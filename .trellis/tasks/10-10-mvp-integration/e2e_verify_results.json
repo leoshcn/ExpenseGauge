@@ -1,8 +1,0 @@
-[
- {
-  "ac": "restart",
-  "what": "data kept (login, transaction count, month actual)",
-  "ok": true,
-  "evidence": "login 200, total 11 (expected 11), Oct actual 374.70"
- }
-]
