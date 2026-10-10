@@ -3,7 +3,7 @@
   "name": "mvp-backend",
   "title": "ExpenseGauge MVP backend",
   "description": "REST API, data model, auth, batch submission, summaries, MCP (implement.md steps 1-7)",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
