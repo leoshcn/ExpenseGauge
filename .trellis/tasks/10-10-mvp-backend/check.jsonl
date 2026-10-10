@@ -1,6 +1,0 @@
-{"file": ".trellis/tasks/10-10-expense-gauge-mvp/prd.md", "reason": "Authoritative requirements and acceptance criteria"}
-{"file": ".trellis/tasks/10-10-expense-gauge-mvp/design.md", "reason": "Authoritative architecture, data model and API contract"}
-{"file": ".trellis/tasks/10-10-expense-gauge-mvp/implement.md", "reason": "Ordered steps, validation commands, risky points"}
-{"file": ".trellis/tasks/10-10-expense-gauge-mvp/research/hermes-agent-mcp.md", "reason": "Hermes Agent MCP client constraints"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Contract shared across frontend, REST and MCP"}
-{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "REST and MCP share one service layer"}

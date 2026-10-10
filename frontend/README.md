@@ -96,4 +96,3 @@ src/
 scripts/          gen-api.mjs, screenshots.mjs
 ```
 
-Conventions for working in this code are in `.trellis/spec/frontend/`.

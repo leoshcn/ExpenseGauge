@@ -99,7 +99,6 @@ docker compose restart                    # restart everything; data is kept
 | `frontend/` | React web UI; `frontend/README.md` has the commands to run it with demo data |
 | `docs/agent-guide.md` | How an AI agent connects, the three tools and their feedback |
 | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf` | Deployment |
-| `.trellis/` | Task documents and coding conventions (`.trellis/spec/`) |
 
 ## Backend development
 
