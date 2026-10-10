@@ -1,12 +1,17 @@
 # Backend Development Guidelines
 
-> Best practices for backend development in this project.
+> Conventions of the ExpenseGauge backend (`backend/`), written from the code as it is.
 
 ---
 
 ## Overview
 
-This directory contains guidelines for backend development. Fill in each file with your project's specific conventions.
+One FastAPI process serves the REST API under `/api/v1` and an MCP Streamable HTTP app
+mounted at `/mcp`. Both call the same service functions; every rule lives in
+`backend/app/services/`.
+
+Stack: Python 3.12 managed by `uv`, FastAPI, SQLAlchemy 2.x (sync) with psycopg 3,
+Alembic, Pydantic v2, the official `mcp` SDK (2.x), pytest, ruff. Database: PostgreSQL.
 
 ---
 
@@ -14,25 +19,37 @@ This directory contains guidelines for backend development. Fill in each file wi
 
 | Guide | Description | Status |
 |-------|-------------|--------|
-| [Directory Structure](./directory-structure.md) | Module organization and file layout | To fill |
-| [Database Guidelines](./database-guidelines.md) | ORM patterns, queries, migrations | To fill |
-| [Error Handling](./error-handling.md) | Error types, handling strategies | To fill |
-| [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
-| [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | To fill |
+| [Directory Structure](./directory-structure.md) | Layers, where code goes, naming | Filled |
+| [Database Guidelines](./database-guidelines.md) | Models, transactions, locks, migrations, money, months | Filled |
+| [Error Handling](./error-handling.md) | `AppError`, the error envelope, reason codes, batch feedback | Filled |
+| [Quality Guidelines](./quality-guidelines.md) | Lint, tests, auth scope rules, review checklist | Filled |
+| [Logging Guidelines](./logging-guidelines.md) | What is logged and what never is | Filled |
+| [Deployment](./deployment.md) | Docker images, Compose, nginx, configuration, migrations on start | Filled |
 
 ---
 
-## How to Fill These Guidelines
+## Pre-Development Checklist
 
-For each guideline file:
+Before changing the backend, read:
 
-1. Document your project's **actual conventions** (not ideals)
-2. Include **code examples** from your codebase
-3. List **forbidden patterns** and why
-4. Add **common mistakes** your team has made
+1. [Directory Structure](./directory-structure.md) - always.
+2. [Error Handling](./error-handling.md) - when adding or changing an endpoint, tool or rule.
+3. [Database Guidelines](./database-guidelines.md) - when touching models, queries or migrations.
+4. [Quality Guidelines](./quality-guidelines.md) - before running the checks and before review.
+5. `../guides/cross-layer-thinking-guide.md` - when a response shape changes, because
+   the frontend client is generated from `backend/openapi.json`.
 
-The goal is to help AI assistants and new team members understand how YOUR project works.
+## Commands
+
+```bash
+cd backend
+uv run ruff check .                       # lint
+uv run ruff format .                      # format
+uv run pytest                             # tests, real PostgreSQL
+uv run python -m scripts.export_openapi   # regenerate backend/openapi.json
+```
 
 ---
 
-**Language**: All documentation should be written in **English**.
+**Language**: documentation, code, field names and reason codes are English. Every
+user-facing `message` returned by the API is Simplified Chinese.

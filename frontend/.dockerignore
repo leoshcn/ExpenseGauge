@@ -1,0 +1,9 @@
+# Only the sources and the lockfile are needed; dependencies are installed with `npm ci`.
+node_modules/
+dist/
+docs/
+*.tsbuildinfo
+.env
+.env.*
+Dockerfile
+.dockerignore

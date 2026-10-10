@@ -1,0 +1,609 @@
+[
+ {
+  "ac": "AC1",
+  "what": "web UI served over the LAN",
+  "ok": true,
+  "evidence": "GET / -> 200 text/html"
+ },
+ {
+  "ac": "AC2",
+  "what": "no user: setup status says so",
+  "ok": true,
+  "evidence": {
+   "user_exists": false
+  }
+ },
+ {
+  "ac": "AC2",
+  "what": "browser routes to user creation",
+  "ok": true,
+  "evidence": {
+   "url": "http://192.168.2.144:8080/setup",
+   "browser": "155.0.4283.45",
+   "error": null,
+   "errors": []
+  }
+ },
+ {
+  "ac": "AC2",
+  "what": "weak password rejected",
+  "ok": true,
+  "evidence": "422 VALIDATION_ERROR"
+ },
+ {
+  "ac": "AC2",
+  "what": "first user created and signed in",
+  "ok": true,
+  "evidence": "201; Set-Cookie flags: HttpOnly; Max-Age=2592000; Path=/; SameSite=lax"
+ },
+ {
+  "ac": "AC2",
+  "what": "setup refuses a second user",
+  "ok": true,
+  "evidence": "409 USER_ALREADY_EXISTS 用户已存在，无法再次创建"
+ },
+ {
+  "ac": "AC2",
+  "what": "setup status now true",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC4",
+  "what": "login with wrong password",
+  "ok": true,
+  "evidence": "401 INVALID_CREDENTIALS"
+ },
+ {
+  "ac": "AC4",
+  "what": "login sets session; /auth/me works",
+  "ok": true,
+  "evidence": "login 200, me 200"
+ },
+ {
+  "ac": "AC3",
+  "what": "no account yet after setup",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC3",
+  "what": "browser is sent to onboarding before the dashboard",
+  "ok": true,
+  "evidence": {
+   "url": "http://192.168.2.144:8080/onboarding",
+   "error": null,
+   "errors": []
+  }
+ },
+ {
+  "ac": "AC3",
+  "what": "first account created (currency normalized)",
+  "ok": true,
+  "evidence": {
+   "id": 1,
+   "name": "日常账户",
+   "currency": "CNY"
+  }
+ },
+ {
+  "ac": "AC3",
+  "what": "categories are two levels only",
+  "ok": true,
+  "evidence": "422 INVALID_PARENT"
+ },
+ {
+  "ac": "AC4",
+  "what": "health and API docs are public",
+  "ok": true,
+  "evidence": {
+   "/health": 200,
+   "/api/docs": 200,
+   "/api/openapi.json": 200
+  }
+ },
+ {
+  "ac": "AC4",
+  "what": "every non-setup endpoint rejects unauthenticated requests",
+  "ok": true,
+  "evidence": {
+   "GET /auth/me": 401,
+   "GET /tokens": 401,
+   "GET /accounts": 401,
+   "GET /accounts/1/categories": 401,
+   "GET /accounts/1/budgets": 401,
+   "GET /accounts/1/transactions": 401,
+   "GET /accounts/1/summary/monthly": 401,
+   "GET /accounts/1/summary/months/2026-10": 401,
+   "POST /accounts/1/transactions/batch": 401,
+   "PUT /accounts/1/budgets": 401,
+   "DELETE /categories/2": 401
+  }
+ },
+ {
+  "ac": "AC4",
+  "what": "state change needs application/json (CSRF guard)",
+  "ok": true,
+  "evidence": "415 UNSUPPORTED_MEDIA_TYPE"
+ },
+ {
+  "ac": "AC5",
+  "what": "token shown at creation",
+  "ok": true,
+  "evidence": "201, token prefix eg_, length 46"
+ },
+ {
+  "ac": "AC5",
+  "what": "token not retrievable afterwards",
+  "ok": true,
+  "evidence": "list keys: ['created_at', 'id', 'last_used_at', 'name', 'revoked_at']"
+ },
+ {
+  "ac": "AC4",
+  "what": "agent token allowed on the read operations",
+  "ok": true,
+  "evidence": {
+   "GET categories": 200,
+   "GET budgets": 200
+  }
+ },
+ {
+  "ac": "AC4",
+  "what": "agent token gets 403 everywhere else",
+  "ok": true,
+  "evidence": {
+   "GET /auth/me": "403 TOKEN_SCOPE_FORBIDDEN",
+   "GET /tokens": "403 TOKEN_SCOPE_FORBIDDEN",
+   "POST /tokens": "403 TOKEN_SCOPE_FORBIDDEN",
+   "DELETE /tokens/1": "403 TOKEN_SCOPE_FORBIDDEN",
+   "GET /accounts": "403 TOKEN_SCOPE_FORBIDDEN",
+   "POST /accounts": "403 TOKEN_SCOPE_FORBIDDEN",
+   "PATCH /accounts/1": "403 TOKEN_SCOPE_FORBIDDEN",
+   "POST /accounts/1/categories": "403 TOKEN_SCOPE_FORBIDDEN",
+   "PATCH /categories/2": "403 TOKEN_SCOPE_FORBIDDEN",
+   "DELETE /categories/7": "403 TOKEN_SCOPE_FORBIDDEN",
+   "PUT /accounts/1/budgets": "403 TOKEN_SCOPE_FORBIDDEN",
+   "GET /accounts/1/transactions": "403 TOKEN_SCOPE_FORBIDDEN",
+   "GET /accounts/1/summary/monthly": "403 TOKEN_SCOPE_FORBIDDEN",
+   "GET /accounts/1/summary/months/2026-10": "403 TOKEN_SCOPE_FORBIDDEN",
+   "PATCH /transactions/1": "403 TOKEN_SCOPE_FORBIDDEN",
+   "DELETE /transactions/1": "403 TOKEN_SCOPE_FORBIDDEN"
+  }
+ },
+ {
+  "ac": "AC4",
+  "what": "session cookie grants full access",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC6",
+  "what": "list_categories (REST) returns the two-level tree",
+  "ok": true,
+  "evidence": {
+   "餐饮": [
+    "超市",
+    "外卖"
+   ],
+   "交通": [
+    "地铁"
+   ],
+   "购物": [
+    "日用"
+   ]
+  }
+ },
+ {
+  "ac": "AC12",
+  "what": "set budgets from 2026-08",
+  "ok": true,
+  "evidence": 200
+ },
+ {
+  "ac": "AC6",
+  "what": "get_budgets per level-2 category for a month",
+  "ok": true,
+  "evidence": {
+   "2": "1000.00",
+   "3": "500.00",
+   "5": "0.00",
+   "7": null
+  }
+ },
+ {
+  "ac": "AC12",
+  "what": "month before the first budget has none",
+  "ok": true,
+  "evidence": {
+   "2": null,
+   "3": null,
+   "5": null,
+   "7": null
+  }
+ },
+ {
+  "ac": "AC12",
+  "what": "change from 2026-10 applies to 10 and later only",
+  "ok": true,
+  "evidence": {
+   "2026-08": "1000.00",
+   "2026-09": "1000.00",
+   "2026-10": "1200.00",
+   "2026-12": "1200.00"
+  }
+ },
+ {
+  "ac": "AC12",
+  "what": "clear from 2026-10 shows no budget for 10 and later, earlier kept",
+  "ok": true,
+  "evidence": {
+   "2026-08": "500.00",
+   "2026-09": "500.00",
+   "2026-10": null,
+   "2026-12": null
+  }
+ },
+ {
+  "ac": "AC12",
+  "what": "level-1 budget cannot be entered",
+  "ok": true,
+  "evidence": "422 CATEGORY_NOT_LEAF"
+ },
+ {
+  "ac": "AC7",
+  "what": "valid batch stored in full (201)",
+  "ok": true,
+  "evidence": "201, 6 stored"
+ },
+ {
+  "ac": "AC7",
+  "what": "batch appears on the transactions list",
+  "ok": true,
+  "evidence": "total 6"
+ },
+ {
+  "ac": "AC7",
+  "what": "batch appears in dashboard actuals",
+  "ok": true,
+  "evidence": "Oct actual 267.30"
+ },
+ {
+  "ac": "AC8",
+  "what": "unknown (other account's) category: nothing stored, item 1 rejected",
+  "ok": true,
+  "evidence": "409 BATCH_REJECTED '本批共 2 条，其中 1 条被拒绝，未写入任何数据'; item1 CATEGORY_NOT_FOUND '分类 9 不存在或不属于该账户，请从 valid_categories 的二级分类中选择'"
+ },
+ {
+  "ac": "AC8",
+  "what": "CATEGORY_NOT_FOUND carries Chinese message and valid categories",
+  "ok": true,
+  "evidence": "3 level-1 entries"
+ },
+ {
+  "ac": "AC8",
+  "what": "level-1 category rejected with its level-2 list",
+  "ok": true,
+  "evidence": "CATEGORY_NOT_LEAF '“餐饮”是一级分类，流水只能归入其下的二级分类' children=[{'id': 2, 'name': '超市'}, {'id': 3, 'name': '外卖'}]"
+ },
+ {
+  "ac": "AC8",
+  "what": "invalid field reported per item (INVALID_FIELD)",
+  "ok": true,
+  "evidence": "INVALID_FIELD [{'field': 'amount', 'reason': 'Value error, amount must not be 0'}]"
+ },
+ {
+  "ac": "AC9",
+  "what": "resubmitted transaction rejected as SUSPECTED_DUPLICATE with the existing record",
+  "ok": true,
+  "evidence": "SUSPECTED_DUPLICATE existing.id=3 hint='与用户确认后，带 confirm_duplicate=true 重新提交该条'"
+ },
+ {
+  "ac": "AC9",
+  "what": "normalized text (spaces, case) still matches",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC9",
+  "what": "re-running the whole batch without flags writes nothing",
+  "ok": true,
+  "evidence": "codes {'SUSPECTED_DUPLICATE'}, total 6"
+ },
+ {
+  "ac": "AC9",
+  "what": "same item with confirm_duplicate stored as a second transaction",
+  "ok": true,
+  "evidence": "201 id=7 confirmed_duplicate=True"
+ },
+ {
+  "ac": "AC9",
+  "what": "flag on an item without a match is ignored",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC10",
+  "what": "two identical items in one batch rejected as in-batch duplicates",
+  "ok": true,
+  "evidence": "item1 DUPLICATE_IN_BATCH '与本批第 0 条（index=0）内容相同'"
+ },
+ {
+  "ac": "AC10",
+  "what": "with the flag on the second, both are stored",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC11",
+  "what": "refund reduces its category's month actual",
+  "ok": true,
+  "evidence": "超市 Oct actual 187.80 -> 137.80"
+ },
+ {
+  "ac": "AC13",
+  "what": "monthly summary: total budget and total actual per month",
+  "ok": true,
+  "evidence": {
+   "2026-07": [
+    null,
+    "0.00"
+   ],
+   "2026-08": [
+    "1500.00",
+    "0.00"
+   ],
+   "2026-09": [
+    "1500.00",
+    "388.50"
+   ],
+   "2026-10": [
+    "1200.00",
+    "362.70"
+   ]
+  }
+ },
+ {
+  "ac": "AC13",
+  "what": "selected month: level-1 rows with nested level-2 rows",
+  "ok": true,
+  "evidence": {
+   "餐饮": [
+    "1200.00",
+    "226.80",
+    {
+     "超市": [
+      "1200.00",
+      "137.80"
+     ],
+     "外卖": [
+      null,
+      "89.00"
+     ]
+    }
+   ],
+   "交通": [
+    "0.00",
+    "6.00",
+    {
+     "地铁": [
+      "0.00",
+      "6.00"
+     ]
+    }
+   ],
+   "购物": [
+    null,
+    "129.90",
+    {
+     "日用": [
+      null,
+      "129.90"
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "ac": "AC13",
+  "what": "unbudgeted categories show no budget (null) with actuals",
+  "ok": true,
+  "evidence": {
+   "购物": [
+    null,
+    "129.90",
+    {
+     "日用": [
+      null,
+      "129.90"
+     ]
+    }
+   ],
+   "外卖": [
+    null,
+    "89.00"
+   ]
+  }
+ },
+ {
+  "ac": "AC13",
+  "what": "month actual includes every category; budget only budgeted ones",
+  "ok": true,
+  "evidence": "actual 362.70 (sum of level-2 362.70), budget 1200.00"
+ },
+ {
+  "ac": "AC13",
+  "what": "switching account changes all figures",
+  "ok": true,
+  "evidence": "B: USD actual 0.00"
+ },
+ {
+  "ac": "AC14",
+  "what": "change category (same account level-2) and note",
+  "ok": true,
+  "evidence": "200 超市 / e2e 改分类"
+ },
+ {
+  "ac": "AC14",
+  "what": "dashboard figures follow the move",
+  "ok": true,
+  "evidence": {
+   "餐饮": "356.70",
+   "交通": "6.00",
+   "购物": "0.00"
+  }
+ },
+ {
+  "ac": "AC14",
+  "what": "move to invalid category refused (CATEGORY_NOT_FOUND)",
+  "ok": true,
+  "evidence": "422 CATEGORY_NOT_FOUND"
+ },
+ {
+  "ac": "AC14",
+  "what": "move to invalid category refused (CATEGORY_NOT_LEAF)",
+  "ok": true,
+  "evidence": "422 CATEGORY_NOT_LEAF"
+ },
+ {
+  "ac": "AC14",
+  "what": "amount is not editable",
+  "ok": true,
+  "evidence": "422 VALIDATION_ERROR"
+ },
+ {
+  "ac": "AC14",
+  "what": "delete a transaction; actuals follow",
+  "ok": true,
+  "evidence": "204, 地铁 actual 0.00, total 10"
+ },
+ {
+  "ac": "AC15",
+  "what": "category with transactions cannot be deleted",
+  "ok": true,
+  "evidence": "409 CATEGORY_IN_USE 该分类下已有流水，无法删除"
+ },
+ {
+  "ac": "AC15",
+  "what": "level-1 with children cannot be deleted",
+  "ok": true,
+  "evidence": "409 CATEGORY_HAS_CHILDREN"
+ },
+ {
+  "ac": "AC15",
+  "what": "unused category with budgets can be deleted (budgets go with it)",
+  "ok": true,
+  "evidence": "budget before 80.00, delete 204"
+ },
+ {
+  "ac": "AC15",
+  "what": "category whose transactions were moved away can be deleted",
+  "ok": true,
+  "evidence": 204
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp: no token -> 401, no redirect",
+  "ok": true,
+  "evidence": "401 INVALID_TOKEN"
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp: exactly three tools",
+  "ok": true,
+  "evidence": [
+   "get_budgets",
+   "list_categories",
+   "submit_transactions"
+  ]
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp: list_categories == REST",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp: get_budgets == REST",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp/: no token -> 401, no redirect",
+  "ok": true,
+  "evidence": "401 INVALID_TOKEN"
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp/: exactly three tools",
+  "ok": true,
+  "evidence": [
+   "get_budgets",
+   "list_categories",
+   "submit_transactions"
+  ]
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp/: list_categories == REST",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC16",
+  "what": "/mcp/: get_budgets == REST",
+  "ok": true,
+  "evidence": ""
+ },
+ {
+  "ac": "AC16",
+  "what": "submit_transactions rejection == REST 409 body (+accepted:false), not a tool error",
+  "ok": true,
+  "evidence": [
+   "SUSPECTED_DUPLICATE",
+   "CATEGORY_NOT_LEAF",
+   "CATEGORY_NOT_FOUND"
+  ]
+ },
+ {
+  "ac": "AC16",
+  "what": "submit_transactions accepted via MCP and visible to REST",
+  "ok": true,
+  "evidence": "total 10 -> 11"
+ },
+ {
+  "ac": "AC16",
+  "what": "error result carries the REST envelope (ACCOUNT_NOT_FOUND)",
+  "ok": true,
+  "evidence": {
+   "code": "ACCOUNT_NOT_FOUND",
+   "message": "账户不存在",
+   "details": {}
+  }
+ },
+ {
+  "ac": "AC5",
+  "what": "revoked token stops working immediately (REST and MCP)",
+  "ok": true,
+  "evidence": "revoke 204; REST 401 INVALID_TOKEN; MCP 401"
+ },
+ {
+  "ac": "AC13",
+  "what": "dashboard renders in a headless browser over the LAN",
+  "ok": true,
+  "evidence": {
+   "url": "http://192.168.2.144:8080/dashboard",
+   "browser": "155.0.4283.45",
+   "heading": "概览",
+   "errors": [],
+   "error": null
+  }
+ },
+ {
+  "ac": "AC14",
+  "what": "transactions page loads via SPA deep link",
+  "ok": true,
+  "evidence": "status 200"
+ }
+]

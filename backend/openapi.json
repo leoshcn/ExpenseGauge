@@ -1,0 +1,2366 @@
+{
+  "components": {
+    "schemas": {
+      "AccountCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Za-z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "currency"
+        ],
+        "title": "AccountCreateIn",
+        "type": "object"
+      },
+      "AccountOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "currency"
+        ],
+        "title": "AccountOut",
+        "type": "object"
+      },
+      "AccountUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AccountUpdateIn",
+        "type": "object"
+      },
+      "BatchAcceptedOut": {
+        "properties": {
+          "accepted": {
+            "default": true,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "BatchAcceptedOut",
+        "type": "object"
+      },
+      "BatchSubmitIn": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "1 to 500 items",
+            "items": {
+              "additionalProperties": false,
+              "description": "One submitted transaction. Validated per item by the service, not by the router,\nso a bad field is reported as an `INVALID_FIELD` item instead of failing the request.",
+              "properties": {
+                "amount": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "description": "Expense > 0, refund < 0, never 0",
+                  "title": "Amount"
+                },
+                "category_id": {
+                  "description": "A level-2 category of the account",
+                  "title": "Category Id",
+                  "type": "integer"
+                },
+                "confirm_duplicate": {
+                  "default": false,
+                  "description": "Single-use: set only after the user confirmed a reported duplicate is real",
+                  "title": "Confirm Duplicate",
+                  "type": "boolean"
+                },
+                "counterparty": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "title": "Counterparty",
+                  "type": "string"
+                },
+                "date": {
+                  "format": "date",
+                  "title": "Date",
+                  "type": "string"
+                },
+                "description": {
+                  "default": "",
+                  "maxLength": 1000,
+                  "title": "Description",
+                  "type": "string"
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "maxLength": 1000,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Note"
+                }
+              },
+              "required": [
+                "date",
+                "amount",
+                "counterparty",
+                "category_id"
+              ],
+              "title": "TransactionItemIn",
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BatchSubmitIn",
+        "type": "object"
+      },
+      "BudgetItemIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Budget from `effective_from` on; null clears it (no budget) from that month",
+            "title": "Amount"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category_id",
+          "amount"
+        ],
+        "title": "BudgetItemIn",
+        "type": "object"
+      },
+      "BudgetLine": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Budget in force for the month; null means no budget (never set, or cleared)",
+            "title": "Amount"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Month the in-force amount started; null when there is no budget",
+            "title": "Effective From"
+          },
+          "parent_id": {
+            "title": "Parent Id",
+            "type": "integer"
+          },
+          "parent_name": {
+            "title": "Parent Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "category_name",
+          "parent_id",
+          "parent_name",
+          "amount",
+          "effective_from"
+        ],
+        "title": "BudgetLine",
+        "type": "object"
+      },
+      "BudgetsOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "budgets": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetLine"
+            },
+            "title": "Budgets",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "currency",
+          "month",
+          "budgets"
+        ],
+        "title": "BudgetsOut",
+        "type": "object"
+      },
+      "BudgetsPutIn": {
+        "additionalProperties": false,
+        "properties": {
+          "effective_from": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetItemIn"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "effective_from",
+          "items"
+        ],
+        "title": "BudgetsPutIn",
+        "type": "object"
+      },
+      "CategoryCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CategoryCreateIn",
+        "type": "object"
+      },
+      "CategoryLeaf": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CategoryLeaf",
+        "type": "object"
+      },
+      "CategoryNode": {
+        "description": "A level-1 category. Only its `children` (level 2) accept transactions and budgets.",
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryLeaf"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "children"
+        ],
+        "title": "CategoryNode",
+        "type": "object"
+      },
+      "CategoryOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "parent_id",
+          "name"
+        ],
+        "title": "CategoryOut",
+        "type": "object"
+      },
+      "CategoryTree": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryNode"
+            },
+            "title": "Categories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account_id",
+          "categories"
+        ],
+        "title": "CategoryTree",
+        "type": "object"
+      },
+      "CategoryUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CategoryUpdateIn",
+        "type": "object"
+      },
+      "CredentialsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "CredentialsIn",
+        "type": "object"
+      },
+      "ErrorEnvelope": {
+        "description": "Body of every non-2xx response.",
+        "properties": {
+          "code": {
+            "description": "Stable English reason code",
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "description": "Chinese message that can be shown to the user",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ErrorEnvelope",
+        "type": "object"
+      },
+      "Level1Row": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of the children's budgets; null if none has one",
+            "title": "Budget"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/Level2Row"
+            },
+            "title": "Children",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "name",
+          "budget",
+          "actual",
+          "children"
+        ],
+        "title": "Level1Row",
+        "type": "object"
+      },
+      "Level2Row": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null means no budget",
+            "title": "Budget"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_id",
+          "name",
+          "budget",
+          "actual"
+        ],
+        "title": "Level2Row",
+        "type": "object"
+      },
+      "LoginIn": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginIn",
+        "type": "object"
+      },
+      "MonthDetailOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/Level1Row"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "currency",
+          "month",
+          "budget",
+          "actual",
+          "categories"
+        ],
+        "title": "MonthDetailOut",
+        "type": "object"
+      },
+      "MonthTotal": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of budgets in force; null if no category has one",
+            "title": "Budget"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "budget",
+          "actual"
+        ],
+        "title": "MonthTotal",
+        "type": "object"
+      },
+      "MonthlySummaryOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/MonthTotal"
+            },
+            "title": "Months",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account_id",
+          "currency",
+          "months"
+        ],
+        "title": "MonthlySummaryOut",
+        "type": "object"
+      },
+      "SetupStatus": {
+        "properties": {
+          "user_exists": {
+            "title": "User Exists",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "user_exists"
+        ],
+        "title": "SetupStatus",
+        "type": "object"
+      },
+      "TokenCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "TokenCreateIn",
+        "type": "object"
+      },
+      "TokenCreatedOut": {
+        "description": "Returned once, at creation. `token` is never retrievable afterwards.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "last_used_at",
+          "revoked_at",
+          "token"
+        ],
+        "title": "TokenCreatedOut",
+        "type": "object"
+      },
+      "TokenOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "last_used_at",
+          "revoked_at"
+        ],
+        "title": "TokenOut",
+        "type": "object"
+      },
+      "TransactionOut": {
+        "properties": {
+          "account_id": {
+            "title": "Account Id",
+            "type": "integer"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "confirmed_duplicate": {
+            "title": "Confirmed Duplicate",
+            "type": "boolean"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "parent_category_id": {
+            "title": "Parent Category Id",
+            "type": "integer"
+          },
+          "parent_category_name": {
+            "title": "Parent Category Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "account_id",
+          "category_id",
+          "category_name",
+          "parent_category_id",
+          "parent_category_name",
+          "date",
+          "amount",
+          "counterparty",
+          "description",
+          "note",
+          "confirmed_duplicate",
+          "created_at"
+        ],
+        "title": "TransactionOut",
+        "type": "object"
+      },
+      "TransactionPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "TransactionPage",
+        "type": "object"
+      },
+      "TransactionUpdateIn": {
+        "additionalProperties": false,
+        "description": "Only category and note are editable. Omitted fields are left unchanged.",
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "TransactionUpdateIn",
+        "type": "object"
+      },
+      "UserOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "created_at"
+        ],
+        "title": "UserOut",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "ExpenseGauge API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/accounts": {
+      "get": {
+        "operationId": "list_accounts_api_v1_accounts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AccountOut"
+                  },
+                  "title": "Response List Accounts Api V1 Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Accounts",
+        "tags": [
+          "accounts"
+        ]
+      },
+      "post": {
+        "operationId": "create_account_api_v1_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Account",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}": {
+      "patch": {
+        "operationId": "rename_account_api_v1_accounts__account_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Rename Account",
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/budgets": {
+      "get": {
+        "description": "Budget in force per level-2 category for `month` (default: current month).\nOpen to agent tokens.",
+        "operationId": "get_budgets_api_v1_accounts__account_id__budgets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Budgets",
+        "tags": [
+          "budgets"
+        ]
+      },
+      "put": {
+        "description": "Sets amounts effective from a month; earlier months keep their version.\nAn `amount` of null clears that category's budget from the month on.",
+        "operationId": "set_budgets_api_v1_accounts__account_id__budgets_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetsPutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Set Budgets",
+        "tags": [
+          "budgets"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/categories": {
+      "get": {
+        "description": "The account's full two-level tree. Open to agent tokens.",
+        "operationId": "get_category_tree_api_v1_accounts__account_id__categories_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Category Tree",
+        "tags": [
+          "categories"
+        ]
+      },
+      "post": {
+        "operationId": "create_category_api_v1_accounts__account_id__categories_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Category",
+        "tags": [
+          "categories"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/summary/monthly": {
+      "get": {
+        "description": "Per month: total budget and total actual. Defaults to the 12 months ending at `to`.",
+        "operationId": "monthly_summary_api_v1_accounts__account_id__summary_monthly_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlySummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Monthly Summary",
+        "tags": [
+          "summary"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/summary/months/{month}": {
+      "get": {
+        "description": "Level-1 rows with nested level-2 rows: budget and actual.",
+        "operationId": "month_detail_api_v1_accounts__account_id__summary_months__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Month Detail",
+        "tags": [
+          "summary"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/transactions": {
+      "get": {
+        "operationId": "list_transactions_api_v1_accounts__account_id__transactions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/accounts/{account_id}/transactions/batch": {
+      "post": {
+        "description": "All-or-nothing submission. Open to agent tokens.",
+        "operationId": "submit_batch_api_v1_accounts__account_id__transactions_batch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "title": "Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSubmitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAcceptedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "BATCH_REJECTED: nothing written; details.items has one entry per item"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Submit Batch",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/categories/{category_id}": {
+      "delete": {
+        "operationId": "delete_category_api_v1_categories__category_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "title": "Category Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Delete Category",
+        "tags": [
+          "categories"
+        ]
+      },
+      "patch": {
+        "operationId": "rename_category_api_v1_categories__category_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "category_id",
+            "required": true,
+            "schema": {
+              "title": "Category Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Rename Category",
+        "tags": [
+          "categories"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Api V1 Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/v1/setup": {
+      "post": {
+        "description": "Creates the only user and signs them in. Returns 409 once a user exists.",
+        "operationId": "setup_api_v1_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Setup",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/api/v1/setup/status": {
+      "get": {
+        "operationId": "setup_status_api_v1_setup_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Setup Status",
+        "tags": [
+          "setup"
+        ]
+      }
+    },
+    "/api/v1/tokens": {
+      "get": {
+        "operationId": "list_tokens_api_v1_tokens_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TokenOut"
+                  },
+                  "title": "Response List Tokens Api V1 Tokens Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Tokens",
+        "tags": [
+          "tokens"
+        ]
+      },
+      "post": {
+        "description": "The raw `token` is in this response only; it cannot be read again.",
+        "operationId": "create_token_api_v1_tokens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreatedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Token",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/api/v1/tokens/{token_id}": {
+      "delete": {
+        "operationId": "revoke_token_api_v1_tokens__token_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "title": "Token Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Revoke Token",
+        "tags": [
+          "tokens"
+        ]
+      }
+    },
+    "/api/v1/transactions/{transaction_id}": {
+      "delete": {
+        "operationId": "delete_transaction_api_v1_transactions__transaction_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Delete Transaction",
+        "tags": [
+          "transactions"
+        ]
+      },
+      "patch": {
+        "operationId": "update_transaction_api_v1_transactions__transaction_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Update Transaction",
+        "tags": [
+          "transactions"
+        ]
+      }
+    }
+  }
+}

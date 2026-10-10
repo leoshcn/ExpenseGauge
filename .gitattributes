@@ -7,3 +7,13 @@
 # picking either side (task state lives in task.json, not index.md). See
 # .trellis/spec/cli/backend/directory-structure.md for details.
 .trellis/workspace/*/journal-*.md merge=union
+
+# Shell scripts and generated contracts keep LF on every platform (core.autocrlf is on).
+*.sh text eol=lf
+backend/openapi.json text eol=lf
+frontend/src/api/schema.gen.ts text eol=lf
+# Files that run inside Linux containers keep LF.
+Dockerfile text eol=lf
+*.conf text eol=lf
+docker-compose.yml text eol=lf
+.env.example text eol=lf
