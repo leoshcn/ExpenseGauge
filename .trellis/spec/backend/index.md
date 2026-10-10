@@ -24,6 +24,7 @@ Alembic, Pydantic v2, the official `mcp` SDK (2.x), pytest, ruff. Database: Post
 | [Error Handling](./error-handling.md) | `AppError`, the error envelope, reason codes, batch feedback | Filled |
 | [Quality Guidelines](./quality-guidelines.md) | Lint, tests, auth scope rules, review checklist | Filled |
 | [Logging Guidelines](./logging-guidelines.md) | What is logged and what never is | Filled |
+| [Deployment](./deployment.md) | Docker images, Compose, nginx, configuration, migrations on start | Filled |
 
 ---
 

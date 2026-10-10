@@ -25,6 +25,9 @@ mcp (tool shape) ─────┘
 ```
 backend/
 ├── pyproject.toml            dependencies, pytest and ruff configuration
+├── Dockerfile                production image (uv sync --frozen --no-dev, non-root)
+├── docker-entrypoint.sh      alembic upgrade head, then uvicorn on :8000 (LF only)
+├── .dockerignore
 ├── uv.lock
 ├── alembic.ini
 ├── alembic/

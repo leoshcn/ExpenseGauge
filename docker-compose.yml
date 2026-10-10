@@ -1,0 +1,63 @@
+# ExpenseGauge: `docker compose up -d --build` (configuration in .env, see .env.example).
+# Only `web` publishes a port; `api` and `db` are reachable on the compose network only.
+
+name: expense-gauge
+
+services:
+  web:
+    build: ./frontend
+    image: expense-gauge-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build: ./backend
+    image: expense-gauge-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:?set in .env}:${POSTGRES_PASSWORD:?set in .env}@db:5432/${POSTGRES_DB:?set in .env}"
+      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-false}"
+      SESSION_TTL_DAYS: "${SESSION_TTL_DAYS:-30}"
+      LOGIN_FAILURE_DELAY_SECONDS: "${LOGIN_FAILURE_DELAY_SECONDS:-1.0}"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=4)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:?set in .env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:?set in .env}"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  db-data:

@@ -1,0 +1,13 @@
+# Only pyproject.toml, uv.lock, alembic and app/ are needed in the image.
+.venv/
+.pgdata/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+tests/
+scripts/
+.env
+.env.*
+Dockerfile
+.dockerignore

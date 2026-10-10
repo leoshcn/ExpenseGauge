@@ -24,6 +24,9 @@ frontend/
     gen-api.mjs            backend/openapi.json -> src/api/schema.gen.ts
     screenshots.mjs        Playwright captures into docs/screenshots/
   docs/screenshots/        reference screenshots of every page, both widths and themes
+  Dockerfile               npm ci + npm run build, then nginx:alpine serving dist/
+  nginx.conf               SPA fallback, caching, proxy for /api/ and /mcp (see
+                           ../backend/deployment.md)
   src/
     main.tsx               providers: QueryClient, BrowserRouter
     App.tsx                the route table, every route under a RequireStage
