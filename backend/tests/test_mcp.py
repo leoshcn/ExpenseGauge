@@ -96,6 +96,29 @@ def test_read_tools_return_the_rest_payloads(server_url, client, token, ledger, 
     assert default_month.structured_content == client.get(f"{ledger.base}/budgets").json()
 
 
+def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger):
+    """AC12 over MCP: the tool returns the REST payload before and after the clearing."""
+    ledger.set_budgets("2026-01", {ledger.groceries: "1000", ledger.metro: "0"})
+    ledger.set_budgets("2026-06", {ledger.groceries: None})
+    url = f"{server_url}/mcp"
+
+    def amounts(month: str) -> dict[int, str | None]:
+        arguments = {"account_id": ledger.account_id, "month": month}
+        result = call(url, token["token"], "get_budgets", arguments)
+        assert result.is_error is False
+        rest = client.get(f"{ledger.base}/budgets", params={"month": month}).json()
+        assert result.structured_content == rest
+        return {line["category_id"]: line["amount"] for line in rest["budgets"]}
+
+    assert amounts("2026-05") == {
+        ledger.groceries: "1000.00",
+        ledger.dining: None,
+        ledger.metro: "0.00",
+    }
+    assert amounts("2026-06") == {ledger.groceries: None, ledger.dining: None, ledger.metro: "0.00"}
+    assert amounts("2026-12") == amounts("2026-06")
+
+
 def test_submit_transactions_matches_rest(server_url, client, token, ledger):
     url = f"{server_url}/mcp"
     arguments = {

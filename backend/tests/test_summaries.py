@@ -106,6 +106,125 @@ def test_monthly_series_uses_the_budget_version_in_force(client, ledger):
         assert (detail["budget"], detail["actual"]) == (month["budget"], month["actual"])
 
 
+def _budgets(detail: dict) -> dict[int, str | None]:
+    """Budget per category id (both levels) of a month detail."""
+    rows = [row for level1 in detail["categories"] for row in (level1, *level1["children"])]
+    return {row["category_id"]: row["budget"] for row in rows}
+
+
+def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, ledger):
+    """AC12: clearing from 2026-09 leaves August as it was and unbudgets September on."""
+    _seed(ledger)  # groceries 1000 from 07 and 1200 from 09, metro 200 from 07
+    ledger.set_budgets("2026-09", {ledger.groceries: None})
+
+    august = client.get(f"{ledger.base}/summary/months/2026-08").json()
+    assert august["budget"] == "1200.00"
+    assert _budgets(august) == {
+        ledger.food: "1000.00",
+        ledger.groceries: "1000.00",
+        ledger.dining: None,
+        ledger.transport: "200.00",
+        ledger.metro: "200.00",
+    }
+    for month in ("2026-09", "2026-10"):
+        detail = client.get(f"{ledger.base}/summary/months/{month}").json()
+        assert detail["budget"] == "200.00"
+        assert _budgets(detail) == {
+            ledger.food: None,  # every child is unbudgeted
+            ledger.groceries: None,
+            ledger.dining: None,
+            ledger.transport: "200.00",
+            ledger.metro: "200.00",
+        }
+    # Actuals do not depend on the budget.
+    september = client.get(f"{ledger.base}/summary/months/2026-09").json()
+    assert september["actual"] == "828.80"
+    assert september["categories"][0]["children"][0]["actual"] == "480.00"
+
+    monthly = client.get(
+        f"{ledger.base}/summary/monthly", params={"from": "2026-07", "to": "2026-11"}
+    )
+    assert monthly.json()["months"] == [
+        {"month": "2026-07", "budget": "1200.00", "actual": "300.00"},
+        {"month": "2026-08", "budget": "1200.00", "actual": "410.10"},
+        {"month": "2026-09", "budget": "200.00", "actual": "828.80"},
+        {"month": "2026-10", "budget": "200.00", "actual": "0.00"},
+        {"month": "2026-11", "budget": "200.00", "actual": "0.00"},
+    ]
+
+    # Clearing the last budgeted category leaves the whole month without a budget ...
+    ledger.set_budgets("2026-10", {ledger.metro: None})
+    # ... and setting an amount again restores one from that month.
+    ledger.set_budgets("2026-11", {ledger.groceries: "900"})
+    monthly = client.get(
+        f"{ledger.base}/summary/monthly", params={"from": "2026-09", "to": "2026-11"}
+    )
+    assert [(m["month"], m["budget"]) for m in monthly.json()["months"]] == [
+        ("2026-09", "200.00"),
+        ("2026-10", None),
+        ("2026-11", "900.00"),
+    ]
+    october = client.get(f"{ledger.base}/summary/months/2026-10").json()
+    assert october["budget"] is None
+    assert set(_budgets(october).values()) == {None}
+    november = client.get(f"{ledger.base}/summary/months/2026-11").json()
+    assert (november["budget"], _budgets(november)[ledger.food]) == ("900.00", "900.00")
+
+
+def test_level1_budget_sums_budgeted_zero_and_cleared_children(client, ledger):
+    """A level-1 budget is the sum of its children that have a budget: zero counts as
+    one, cleared and never-set do not; with no budgeted child it is null, not 0."""
+    snacks = ledger.category("零食", ledger.food)
+    bus = ledger.category("公交", ledger.transport)
+    ledger.set_budgets(
+        "2026-01",
+        {ledger.groceries: "1000", ledger.dining: "300", snacks: "50", ledger.metro: "200"},
+    )
+    # From March: one budgeted, one zero and one cleared child under 餐饮; a cleared and a
+    # never-set child under 交通.
+    ledger.set_budgets("2026-03", {ledger.dining: "0", snacks: None, ledger.metro: None})
+
+    february = client.get(f"{ledger.base}/summary/months/2026-02").json()
+    assert february["budget"] == "1550.00"
+    assert _budgets(february) == {
+        ledger.food: "1350.00",
+        ledger.groceries: "1000.00",
+        ledger.dining: "300.00",
+        snacks: "50.00",
+        ledger.transport: "200.00",
+        ledger.metro: "200.00",
+        bus: None,
+    }
+    march = client.get(f"{ledger.base}/summary/months/2026-03").json()
+    assert march["budget"] == "1000.00"
+    assert _budgets(march) == {
+        ledger.food: "1000.00",
+        ledger.groceries: "1000.00",
+        ledger.dining: "0.00",
+        snacks: None,
+        ledger.transport: None,
+        ledger.metro: None,
+        bus: None,
+    }
+
+    # Zero and cleared only: the level-1 budget is a real 0, not "no budget".
+    ledger.set_budgets("2026-05", {ledger.groceries: None})
+    may = client.get(f"{ledger.base}/summary/months/2026-05").json()
+    assert may["budget"] == "0.00"
+    assert _budgets(may)[ledger.food] == "0.00"
+    assert _budgets(may)[ledger.transport] is None
+
+    monthly = client.get(
+        f"{ledger.base}/summary/monthly", params={"from": "2026-02", "to": "2026-05"}
+    )
+    assert [(m["month"], m["budget"]) for m in monthly.json()["months"]] == [
+        ("2026-02", "1550.00"),
+        ("2026-03", "1000.00"),
+        ("2026-04", "1000.00"),
+        ("2026-05", "0.00"),
+    ]
+
+
 def test_monthly_series_defaults_to_twelve_months(client, ledger):
     months = client.get(f"{ledger.base}/summary/monthly").json()["months"]
     this_month = date.today().replace(day=1)

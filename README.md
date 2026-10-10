@@ -5,8 +5,9 @@ with the budget by category. An AI agent classifies bank transactions and submit
 through the REST API or the MCP server; the app is the source of truth for categories,
 budgets and stored transactions.
 
-Status: the backend is implemented. The frontend, Docker Compose deployment and the agent
-integration guide are separate, later tasks.
+Status: the backend is implemented. The frontend has setup, login, onboarding and the
+Dashboard (see `frontend/README.md`); its remaining pages, the Docker Compose deployment
+and the agent integration guide are later tasks.
 
 ## Layout
 
@@ -14,6 +15,7 @@ integration guide are separate, later tasks.
 |---|---|
 | `backend/` | FastAPI app: REST under `/api/v1`, MCP Streamable HTTP under `/mcp` |
 | `backend/openapi.json` | Exported API contract, the input for the frontend's typed client |
+| `frontend/` | React web UI; `frontend/README.md` has the commands to run it with demo data |
 | `.trellis/` | Task documents and coding conventions (`.trellis/spec/`) |
 
 ## Backend
@@ -47,6 +49,16 @@ cd backend
 cp ../.env.example .env                   # then edit DATABASE_URL
 uv run alembic upgrade head               # create or migrate the schema
 uv run uvicorn app.main:app --reload --port 8000
+```
+
+For local development without a PostgreSQL install, `scripts/dev_server.py` runs the same
+app on an embedded PostgreSQL (data in `backend/.pgdata/dev/`) and `scripts/seed_demo.py`
+fills it with demo data through the REST API:
+
+```bash
+cd backend
+uv run python -m scripts.dev_server --reset   # terminal 1; --reset empties the dev database
+uv run python -m scripts.seed_demo            # terminal 2; sign in as demo / expense-gauge-demo
 ```
 
 - API docs: `http://localhost:8000/api/docs`

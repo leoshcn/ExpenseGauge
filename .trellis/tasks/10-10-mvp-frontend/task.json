@@ -3,7 +3,7 @@
   "name": "mvp-frontend",
   "title": "ExpenseGauge MVP frontend",
   "description": "React UI with shadcn/ui + Recharts (implement.md steps 8-9)",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

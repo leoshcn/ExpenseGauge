@@ -16,6 +16,7 @@ backend/.pgdata/
 # Node
 node_modules/
 dist/
+*.tsbuildinfo
 
 # Editors and OS
 .idea/

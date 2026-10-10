@@ -11,3 +11,4 @@
 # Shell scripts and generated contracts keep LF on every platform (core.autocrlf is on).
 *.sh text eol=lf
 backend/openapi.json text eol=lf
+frontend/src/api/schema.gen.ts text eol=lf

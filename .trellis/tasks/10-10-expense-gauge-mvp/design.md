@@ -48,7 +48,7 @@ Tooling: `uv` + `ruff` + `pytest` for the backend; `pnpm` + `vitest` + `tsc` + `
 | `budgets` | id, category_id, effective_from (first day of month), amount NUMERIC(14,2) | unique(category_id, effective_from); category must be level 2; amount >= 0 |
 | `transactions` | id, account_id, category_id, date, amount NUMERIC(14,2), counterparty, description, note, fingerprint, confirmed_duplicate, api_token_id, created_at | index(account_id, fingerprint) non-unique; index(account_id, date); amount != 0; category must be level 2 of the same account |
 
-- The budget in force for category C in month M is the row with the greatest `effective_from <= M`. Amount 0 is a real budget; absence of any row means "no budget".
+- The budget in force for category C in month M is the row with the greatest `effective_from <= M`. Amount 0 is a real budget. "No budget" means either no row at all, or the row in force has a NULL amount (a cleared budget).
 - `fingerprint` = sha256 of `account_id | date | amount (2 dp) | norm(counterparty) | norm(description)`, where `norm` = Unicode NFKC, trim, collapse whitespace, casefold.
 - The fingerprint index is not unique because confirmed duplicates are legitimate rows.
 
@@ -66,7 +66,7 @@ Auth column: S = session cookie, A = agent token also accepted.
 | GET `/accounts/{id}/categories` | S, A | two-level tree |
 | POST `/accounts/{id}/categories`; PATCH, DELETE `/categories/{id}` | S | category edits |
 | GET `/accounts/{id}/budgets?month=YYYY-MM` | S, A | budget in force per level-2 category |
-| PUT `/accounts/{id}/budgets` | S | set amounts effective from a month |
+| PUT `/accounts/{id}/budgets` | S | set amounts effective from a month; an amount of `null` clears the budget from that month |
 | POST `/accounts/{id}/transactions/batch` | S, A | all-or-nothing submission |
 | GET `/accounts/{id}/transactions` | S | list, filter by month and category, paginated |
 | PATCH, DELETE `/transactions/{id}` | S | edit category/note, delete |

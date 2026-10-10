@@ -1,10 +1,14 @@
-"""Budgets: one amount per level-2 category, in force from a month until the next version."""
+"""Budgets: one amount per level-2 category, in force from a month until the next version.
 
-from bisect import bisect_right
+A version whose amount is NULL clears the budget: from its month on the category has
+"no budget", exactly as if it never had one. Amount 0 is a real budget.
+"""
+
+from bisect import bisect_left, bisect_right
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -27,12 +31,18 @@ class BudgetHistory:
             self._rows.setdefault(row.category_id, []).append(row)
 
     def in_force(self, category_id: int, month: date) -> Budget | None:
-        """The version with the greatest effective_from <= month, or None for "no budget"."""
-        months = self._months.get(category_id)
-        if not months:
-            return None
-        position = bisect_right(months, month)
-        return self._rows[category_id][position - 1] if position else None
+        """The version with the greatest effective_from <= month. None for "no budget":
+        there is no such version, or it is a cleared one (NULL amount)."""
+        return self._budgeted(category_id, bisect_right, month)
+
+    def in_force_before(self, category_id: int, month: date) -> Budget | None:
+        """What `in_force` would return for `month` if no version started in `month`."""
+        return self._budgeted(category_id, bisect_left, month)
+
+    def _budgeted(self, category_id: int, bisect, month: date) -> Budget | None:
+        position = bisect(self._months.get(category_id, []), month)
+        row = self._rows[category_id][position - 1] if position else None
+        return row if row is not None and row.amount is not None else None
 
     def amount(self, category_id: int, month: date) -> Decimal | None:
         row = self.in_force(category_id, month)
@@ -81,7 +91,11 @@ def get_budgets(db: Session, account_id: int, month: str | None) -> BudgetsOut:
 def set_budgets(
     db: Session, account_id: int, effective_from: str, items: list[BudgetItemIn]
 ) -> BudgetsOut:
-    """Upserts one budget version per item at `effective_from`; all items or none."""
+    """Upserts one budget version per item at `effective_from`; all items or none.
+
+    An item with amount None clears the budget from that month. Where there is no budget
+    to clear (none in force before that month) no clearing version is kept.
+    """
     get_account(db, account_id)
     month_date = parse_month(effective_from)
     categories = {c.id: c for c in load_categories(db, account_id)}
@@ -100,7 +114,15 @@ def set_budgets(
         if item.category_id in seen:
             raise invalid("DUPLICATE_CATEGORY", "同一分类在请求中出现多次", details)
         seen.add(item.category_id)
+    history = load_history(db, account_id)
     for item in items:
+        if item.amount is None and history.in_force_before(item.category_id, month_date) is None:
+            db.execute(
+                delete(Budget).where(
+                    Budget.category_id == item.category_id, Budget.effective_from == month_date
+                )
+            )
+            continue
         statement = insert(Budget).values(
             category_id=item.category_id, effective_from=month_date, amount=item.amount
         )

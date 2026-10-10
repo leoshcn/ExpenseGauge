@@ -69,6 +69,13 @@ def database_url() -> Iterator[str]:
         yield from _embedded_database_url()
 
 
+def alembic_config() -> Config:
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    config.attributes["configure_logging"] = False
+    return config
+
+
 @pytest.fixture(scope="session", autouse=True)
 def migrated_database(database_url: str) -> Iterator[str]:
     """Points the app at the test database and builds the schema with Alembic."""
@@ -87,10 +94,7 @@ def migrated_database(database_url: str) -> Iterator[str]:
         connection.execute(text("CREATE SCHEMA public"))
     engine.dispose()
 
-    config = Config(str(BACKEND_DIR / "alembic.ini"))
-    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    config.attributes["configure_logging"] = False
-    command.upgrade(config, "head")
+    command.upgrade(alembic_config(), "head")
 
     yield database_url
     get_engine().dispose()
@@ -181,7 +185,8 @@ class Ledger:
             f"{self.base}/transactions/batch", json={"items": items}
         )
 
-    def set_budgets(self, effective_from: str, amounts: dict[int, str]):
+    def set_budgets(self, effective_from: str, amounts: dict[int, str | None]):
+        """Sets budgets from a month; an amount of None clears the budget from that month."""
         response = self.client.put(
             f"{self.base}/budgets",
             json={

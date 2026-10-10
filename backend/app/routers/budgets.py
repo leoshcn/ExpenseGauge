@@ -19,5 +19,6 @@ def get_budgets(
 
 @router.put("/accounts/{account_id}/budgets", response_model=BudgetsOut)
 def set_budgets(account_id: int, payload: BudgetsPutIn, principal: SessionPrincipal, db: DbSession):
-    """Sets amounts effective from a month; earlier months keep their version."""
+    """Sets amounts effective from a month; earlier months keep their version.
+    An `amount` of null clears that category's budget from the month on."""
     return budget_service.set_budgets(db, account_id, payload.effective_from, payload.items)

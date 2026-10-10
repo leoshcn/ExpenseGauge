@@ -59,6 +59,7 @@ Source requirements: `userinput/requirement.md`.
 - Earlier months keep the budget version in force at the time.
 - A level-1 budget is the computed sum of its level-2 budgets; it cannot be entered directly.
 - No rollover of surplus or overspend.
+- A budget can be cleared from a chosen month onward, returning the category to "no budget" for that month and later; earlier months keep their budget.
 
 ### R7 Transaction submission (agent)
 
@@ -75,7 +76,7 @@ Source requirements: `userinput/requirement.md`.
 - Dashboard: account selector; month-by-month summary; for the selected month, budget vs. actual by level-1 category with drill-down to level-2; category share chart by level-1. Categories with no budget show "no budget" with actuals only.
 - Transactions page: list and filter transactions; edit category and note; delete a single transaction. No manual creation; amount, date and counterparty are not editable.
 - Budget page: enter budgets per account and level-2 category, choosing the effective month.
-- Settings: add and rename accounts (no deletion); add and rename categories, delete only when unused; create and revoke agent tokens.
+- Settings: add and rename accounts (no deletion); add and rename categories, delete only when no transaction uses them (a level-2 category that has only budgets can be deleted and its budgets go with it); create and revoke agent tokens.
 
 ### R9 Language
 
@@ -93,7 +94,7 @@ Source requirements: `userinput/requirement.md`.
 - [ ] AC1 `docker compose up` on a clean checkout brings up `web`, `api`, `db`; only the `web` port is published; the app is reachable in a browser.
 - [ ] AC2 With no user, the app routes to user creation. After creating one, the creation endpoint refuses further users.
 - [ ] AC3 After user creation, the user is guided to create a first account (name + currency) and at least one level-1 category with one level-2 child before reaching the dashboard.
-- [ ] AC4 All non-setup API endpoints reject unauthenticated requests. A session cookie grants full access. An agent token grants only the three agent operations and gets 403 elsewhere.
+- [ ] AC4 All non-setup API endpoints reject unauthenticated requests, except the health check and the API documentation (`/api/docs`, `/api/openapi.json`), which are public by user decision and expose no data. A session cookie grants full access. An agent token grants only the three agent operations and gets 403 elsewhere.
 - [ ] AC5 A token is displayed once at creation, is not retrievable afterwards, and stops working immediately after revocation.
 - [ ] AC6 `list_categories` returns the account's full two-level tree. `get_budgets` returns the budget per level-2 category for a requested month.
 - [ ] AC7 A valid batch is stored in full and appears on the transactions page and in dashboard actuals.
@@ -101,10 +102,10 @@ Source requirements: `userinput/requirement.md`.
 - [ ] AC9 Resubmitting an already stored transaction stores nothing and returns `SUSPECTED_DUPLICATE` with the existing record. The same item resubmitted with the confirmation flag is stored as a second transaction.
 - [ ] AC10 Two identical items in one batch without flags are rejected as in-batch duplicates.
 - [ ] AC11 A refund (negative amount) reduces its category's actual for that month.
-- [ ] AC12 Setting a budget effective from month M changes budget figures for M and later months and leaves earlier months unchanged.
-- [ ] AC13 Dashboard: switching account changes all figures; the monthly summary shows total budget and total actual per month; the selected month shows level-1 rows that expand to level-2 rows; the share chart reflects level-1 actuals; unbudgeted categories show "no budget".
+- [ ] AC12 Setting a budget effective from month M changes budget figures for M and later months and leaves earlier months unchanged. Clearing a budget from month M shows "no budget" for M and later and leaves earlier months unchanged.
+- [ ] AC13 Dashboard: switching account changes all figures; the monthly summary shows total budget and total actual per month; the selected month shows level-1 rows that expand to level-2 rows; the share chart reflects level-1 actuals; unbudgeted categories show "no budget". Month totals: actual includes every category, budget only budgeted ones (user decision, kept as is), so unbudgeted spending alone can make a month read as over budget.
 - [ ] AC14 On the transactions page the user can change a transaction's category (to a level-2 category of the same account) and note, and delete a transaction; dashboard figures reflect the change.
-- [ ] AC15 A category in use cannot be deleted; an unused one can.
+- [ ] AC15 A category with transactions cannot be deleted; one without transactions can, including one that has budgets.
 - [ ] AC16 The three MCP tools work from an MCP client over HTTP at `/mcp` with a Bearer token and return the same results and rejections as the REST endpoints.
 - [ ] AC17 Backend tests, frontend type check and frontend tests pass; the OpenAPI document is served and the frontend client is generated from it.
 - [ ] AC18 The agent integration guide exists and `.trellis/spec/` backend and frontend files describe the conventions actually used.

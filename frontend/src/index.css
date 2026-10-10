@@ -1,0 +1,206 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/inter/wght.css";
+
+/* Design tokens. The rationale for every value is in frontend/DESIGN.md; change both. */
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces and text: warm paper, cool ink */
+  --background: oklch(0.982 0.004 90);
+  --foreground: oklch(0.24 0.014 255);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+  --muted: oklch(0.957 0.005 90);
+  --muted-foreground: oklch(0.5 0.014 255);
+  --secondary: oklch(0.957 0.005 90);
+  --secondary-foreground: var(--foreground);
+  --border: oklch(0.912 0.006 90);
+  --input: oklch(0.87 0.008 90);
+
+  /* Brand: 黛青, a deep teal */
+  --primary: oklch(0.4 0.068 195);
+  --primary-foreground: oklch(0.985 0.004 90);
+  --accent: oklch(0.945 0.014 195);
+  --accent-foreground: oklch(0.3 0.055 195);
+  --ring: oklch(0.55 0.08 195);
+
+  /* Budget states */
+  --positive: oklch(0.55 0.105 165);
+  --positive-soft: oklch(0.955 0.028 165);
+  --warning: oklch(0.7 0.14 70);
+  --warning-foreground: oklch(0.47 0.11 60);
+  --warning-soft: oklch(0.96 0.04 85);
+  --over: oklch(0.56 0.19 27);
+  --over-soft: oklch(0.957 0.026 27);
+  --destructive: var(--over);
+  --track: oklch(0.925 0.006 90);
+
+  /* Charts */
+  --chart-budget: oklch(0.885 0.014 195);
+  --chart-actual: var(--primary);
+  --chart-over: var(--over);
+  --chart-grid: oklch(0.93 0.005 90);
+  /* Categorical. No amber and no red: those two hues mean "near" and "over". */
+  --chart-1: oklch(0.54 0.085 195);
+  --chart-2: oklch(0.58 0.13 340);
+  --chart-3: oklch(0.66 0.12 148);
+  --chart-4: oklch(0.54 0.13 268);
+  --chart-5: oklch(0.74 0.065 80);
+  --chart-6: oklch(0.72 0.09 232);
+  --chart-7: oklch(0.62 0.12 300);
+  --chart-8: oklch(0.68 0.018 255);
+
+  --radius: 0.5rem;
+  --shadow-card: 0 1px 2px oklch(0.24 0.014 255 / 0.04), 0 1px 1px oklch(0.24 0.014 255 / 0.03);
+
+  --font-sans:
+    "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Source Han Sans SC", "WenQuanYi Micro Hei", sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: oklch(0.172 0.008 255);
+  --foreground: oklch(0.935 0.005 90);
+  --card: oklch(0.212 0.009 255);
+  --popover: oklch(0.235 0.01 255);
+  --muted: oklch(0.255 0.01 255);
+  --muted-foreground: oklch(0.69 0.012 255);
+  --secondary: oklch(0.255 0.01 255);
+  --border: oklch(0.29 0.01 255);
+  --input: oklch(0.35 0.012 255);
+
+  --primary: oklch(0.76 0.085 192);
+  --primary-foreground: oklch(0.19 0.02 195);
+  --accent: oklch(0.275 0.026 195);
+  --accent-foreground: oklch(0.9 0.04 192);
+  --ring: oklch(0.62 0.08 192);
+
+  --positive: oklch(0.74 0.11 165);
+  --positive-soft: oklch(0.285 0.04 165);
+  --warning: oklch(0.79 0.13 75);
+  --warning-foreground: oklch(0.83 0.12 80);
+  --warning-soft: oklch(0.3 0.045 75);
+  --over: oklch(0.69 0.17 27);
+  --over-soft: oklch(0.29 0.06 27);
+  --track: oklch(0.285 0.01 255);
+
+  --chart-budget: oklch(0.345 0.022 195);
+  --chart-grid: oklch(0.265 0.01 255);
+  --chart-1: oklch(0.68 0.09 192);
+  --chart-2: oklch(0.69 0.12 340);
+  --chart-3: oklch(0.75 0.12 148);
+  --chart-4: oklch(0.67 0.12 268);
+  --chart-5: oklch(0.8 0.06 80);
+  --chart-6: oklch(0.78 0.085 232);
+  --chart-7: oklch(0.72 0.11 300);
+  --chart-8: oklch(0.6 0.018 255);
+
+  --shadow-card: 0 0 0 transparent;
+}
+
+@theme inline {
+  --font-sans: var(--font-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-positive: var(--positive);
+  --color-positive-soft: var(--positive-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-over: var(--over);
+  --color-over-soft: var(--over-soft);
+  --color-track: var(--track);
+  --color-chart-budget: var(--chart-budget);
+  --color-chart-actual: var(--chart-actual);
+  --color-chart-over: var(--chart-over);
+  --color-chart-grid: var(--chart-grid);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+
+  --shadow-card: var(--shadow-card);
+
+  /* Type scale (size / line height). Chinese text needs taller lines than Latin. */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.625rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.75rem;
+  --text-display: 2.125rem;
+  --text-display--line-height: 2.5rem;
+  --text-display--letter-spacing: -0.02em;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground text-sm antialiased;
+    font-family: var(--font-sans);
+    font-feature-settings: "calt", "cv11";
+    min-height: 100dvh;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@utility num {
+  /* Every amount, percentage and date: digits of equal width so columns line up. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "calt", "cv11";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

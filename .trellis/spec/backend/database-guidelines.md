@@ -57,8 +57,15 @@ Anything else that inserts transactions for an account must take the same lock.
   versions of an account) are reused by budgets, transactions and summaries.
 - **Budget in force**: the version with the greatest `effective_from <= month`.
   `services/budgets.py::BudgetHistory` is the only implementation; the single-month
-  endpoint and the 12-month series both use it. Amount 0 is a real budget; no version
-  means "no budget" and is returned as `null`.
+  endpoint, the 12-month series and the MCP `get_budgets` tool all use it. Amount 0 is a
+  real budget. "No budget" (returned as `null`, with `effective_from: null`) means no
+  version at all, or the version in force has a NULL `amount`: a budget cleared from that
+  month (`PUT budgets` with `"amount": null`). `in_force` hides cleared versions, so
+  callers never see a NULL amount row. A level-1 budget sums only children that have a
+  budget and is `null` when none has (`services/summaries.py::_sum_or_none`).
+- Clearing where no budget is in force before that month stores no version (it only
+  deletes a version at that same month, if any), so redundant clearing rows do not pile
+  up (`set_budgets`, `BudgetHistory.in_force_before`).
 - Aggregates are done in SQL (`func.sum`, `GROUP BY`) and returned as `Decimal`.
 - Upserts use `sqlalchemy.dialects.postgresql.insert(...).on_conflict_do_update`,
   naming the constraint (`set_budgets`).
@@ -99,7 +106,14 @@ user-confirmed duplicates are legitimate rows.
 - Files are named `NNNN_description.py` with revision id `NNNN` (`0001_initial_schema.py`).
 - Create: `uv run alembic revision --autogenerate -m "..."` (needs `DATABASE_URL`), then
   read and edit the result. Apply: `uv run alembic upgrade head`.
-- Every migration has a working `downgrade`.
+- Every migration has a working `downgrade`. A migration is never edited once committed;
+  changes go into a new revision (`0002_budget_amount_nullable.py` makes
+  `budgets.amount` nullable; its downgrade deletes the clearing rows, which the old
+  schema cannot hold).
+- A migration that changes existing data or constraints gets a test that upgrades from
+  the previous revision with rows present
+  (`tests/test_schema.py::test_0002_applies_to_a_database_that_already_has_budgets`,
+  using `tests/conftest.py::alembic_config`).
 - `tests/test_schema.py::test_migrations_match_models` compares the migrated database
   with the models and fails on any difference. The test database itself is built by
   running the migrations, never by `Base.metadata.create_all`.

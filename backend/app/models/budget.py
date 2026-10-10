@@ -8,7 +8,10 @@ from app.db import Base
 
 
 class Budget(Base):
-    """One version of a level-2 category's monthly budget, in force from `effective_from`."""
+    """One version of a level-2 category's monthly budget, in force from `effective_from`.
+
+    A NULL `amount` is a cleared budget: "no budget" from that month on. 0 is a real budget.
+    """
 
     __tablename__ = "budgets"
     __table_args__ = (
@@ -24,4 +27,4 @@ class Budget(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id", ondelete="CASCADE"))
     effective_from: Mapped[date] = mapped_column(Date)
-    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))

@@ -78,7 +78,7 @@ def create_mcp_server() -> MCPServer:
         """Return the budget in force per level-2 category for a month.
 
         `month` is `YYYY-MM` and defaults to the current month. `amount: null` means the
-        category has no budget.
+        category has no budget that month (never set, or cleared); `"0.00"` is a real budget.
         """
         try:
             budgets = await _run(lambda db: budget_service.get_budgets(db, account_id, month))

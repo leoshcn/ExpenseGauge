@@ -7,7 +7,9 @@ from app.schemas.common import Money, Month, RequestSchema, Schema
 
 class BudgetItemIn(RequestSchema):
     category_id: int
-    amount: Annotated[Money, Field(ge=0)]
+    amount: Annotated[Money, Field(ge=0)] | None = Field(
+        description="Budget from `effective_from` on; null clears it (no budget) from that month"
+    )
 
 
 class BudgetsPutIn(RequestSchema):
@@ -20,8 +22,12 @@ class BudgetLine(Schema):
     category_name: str
     parent_id: int
     parent_name: str
-    amount: Money | None = Field(description="Budget in force for the month; null means no budget")
-    effective_from: Month | None = Field(description="Month the in-force version started")
+    amount: Money | None = Field(
+        description="Budget in force for the month; null means no budget (never set, or cleared)"
+    )
+    effective_from: Month | None = Field(
+        description="Month the in-force amount started; null when there is no budget"
+    )
 
 
 class BudgetsOut(Schema):

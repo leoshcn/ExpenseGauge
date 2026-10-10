@@ -175,8 +175,12 @@
               },
               {
                 "type": "string"
+              },
+              {
+                "type": "null"
               }
             ],
+            "description": "Budget from `effective_from` on; null clears it (no budget) from that month",
             "title": "Amount"
           },
           "category_id": {
@@ -202,7 +206,7 @@
                 "type": "null"
               }
             ],
-            "description": "Budget in force for the month; null means no budget",
+            "description": "Budget in force for the month; null means no budget (never set, or cleared)",
             "title": "Amount"
           },
           "category_id": {
@@ -223,7 +227,7 @@
                 "type": "null"
               }
             ],
-            "description": "Month the in-force version started",
+            "description": "Month the in-force amount started; null when there is no budget",
             "title": "Effective From"
           },
           "parent_id": {
@@ -1239,7 +1243,7 @@
         ]
       },
       "put": {
-        "description": "Sets amounts effective from a month; earlier months keep their version.",
+        "description": "Sets amounts effective from a month; earlier months keep their version.\nAn `amount` of null clears that category's budget from the month on.",
         "operationId": "set_budgets_api_v1_accounts__account_id__budgets_put",
         "parameters": [
           {
