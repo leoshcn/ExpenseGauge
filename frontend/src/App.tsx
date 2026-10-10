@@ -2,12 +2,13 @@ import { Route, Routes } from "react-router";
 
 import { AppLayout } from "@/components/app-layout";
 import { RequireStage, StageRedirect } from "@/components/route-guard";
+import { BudgetsPage } from "@/pages/budgets";
 import { DashboardPage } from "@/pages/dashboard";
 import { LoginPage } from "@/pages/login";
 import { OnboardingPage } from "@/pages/onboarding";
-import { PlaceholderPage } from "@/pages/placeholder";
+import { SettingsPage } from "@/pages/settings";
 import { SetupPage } from "@/pages/setup";
-import { S } from "@/strings.zh";
+import { TransactionsPage } from "@/pages/transactions";
 
 /**
  * Every route sits under a `RequireStage`, so a URL typed by hand can never show a
@@ -29,19 +30,9 @@ export function App() {
       <Route element={<RequireStage allow={["app"]} />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          {/* Placeholders until parent implement.md step 9b. */}
-          <Route
-            path="/transactions"
-            element={<PlaceholderPage title={S.nav.transactions} purpose={S.placeholder.transactions} />}
-          />
-          <Route
-            path="/budgets"
-            element={<PlaceholderPage title={S.nav.budgets} purpose={S.placeholder.budgets} />}
-          />
-          <Route
-            path="/settings"
-            element={<PlaceholderPage title={S.nav.settings} purpose={S.placeholder.settings} />}
-          />
+          <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/budgets" element={<BudgetsPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<StageRedirect />} />

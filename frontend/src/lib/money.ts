@@ -54,6 +54,14 @@ export function formatMoney(value: string, currency: string): string {
   return formatter(currency, false).format(value as Intl.StringNumericLiteral);
 }
 
+/** The sign the formatted amounts use, for an input's prefix: "¥", "US$". */
+export function currencySymbol(currency: string): string {
+  const part = formatter(currency, false)
+    .formatToParts(0)
+    .find((candidate) => candidate.type === "currency");
+  return part?.value ?? currency;
+}
+
 /** Abbreviated, for chart axes only: "¥1.2万". */
 export function formatMoneyCompact(value: number, currency: string): string {
   return formatter(currency, true).format(value);

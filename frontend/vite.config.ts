@@ -7,7 +7,8 @@ import { defineConfig } from "vite";
 
 // The session cookie is HttpOnly and SameSite=Lax, so the browser must see the API on
 // the page's own origin. In development Vite proxies `/api` to the backend; in
-// production nginx does the same.
+// production nginx does the same. `/mcp` is proxied too, so the MCP address shown on the
+// settings page (`<origin>/mcp`) also works against the dev server.
 const API_TARGET = process.env.VITE_API_TARGET ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
@@ -20,6 +21,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": { target: API_TARGET, changeOrigin: false },
+      "/mcp": { target: API_TARGET, changeOrigin: false },
     },
   },
   test: {

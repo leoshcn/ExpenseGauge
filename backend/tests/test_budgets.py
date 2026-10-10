@@ -233,6 +233,68 @@ def test_clearing_where_there_is_no_budget_is_accepted_and_stores_nothing(client
     assert _amounts(client, ledger, "2026-12")[ledger.metro] is None
 
 
+def test_clear_left_without_a_budget_before_it_is_removed(client, ledger):
+    """R6: set from Jan, cleared from Apr, then cleared from Jan; a later set from Feb
+    is not cut short at Apr by the stale clear."""
+    ledger.set_budgets("2026-01", {ledger.groceries: "1000"})
+    ledger.set_budgets("2026-04", {ledger.groceries: None})
+    ledger.set_budgets("2026-01", {ledger.groceries: None})
+    assert _stored(ledger.groceries) == []
+
+    ledger.set_budgets("2026-02", {ledger.groceries: "800"})
+    assert _stored(ledger.groceries) == [("2026-02", "800.00")]
+    expected = {
+        "2026-01": None,
+        "2026-02": "800.00",
+        "2026-04": "800.00",
+        "2027-06": "800.00",
+    }
+    assert {m: _amounts(client, ledger, m)[ledger.groceries] for m in expected} == expected
+
+
+def test_consecutive_clears_collapse_and_a_clear_after_a_budget_is_kept(client, ledger):
+    """R6"""
+    ledger.set_budgets("2026-01", {ledger.dining: "300"})
+    ledger.set_budgets("2026-03", {ledger.dining: "400"})
+    ledger.set_budgets("2026-05", {ledger.dining: None})
+    # A clear after a real budget is kept.
+    assert _stored(ledger.dining) == [
+        ("2026-01", "300.00"),
+        ("2026-03", "400.00"),
+        ("2026-05", None),
+    ]
+
+    # Clearing from Mar makes the May clear follow another clear: it collapses into Mar.
+    ledger.set_budgets("2026-03", {ledger.dining: None})
+    assert _stored(ledger.dining) == [("2026-01", "300.00"), ("2026-03", None)]
+    assert _amounts(client, ledger, "2026-02")[ledger.dining] == "300.00"
+    assert _amounts(client, ledger, "2026-03")[ledger.dining] is None
+    assert _amounts(client, ledger, "2026-06")[ledger.dining] is None
+
+    # Only the categories in the request are normalised; others keep their history.
+    ledger.set_budgets("2026-01", {ledger.metro: "50"})
+    ledger.set_budgets("2026-06", {ledger.metro: None})
+    ledger.set_budgets("2026-01", {ledger.dining: None})
+    assert _stored(ledger.dining) == []
+    assert _stored(ledger.metro) == [("2026-01", "50.00"), ("2026-06", None)]
+
+
+def test_one_request_normalises_each_category_on_its_own_history(client, ledger):
+    """R6: several categories in one PUT; each keeps or loses its clears by its own walk."""
+    ledger.set_budgets("2026-01", {ledger.groceries: "1000", ledger.dining: "300"})
+    ledger.set_budgets("2026-04", {ledger.groceries: None, ledger.dining: None})
+    ledger.set_budgets("2026-02", {ledger.metro: "50"})
+    ledger.set_budgets("2026-05", {ledger.metro: None})
+
+    # Groceries loses its Jan budget (so its Apr clear goes too); dining only changes its
+    # Jan amount, so its Apr clear still ends a budget and stays.
+    ledger.set_budgets("2026-01", {ledger.groceries: None, ledger.dining: "350"})
+    assert _stored(ledger.groceries) == []
+    assert _stored(ledger.dining) == [("2026-01", "350.00"), ("2026-04", None)]
+    assert _stored(ledger.metro) == [("2026-02", "50.00"), ("2026-05", None)]
+    assert _amounts(client, ledger, "2026-04")[ledger.dining] is None
+
+
 def test_agent_token_cannot_clear_a_budget(client, agent, ledger):
     """AC7/AC12: clearing is a budget edit, so it needs the user's session."""
     ledger.set_budgets("2026-01", {ledger.groceries: "1000"})

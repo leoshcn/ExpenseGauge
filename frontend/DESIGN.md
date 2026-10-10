@@ -118,6 +118,13 @@ Line heights are taller than Latin defaults because Chinese glyphs fill the em b
 - **Below `md` (768 px)** the table folds: budget, remaining and meter move under the
   category name, the amount stays right-aligned with the percentage under it. Nothing
   scrolls sideways at 360 px.
+- **Every page has the same header**: the page title (`text-lg`) on the left, the account
+  selector (or, on settings, the tabs) on the right. Content is cards
+  (`rounded-xl border bg-card shadow-card`) separated by 20 px, as on the Dashboard.
+- **Other tables fold the same way.** Transactions: below `md` the date and category move
+  under the counterparty and only the amount and an edit button stay in columns; the note
+  has its own column only from `lg` and otherwise sits under the counterparty with a
+  note icon. Budgets: below `md` the amount in force moves under the category name.
 
 ## Charts
 
@@ -157,14 +164,53 @@ category order, not from its rank this month, so it keeps its colour from month 
 - Percentages are whole numbers in tables and meters and one decimal in the share list.
 - Months are written `2026年10月`; chart ticks use `10月` (just `10` on phones) with the
   year under the first tick and under each January.
+- Transaction days are `10月8日`, with the year (`2025年12月3日`) only outside the current
+  year; timestamps (token created, last used) are `2026年10月10日 14:32` in the browser's
+  time zone (`src/lib/date.ts`).
+
+## Data-entry pages
+
+The transactions, budgets and settings pages add no colours: they reuse the tokens above
+with these meanings.
+
+- **Refunds** (negative amounts) are set in `--positive` with a "退款" chip on
+  `--positive-soft`: money coming back is good news, and the chip keeps it findable
+  without colour. Expenses stay in the foreground colour; only the amount is coloured.
+- **Unsaved edits** on the budget page carry a `--primary` edge on the left of the row
+  (the same 3 px inset edge an over-budget row has in vermilion), a primary input border,
+  an "已修改" chip on `--accent` (from `sm`), and "原为 ¥x" under the input, so the
+  previous value is never lost from view. A save bar, pinned above the tab bar on phones
+  and to the bottom of the screen from `lg`, counts the edits and repeats the month they
+  take effect from.
+- **Budget inputs**: empty means "未设预算" (shown as the placeholder), `0` is a budget of
+  zero. The currency sign sits inside the input on the left, the figure is right-aligned
+  in tabular digits like every other amount. The level-1 subtotal and the total are
+  computed from the inputs as the user types and are never inputs themselves.
+- **The effective month** is explained next to the stepper in an `--accent` panel: from
+  which month the amounts apply, that earlier months keep theirs, and what clearing and
+  zero mean.
+- **Dialogs** (`src/components/ui/dialog.tsx`, `alert-dialog.tsx`) are popover surfaces
+  with `rounded-xl`; buttons stack full-width on phones with the primary action on top.
+  Destructive confirmations use the `destructive` button (`--over`), start with focus on
+  "取消", stay open while the request runs, and show the backend's refusal in place
+  (`CATEGORY_IN_USE`).
+- **The one-time token** is shown in a monospace, read-only field (selected on focus)
+  beside a primary copy button, under a `--warning-soft` panel saying it will not be shown
+  again. The dialog ignores clicks outside it; closing takes the button or Escape.
+- **Status chips** follow one shape (fully round, 11 px, medium): "超支" and "退款" use the
+  state colours, "已修改" and "有效" use `--accent`, neutral facts ("已撤销", "已确认重复")
+  are outlined.
+- **Copy buttons** confirm with a check mark in `--positive` for 2 s. Copying works over
+  plain HTTP on a LAN too (`src/lib/clipboard.ts` falls back when the Clipboard API is
+  missing).
 
 ## States
 
-Every data view has four states, all implemented for the Dashboard: loading (skeleton
+Every data view has four states, implemented on every page: loading (skeleton
 blocks in the final layout, so nothing jumps), empty (what is missing and how data gets
 in), error (the backend's own Chinese message, its reason code, and a retry button), and
-loaded. Changing the month keeps the previous month on screen at 60% opacity until the
-new one arrives.
+loaded. Changing the month (Dashboard, budgets) or the page or filter (transactions)
+keeps the previous result on screen at 60% opacity until the new one arrives.
 
 ## Motion and accessibility
 
@@ -173,5 +219,8 @@ new one arrives.
 - Meters have `role="meter"` with a label and value text; expandable rows are buttons with
   `aria-expanded`; the month can be changed with the previous/next buttons as well as by
   clicking the chart; focus rings use `--ring` on every control.
+- Dialogs trap focus, close on Escape and give focus back to the button that opened them
+  (`useRestoreFocus`). Every icon-only button (edit, delete, rename, copy, clear) has an
+  accessible name that includes what it acts on ("删除「买菜」").
 - The theme follows the system on first visit and is then remembered (`localStorage`,
   key `eg-theme`); it is applied before first paint by a script in `index.html`.

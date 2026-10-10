@@ -17,14 +17,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { S } from "@/strings.zh";
 
-type NavItem = { to: string; label: string; icon: LucideIcon; built: boolean };
+type NavItem = { to: string; label: string; icon: LucideIcon };
 
-/** `built: false` marks routes that are still placeholders (parent implement.md step 9b). */
 const NAV: readonly NavItem[] = [
-  { to: "/dashboard", label: S.nav.dashboard, icon: LayoutDashboardIcon, built: true },
-  { to: "/transactions", label: S.nav.transactions, icon: ReceiptTextIcon, built: false },
-  { to: "/budgets", label: S.nav.budgets, icon: TargetIcon, built: false },
-  { to: "/settings", label: S.nav.settings, icon: SettingsIcon, built: false },
+  { to: "/dashboard", label: S.nav.dashboard, icon: LayoutDashboardIcon },
+  { to: "/transactions", label: S.nav.transactions, icon: ReceiptTextIcon },
+  { to: "/budgets", label: S.nav.budgets, icon: TargetIcon },
+  { to: "/settings", label: S.nav.settings, icon: SettingsIcon },
 ];
 
 function useLogout() {
@@ -71,11 +70,6 @@ function Sidebar() {
           >
             <item.icon className="size-4" aria-hidden="true" />
             <span className="flex-1">{item.label}</span>
-            {item.built ? null : (
-              <span className="rounded-full border px-1.5 text-[11px] leading-4 font-normal text-muted-foreground">
-                {S.placeholder.badge}
-              </span>
-            )}
           </NavLink>
         ))}
       </nav>
@@ -133,7 +127,6 @@ function MobileBars() {
               cn(
                 "flex h-14 flex-col items-center justify-center gap-0.5 text-xs text-muted-foreground",
                 isActive && "font-medium text-primary",
-                !item.built && "opacity-60",
               )
             }
           >

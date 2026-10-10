@@ -19,7 +19,9 @@ npm run test         # vitest
 `npm run build` additionally proves the production bundle builds. Anything visible is also
 checked in a browser against the real API with seeded data (see `frontend/README.md`), at
 desktop and phone widths and in both themes; `npm run screenshots` regenerates
-`docs/screenshots/` for review.
+`docs/screenshots/` for review (`npm run screenshots -- budgets` for one page). The
+script must not change data: open dialogs and cancel them, and stub responses that would
+create something (`page.route`, as for the one-time token).
 
 ---
 
@@ -55,15 +57,30 @@ desktop and phone widths and in both themes; `npm run screenshots` regenerates
 
 - **Pure functions are tested thoroughly**, including the awkward values: zero budgets,
   `null` budgets, negative actuals from refunds, large amounts, year boundaries
-  (`lib/*.test.ts`, `pages/dashboard/model.test.ts`).
+  (`lib/*.test.ts`, `pages/*/model.test.ts`). Anything that decides what is sent to the
+  API is tested as a function: `transactionChanges` (only changed fields, `null` to
+  remove a note), `budgetChanges` (clear vs zero, unchanged rows left out, invalid rows
+  reported, the same draft re-diffed against another month).
 - **The API client's error handling is tested** with a stub `fetch`
   (`api/client.test.ts`): envelope, non-envelope, proxy error, no connection, 204.
 - **Components are tested through what the user sees** with Testing Library: roles, labels
-  and text from the UI, not class names (`pages/dashboard/category-table.test.tsx`).
+  and text from the UI, not class names (`pages/dashboard/category-table.test.tsx`,
+  `pages/budgets/budget-table.test.tsx`, which drives the inputs and checks the request
+  items that would be sent).
+- **Page wiring** (what a page asks for and when it lets the user save) is tested by
+  rendering the page in a `QueryClientProvider` and `MemoryRouter` with `@/api/queries`
+  partly mocked (`vi.mock`, keeping `keys`): `pages/budgets/index.test.tsx` (no save
+  while another month loads), `pages/transactions/index.test.tsx` (an unknown URL
+  category never reaches the API), `pages/settings/agent-section.test.tsx` (the one-time
+  token is gone from the query client once its dialog closes).
 - Tests are deterministic: no real clock (pass `now`), no network.
 - Not covered by automated tests today, and therefore checked by hand in the browser:
   the route guard and the setup/login/onboarding flow, chart rendering and month selection
-  by click (jsdom has no layout). Extend the Playwright script or add tests when these change.
+  by click (jsdom has no layout), and the mutation flows against the real API (edit and
+  delete a transaction and see the Dashboard change, set a budget from one month and clear
+  it from a later one, create and revoke a token, delete a category in use and an unused
+  one), and keyboard use of the dialogs. Extend the Playwright script or add tests when
+  these change.
 
 ---
 
@@ -76,5 +93,7 @@ desktop and phone widths and in both themes; `npm run screenshots` regenerates
 - [ ] Loading, empty and error states exist and were looked at.
 - [ ] Looked at in the browser at about 390 px and at desktop width, light and dark.
 - [ ] Icon-only buttons have labels; state is not shown by colour alone.
-- [ ] Query keys come from `keys`; mutations update or invalidate the caches they affect.
+- [ ] Query keys come from `keys`; mutations update or invalidate the caches they affect
+  (table in hook-guidelines.md), including the Dashboard's.
+- [ ] Dialogs restore focus, stay open while saving, and show the backend's refusal.
 - [ ] `DESIGN.md` and these spec files still describe the code.

@@ -63,9 +63,15 @@ Anything else that inserts transactions for an account must take the same lock.
   month (`PUT budgets` with `"amount": null`). `in_force` hides cleared versions, so
   callers never see a NULL amount row. A level-1 budget sums only children that have a
   budget and is `null` when none has (`services/summaries.py::_sum_or_none`).
-- Clearing where no budget is in force before that month stores no version (it only
-  deletes a version at that same month, if any), so redundant clearing rows do not pile
-  up (`set_budgets`, `BudgetHistory.in_force_before`).
+- A clearing version (NULL `amount`) exists only where a budget is in force right before
+  it. After its upserts, and in the same transaction, `set_budgets` normalises the history
+  of every category in the request (`_drop_redundant_clears`): walking versions by
+  `effective_from`, it deletes each NULL row with no earlier row or whose previous kept
+  row is also NULL. So clearing where there is no budget stores nothing, consecutive
+  clears collapse to the first, and removing a budget (e.g. clearing from its own month)
+  also removes later clears that it leaves stranded, so a later set is never cut short
+  by an invisible clear. It lives in the service, so REST and MCP both get it; any other
+  code that writes budget versions must call it too.
 - Aggregates are done in SQL (`func.sum`, `GROUP BY`) and returned as `Decimal`.
 - Upserts use `sqlalchemy.dialects.postgresql.insert(...).on_conflict_do_update`,
   naming the constraint (`set_budgets`).

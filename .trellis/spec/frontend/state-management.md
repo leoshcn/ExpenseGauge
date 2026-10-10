@@ -16,7 +16,7 @@ the server (TanStack Query), the URL, the component, or `localStorage` for one p
 | Kind | Where | Examples |
 |---|---|---|
 | Server state | TanStack Query cache | user, accounts, category tree, summaries |
-| View state worth sharing or reloading | URL search params | Dashboard `?account=<id>&month=YYYY-MM` |
+| View state worth sharing or reloading | URL search params | Dashboard `?account=<id>&month=YYYY-MM`; transactions `?account&month&category&page`; budgets `?account&month` (the effective-from month); settings `?tab&account` |
 | Transient UI state | `useState` in the component | form fields, which table rows are open |
 | Device preference | `localStorage` + class on `<html>` | theme (`eg-theme`), via `useTheme()` |
 
@@ -24,11 +24,27 @@ URL state is validated when read and falls back silently: an unknown account id 
 first account, a month outside the 12-month window means the current month
 (`DashboardPage` in `pages/dashboard/index.tsx`). It is written with
 `setSearchParams(..., { replace: true })` so stepping through months does not fill the
-history.
+history. The newer pages read and write it through `useSearchState()` /
+`useSelectedAccount()` (`hooks/use-search-state.ts`); default values are left out of
+the URL (`update({ page: null })`). The transactions filter is parsed by `readFilter()`
+(`pages/transactions/model.ts`): a malformed month, a page below 1 or a category not in
+the account's tree means "not filtered". While the URL names a category, the list query
+waits for the tree (`enabled`), so an unknown category never reaches the API. Changing the account resets the category filter
+and the page; changing a filter resets the page.
 
 Form state is plain `useState` with a `validate` function that returns messages from
 `strings.zh.ts`; the server's message is shown for anything the client did not catch
 (`pages/setup.tsx`). There is no form library.
+
+**The budget draft** (`pages/budgets/index.tsx`) is a `Record<categoryId, text>` of what
+the user typed; untouched rows are absent and show the amount in force. What to send is
+derived during render by `budgetChanges(lines, draft)`, never stored. The draft survives
+a change of month on purpose: it is re-compared with the new month's amounts and saved
+from whichever month is shown when the user presses save (the save bar names it). Save is
+disabled while that month's amounts are still loading (`isPlaceholderData`), because the
+diff would still be against the previous month. On success only the entries saved as typed
+are dropped (`draftAfterSave`), so typing during the request is kept; it is also dropped
+on "撤销修改" and when the account changes (the body is keyed by account).
 
 ---
 

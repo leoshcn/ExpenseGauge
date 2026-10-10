@@ -27,7 +27,13 @@ response shape of its own.
 - **Paths, parameters and bodies are checked by `openapi-fetch`**: a misspelt path, a
   missing path parameter or an unknown body field is a compile error in `api/queries.ts`.
 - **View models** that are not API shapes live next to their producer
-  (`TrendPoint`, `ShareSlice` in `pages/dashboard/model.ts`; `Usage` in `lib/budget.ts`).
+  (`TrendPoint`, `ShareSlice` in `pages/dashboard/model.ts`; `Usage` in `lib/budget.ts`;
+  `BudgetDraft`, `ParsedAmount` in `pages/budgets/model.ts`). Request parameters that
+  are also part of a query key get a named type next to the keys (`TransactionFilter` in
+  `api/queries.ts`).
+- **Request bodies are built as the generated type**, so a misspelt or non-editable field
+  does not compile: `transactionChanges()` returns `Schemas["TransactionUpdateIn"] | null`
+  with only the changed fields, `budgetChanges()` returns `Schemas["BudgetItemIn"][]`.
 - Type-only imports use `import type` or inline `type` (eslint
   `consistent-type-imports`).
 
@@ -62,6 +68,17 @@ keep `openapi.json` in step with the code); they are not re-validated in the bro
   geometry only.
 - **`budget: string | null`.** `null` is "no budget", `"0.00"` is a budget of zero. Code
   must handle `null` explicitly; `usage()` turns the pair into a discriminated `state`.
+  On the way in, `parseBudgetInput()` maps an empty input to `null` and a typed amount to
+  a two-decimal string (`{ valid: true; amount: string | null } | { valid: false }`), and
+  `sameBudget()` compares by value with `null` equal only to `null`. The PUT sends
+  `amount: null` to clear a budget from the chosen month.
+- **Optional PATCH fields mean "unchanged"; `null` means "remove".** For
+  `TransactionUpdateIn` an absent `note` keeps the note and `note: null` deletes it, so
+  never send a field the user did not change.
+- **Calendar days are strings.** A transaction's `date` (`YYYY-MM-DD`) is formatted by
+  `formatDay()` (`lib/date.ts`) from its parts, never through `Date`, so no time zone
+  can move it to another day. Only instants (`created_at`, `last_used_at`) go through
+  `Date` (`formatDateTime()`).
 - **Months are `YYYY-MM` strings**, compared as strings and stepped with `addMonths()`.
   Dates are not parsed into `Date` except to read "now".
 - **Discriminated unions for state** (`StageState`, `Usage["state"]`) and `Record<Union, T>`

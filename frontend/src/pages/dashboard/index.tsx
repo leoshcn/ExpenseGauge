@@ -6,14 +6,8 @@ import { useSearchParams } from "react-router";
 
 import type { Schemas } from "@/api/client";
 import { accountsQuery, monthDetailQuery, monthlySummaryQuery } from "@/api/queries";
+import { AccountSelect } from "@/components/account-select";
 import { ErrorState } from "@/components/error-state";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
 import { S } from "@/strings.zh";
@@ -26,32 +20,6 @@ import { TrendChart } from "./trend-chart";
 
 const T = S.dashboard;
 const WINDOW_MONTHS = 12;
-
-function AccountSelect({
-  accounts,
-  value,
-  onChange,
-}: {
-  accounts: readonly Schemas["AccountOut"][];
-  value: number;
-  onChange: (id: number) => void;
-}) {
-  return (
-    <Select value={String(value)} onValueChange={(id) => onChange(Number(id))}>
-      <SelectTrigger aria-label={T.account} className="max-w-[60vw] min-w-40 bg-card">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent align="end" position="popper">
-        {accounts.map((account) => (
-          <SelectItem key={account.id} value={String(account.id)}>
-            <span className="truncate">{account.name}</span>
-            <span className="num text-xs text-muted-foreground">{account.currency}</span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
 
 function DashboardSkeleton() {
   return (

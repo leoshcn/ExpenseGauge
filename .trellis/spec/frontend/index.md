@@ -15,8 +15,8 @@ TanStack Query 5, `openapi-typescript` + `openapi-fetch` for the typed client, T
 CSS 4, shadcn/ui components vendored into `src/components/ui`, Recharts 3 through the
 shadcn/ui chart wrapper, vitest + Testing Library, eslint. Package manager: **npm**.
 
-Built so far: setup, login, onboarding, Dashboard. Transactions, budgets and settings are
-placeholders (`src/pages/placeholder.tsx`) until parent `implement.md` step 9b.
+Pages: setup, login, onboarding, Dashboard, transactions, budgets, settings (accounts,
+categories, agent tokens and connection details).
 
 The UI is Simplified Chinese only. Visual decisions are recorded in `frontend/DESIGN.md`.
 

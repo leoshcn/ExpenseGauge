@@ -59,7 +59,7 @@ Source requirements: `userinput/requirement.md`.
 - Earlier months keep the budget version in force at the time.
 - A level-1 budget is the computed sum of its level-2 budgets; it cannot be entered directly.
 - No rollover of surplus or overspend.
-- A budget can be cleared from a chosen month onward, returning the category to "no budget" for that month and later; earlier months keep their budget.
+- A budget can be cleared from a chosen month onward, returning the category to "no budget" for that month and later; earlier months keep their budget. Clear rows left with no budget in force before them are removed automatically (user decision), so a later set never stops at a stale clear.
 
 ### R7 Transaction submission (agent)
 

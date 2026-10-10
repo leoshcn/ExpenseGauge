@@ -4,9 +4,9 @@ React + TypeScript + Vite. React Router, TanStack Query, Tailwind CSS v4, shadcn
 components vendored into `src/components/ui`, Recharts through the shadcn/ui chart
 wrapper. The UI is Simplified Chinese; all copy is in `src/strings.zh.ts`.
 
-Status: setup, login, onboarding and the Dashboard are built. Transactions, budgets and
-settings are labelled placeholders until the Dashboard's visual design is approved
-(parent `implement.md` step 9b). The design spec is [`DESIGN.md`](./DESIGN.md).
+Pages: setup, login, onboarding, Dashboard (概览), transactions (流水), budgets (预算) and
+settings (设置: accounts, categories, AI agent tokens and connection details). The design
+spec is [`DESIGN.md`](./DESIGN.md).
 
 This project uses **npm** (not pnpm; the parent plan's `pnpm ...` commands map one to one).
 On Windows shells where `npm` is not found, call `npm.cmd` and `npx.cmd` instead.
@@ -43,8 +43,9 @@ Open <http://localhost:5173> and sign in as `demo` / `expense-gauge-demo`.
 - The demo has three accounts: `日常账户` (nine months, over-budget and unbudgeted
   categories, refunds; three months back a refund makes one category negative),
   `美元信用卡` (USD) and `旅行基金` (no transactions: the empty state).
-- The dev server proxies `/api` to `http://127.0.0.1:8000`, so the browser sees one origin
-  and the HttpOnly session cookie works. Another backend address:
+- The dev server proxies `/api` and `/mcp` to `http://127.0.0.1:8000`, so the browser sees
+  one origin and the HttpOnly session cookie works, and the MCP address shown under
+  设置 → AI 助手 (`http://localhost:5173/mcp`) works in development too. Another backend address:
   `VITE_API_TARGET=http://host:port npm run dev`.
 
 ## Checks
@@ -63,13 +64,19 @@ npm run build        # type check + production bundle in dist/
 
 ## Screenshots
 
-`docs/screenshots/` holds the Dashboard at desktop (1440 px) and phone (390 px) widths in
-light and dark, plus its states. To regenerate them, with the three steps above running:
+`docs/screenshots/` holds every signed-in page at desktop (1440 px) and phone (390 px)
+widths in light and dark, plus their states and dialogs: `dashboard-*`, `transactions-*`
+(filtered, edit, delete, empty, no match), `budgets-*` (unsaved edits, an earlier month,
+error) and `settings-*` (each tab, category in use, add dialogs, the one-time token).
+To regenerate them, with the three steps above running on a freshly seeded database:
 
 ```bash
 cd frontend
-npm run screenshots
+npm run screenshots                      # all pages
+npm run screenshots -- budgets settings  # only some
 ```
+
+The script changes no data, so it can be run repeatedly against the same database.
 
 The script uses Playwright's Chromium if installed (`npx playwright install chromium`)
 and otherwise the Microsoft Edge that ships with Windows.

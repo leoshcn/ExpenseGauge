@@ -7,24 +7,15 @@ import { useNavigate } from "react-router";
 import { errorMessage, type Schemas } from "@/api/client";
 import { accountsQuery, categoriesQuery, createAccount, createCategory, keys } from "@/api/queries";
 import { AuthLayout } from "@/components/auth-layout";
+import { CurrencySelect, type CurrencyCode } from "@/components/currency-select";
 import { ErrorState } from "@/components/error-state";
 import { FormError, FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { hasUsableCategory, STAGE_HOME } from "@/hooks/use-stage";
 import { S } from "@/strings.zh";
-
-type CurrencyCode = keyof typeof S.currencies;
-const CURRENCIES = Object.keys(S.currencies) as CurrencyCode[];
 
 function Steps({ current }: { current: 1 | 2 }) {
   const labels = [S.onboarding.steps.account, S.onboarding.steps.categories];
@@ -92,19 +83,7 @@ function AccountStep() {
         />
         <div className="space-y-1.5">
           <Label htmlFor={currencyId}>{S.onboarding.account.currency}</Label>
-          <Select value={currency} onValueChange={(value) => setCurrency(value as CurrencyCode)}>
-            <SelectTrigger id={currencyId} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CURRENCIES.map((code) => (
-                <SelectItem key={code} value={code}>
-                  <span className="num w-9 text-muted-foreground">{code}</span>
-                  {S.currencies[code]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <CurrencySelect id={currencyId} value={currency} onChange={setCurrency} />
         </div>
         <FormError message={create.isError ? errorMessage(create.error) : null} />
         <Button type="submit" className="w-full" disabled={create.isPending}>

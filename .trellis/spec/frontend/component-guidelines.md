@@ -66,12 +66,51 @@ A file exports components only. Helpers and constants shared with other files li
 
 ---
 
+## Shared Building Blocks
+
+Use these instead of re-building them per page:
+
+| Component | For |
+|---|---|
+| `AccountSelect` (`components/account-select.tsx`) | The account picker in a page header; pair with `useSelectedAccount()` |
+| `ConfirmDialog` (`components/confirm-dialog.tsx`) | Any irreversible action: stays open while pending, shows the backend message on refusal |
+| `EmptyState` (`components/empty-state.tsx`) | "Nothing here yet": icon, title, how data gets in, optional action link |
+| `ErrorState` | A failed first load, with code and retry |
+| `FormField` / `FormError` | Labelled inputs; the backend message above the submit button |
+| `CopyButton` | Copying a value, with a confirmation that screen readers hear |
+| `CurrencySelect` | The currencies offered for a new account |
+| `NameDialog` (`pages/settings/name-dialog.tsx`) | Add or rename anything that has one name |
+
+## Dialogs
+
+- Mount a dialog only while it is open, keyed by what it edits
+  (`{editing ? <EditTransactionDialog key={editing.id} ... /> : null}`), and pass `open`
+  as a constant. Its form state then starts from the right values without effects.
+- Call `useRestoreFocus()` at the top of every such dialog. Without a Radix `Trigger`
+  focus would otherwise land on `<body>` when it closes.
+- Close only on success (`onSuccess: onClose`); refuse to close while the mutation is
+  pending (`onOpenChange={(open) => (!open && !save.isPending ? onClose() : undefined)}`).
+- Show the failure inside the dialog with `FormError` / `ConfirmDialog`'s `error`, using
+  `errorMessage(error)`: the backend's Chinese message (`CATEGORY_IN_USE`, `*_NAME_TAKEN`).
+- A dialog that holds something shown only once (the new token) blocks outside clicks
+  with `onInteractOutside={(event) => event.preventDefault()}`. The mutation that
+  returned it has `gcTime: 0` and is `reset()` when the dialog closes, so the value is
+  not left in the MutationCache (`pages/settings/agent-section.tsx`, tested in
+  `agent-section.test.tsx`). Never put it in a query, the URL, storage or a log.
+- Pass `closeLabel={S.common.close}` to `DialogContent`; the vendored component takes the
+  close button's accessible name as a prop so no copy lives in `ui/`.
+
+---
+
 ## Accessibility
 
-- Every icon-only button has an `aria-label` from `strings.zh.ts`.
+- Every icon-only button has an `aria-label` from `strings.zh.ts` that names its target
+  (`删除「买菜」`, `清空「买菜」的预算`), so a list of identical icons is distinguishable.
 - Form inputs go through `FormField` (`src/components/form-field.tsx`), which wires the
   label, hint and error (`aria-invalid`, `aria-describedby`).
-- Expandable rows are real buttons with `aria-expanded`.
+- Expandable rows are real buttons with `aria-expanded`. A clickable table row (the
+  Dashboard's level-1 rows, transaction rows) always also has a real button in it for
+  keyboard users; the row's `onClick` is a convenience for the mouse.
 - State is never shown by colour alone: over budget has a badge, text and a distinct meter.
 - Charts have `role="img"` and a label, and everything a chart shows is also available as
   text beside it (the category table, the share list). Month selection works without the
@@ -94,3 +133,10 @@ A file exports components only. Helpers and constants shared with other files li
   `scripts/screenshots.mjs` grows the viewport instead.
 - **Writing copy inline** ("加载中…" in JSX). Add it to `strings.zh.ts`.
 - **Treating `budget: null` as zero.** It means "no budget" and has its own presentation.
+  In a budget input it is the empty string; `"0"` is a budget of zero.
+- **Hiding duplicated markup per breakpoint without telling tests.** Folded tables render
+  some text twice (one copy `md:hidden`); jsdom applies no CSS, so query with
+  `getAllBy...` or scope with `within(row)` (see `budget-table.test.tsx`).
+- **Pressing Escape after a resize in Playwright.** A Radix Select closes on window
+  resize, so the next Escape closes the dialog behind it. `scripts/screenshots.mjs` takes
+  dialog and popover shots with `captureScreen` (no resize).

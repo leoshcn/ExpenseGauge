@@ -4,7 +4,7 @@ A version whose amount is NULL clears the budget: from its month on the category
 "no budget", exactly as if it never had one. Amount 0 is a real budget.
 """
 
-from bisect import bisect_left, bisect_right
+from bisect import bisect_right
 from datetime import date
 from decimal import Decimal
 
@@ -34,10 +34,6 @@ class BudgetHistory:
         """The version with the greatest effective_from <= month. None for "no budget":
         there is no such version, or it is a cleared one (NULL amount)."""
         return self._budgeted(category_id, bisect_right, month)
-
-    def in_force_before(self, category_id: int, month: date) -> Budget | None:
-        """What `in_force` would return for `month` if no version started in `month`."""
-        return self._budgeted(category_id, bisect_left, month)
 
     def _budgeted(self, category_id: int, bisect, month: date) -> Budget | None:
         position = bisect(self._months.get(category_id, []), month)
@@ -93,8 +89,9 @@ def set_budgets(
 ) -> BudgetsOut:
     """Upserts one budget version per item at `effective_from`; all items or none.
 
-    An item with amount None clears the budget from that month. Where there is no budget
-    to clear (none in force before that month) no clearing version is kept.
+    An item with amount None clears the budget from that month. Afterwards each touched
+    category's clearing versions with no budget in force before them are removed
+    (`_drop_redundant_clears`), in the same transaction.
     """
     get_account(db, account_id)
     month_date = parse_month(effective_from)
@@ -114,15 +111,7 @@ def set_budgets(
         if item.category_id in seen:
             raise invalid("DUPLICATE_CATEGORY", "同一分类在请求中出现多次", details)
         seen.add(item.category_id)
-    history = load_history(db, account_id)
     for item in items:
-        if item.amount is None and history.in_force_before(item.category_id, month_date) is None:
-            db.execute(
-                delete(Budget).where(
-                    Budget.category_id == item.category_id, Budget.effective_from == month_date
-                )
-            )
-            continue
         statement = insert(Budget).values(
             category_id=item.category_id, effective_from=month_date, amount=item.amount
         )
@@ -132,5 +121,32 @@ def set_budgets(
                 set_={"amount": statement.excluded.amount},
             )
         )
+    _drop_redundant_clears(db, seen)
     db.commit()
     return get_budgets(db, account_id, effective_from)
+
+
+def _drop_redundant_clears(db: Session, category_ids: set[int]) -> None:
+    """Deletes clearing versions (NULL amount) that have no budget in force before them.
+
+    Walking each category's versions by month, a NULL row is kept only when the previous
+    kept row has an amount; one with no earlier row, or following another NULL row, clears
+    nothing. So consecutive clears collapse to the first, and a later set never stops at a
+    stale clear left behind when the budget before it was removed.
+    """
+    if not category_ids:
+        return
+    rows = db.execute(
+        select(Budget.id, Budget.category_id, Budget.amount)
+        .where(Budget.category_id.in_(category_ids))
+        .order_by(Budget.category_id, Budget.effective_from)
+    )
+    redundant: list[int] = []
+    budgeted: dict[int, bool] = {}
+    for row_id, category_id, amount in rows:
+        if amount is None and not budgeted.get(category_id, False):
+            redundant.append(row_id)
+        else:
+            budgeted[category_id] = amount is not None
+    if redundant:
+        db.execute(delete(Budget).where(Budget.id.in_(redundant)))
