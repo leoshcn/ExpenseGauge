@@ -1,0 +1,30 @@
+{
+  "id": "expense-gauge-mvp",
+  "name": "expense-gauge-mvp",
+  "title": "ExpenseGauge MVP planning",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "stammer",
+  "assignee": "stammer",
+  "createdAt": "2026-10-10",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "10-10-mvp-backend",
+    "10-10-mvp-frontend",
+    "10-10-mvp-integration"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

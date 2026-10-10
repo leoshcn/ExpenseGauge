@@ -1,0 +1,3 @@
+{"file": ".trellis/tasks/10-10-expense-gauge-mvp/research/hermes-agent-mcp.md", "reason": "Hermes Agent MCP client config and transport constraints for the /mcp endpoint"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "API contract shared by frontend, REST and MCP layers"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "REST and MCP must share one service layer"}
