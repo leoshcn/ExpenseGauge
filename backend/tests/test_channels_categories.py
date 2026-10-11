@@ -1,6 +1,12 @@
 """Settings (base currency), budget accounts, payment channels, AC6 (category tree),
 AC15 (delete only when unused), R2 (global two-level rules and budget account ownership)."""
 
+from datetime import date
+
+from sqlalchemy import text
+
+from app.db import get_engine
+from app.months import format_month
 from tests.conftest import Ledger
 from tests.test_auth import API, assert_envelope
 
@@ -46,7 +52,7 @@ def test_budget_accounts_create_list_rename(client):
     created = client.post(f"{API}/budget-accounts", json={"name": " 固定 "})
     assert created.status_code == 201
     fixed = created.json()
-    assert fixed == {"id": fixed["id"], "name": "固定"}
+    assert fixed == {"id": fixed["id"], "name": "固定", "period": "month"}
 
     duplicate = client.post(f"{API}/budget-accounts", json={"name": "固定"})
     assert_envelope(duplicate, 409, "BUDGET_ACCOUNT_NAME_TAKEN")
@@ -55,7 +61,7 @@ def test_budget_accounts_create_list_rename(client):
     assert_envelope(clash, 409, "BUDGET_ACCOUNT_NAME_TAKEN")
 
     renamed = client.patch(f"{API}/budget-accounts/{fixed['id']}", json={"name": "固定支出"})
-    assert renamed.json() == {"id": fixed["id"], "name": "固定支出"}
+    assert renamed.json() == {"id": fixed["id"], "name": "固定支出", "period": "month"}
     assert client.get(f"{API}/budget-accounts").json() == [renamed.json(), daily]
     # Budget accounts carry no currency of their own.
     extra = client.post(f"{API}/budget-accounts", json={"name": "x", "currency": "USD"})
@@ -98,7 +104,7 @@ def test_channels_create_list_rename(client, agent):
 
 def test_category_tree_is_global_with_budget_accounts_on_level2(client, agent, ledger):
     """AC6/D1: one global tree, also to an agent token. Level 2 shows its budget account."""
-    daily = {"id": ledger.daily, "name": "日常"}
+    daily = {"id": ledger.daily, "name": "日常", "period": "month"}
     expected = {
         "budget_account_id": None,
         "categories": [
@@ -302,7 +308,7 @@ def test_level2_category_description(client, agent, ledger):
         "id": market["id"],
         "name": "超市",
         "description": "线下商超",
-        "budget_account": {"id": ledger.daily, "name": "日常"},
+        "budget_account": {"id": ledger.daily, "name": "日常", "period": "month"},
     }
     assert "description" not in tree[0]
 
@@ -399,3 +405,96 @@ def test_category_in_use_cannot_be_deleted_unused_can(client, ledger):
     assert_envelope(
         client.delete(f"{API}/categories/{ledger.groceries}"), 404, "CATEGORY_NOT_FOUND"
     )
+
+
+def test_budget_account_period_is_chosen_at_creation_and_fixed(client):
+    """AC1 (R1): monthly by default, annual on request; the period cannot be changed."""
+    monthly = client.post(f"{API}/budget-accounts", json={"name": "日常"}).json()
+    yearly = client.post(f"{API}/budget-accounts", json={"name": "年度", "period": "year"})
+    assert yearly.status_code == 201
+    assert yearly.json() == {"id": yearly.json()["id"], "name": "年度", "period": "year"}
+    assert monthly["period"] == "month"
+    assert [a["period"] for a in client.get(f"{API}/budget-accounts").json()] == ["month", "year"]
+
+    bad = client.post(f"{API}/budget-accounts", json={"name": "季度", "period": "quarter"})
+    assert_envelope(bad, 422, "VALIDATION_ERROR")
+    change = client.patch(
+        f"{API}/budget-accounts/{yearly.json()['id']}", json={"name": "年度", "period": "month"}
+    )
+    assert_envelope(change, 422, "VALIDATION_ERROR")
+    renamed = client.patch(f"{API}/budget-accounts/{yearly.json()['id']}", json={"name": "每年"})
+    assert renamed.json()["period"] == "year"
+
+
+def _versions(category_id: int) -> list[tuple[str, str | None]]:
+    with get_engine().connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT to_char(effective_from, 'YYYY-MM'), amount::text FROM budgets"
+                " WHERE category_id = :id ORDER BY effective_from"
+            ),
+            {"id": category_id},
+        )
+        return [tuple(row) for row in rows]
+
+
+def test_moving_a_category_across_periods_resets_its_budget(client, ledger):
+    """AC4 (R3): a cross-period move needs `budget_amount`; it deletes every old version
+    and starts the new budget this month (monthly) or this January (annual)."""
+    yearly = ledger.budget_account("年度", "year")
+    other_yearly = ledger.budget_account("长期", "year")
+    fixed = ledger.budget_account("固定")
+    ledger.set_budgets("2026-01", {ledger.dining: "800"})
+    ledger.set_budgets("2026-05", {ledger.dining: "900"})
+    url = f"{API}/categories/{ledger.dining}"
+    today = date.today()
+    this_month = format_month(today.replace(day=1))
+    this_january = f"{today.year:04d}-01"
+
+    missing = client.patch(url, json={"budget_account_id": yearly})
+    body = assert_envelope(missing, 422, "BUDGET_RESET_REQUIRED")
+    assert body["details"] == {"from_period": "month", "to_period": "year"}
+    assert _versions(ledger.dining) == [("2026-01", "800.00"), ("2026-05", "900.00")]
+    # `budget_amount` belongs only to a cross-period move.
+    for payload in (
+        {"budget_account_id": fixed, "budget_amount": "100"},
+        {"name": "外卖", "budget_amount": "100"},
+        {"budget_amount": None},
+    ):
+        assert_envelope(client.patch(url, json=payload), 422, "BUDGET_RESET_NOT_ALLOWED")
+    assert_envelope(
+        client.patch(url, json={"budget_account_id": yearly, "budget_amount": "-1"}),
+        422,
+        "VALIDATION_ERROR",
+    )
+    tree = client.get(f"{API}/categories").json()["categories"]
+    assert tree[0]["children"][1]["name"] == "外食"  # nothing above was applied
+    assert tree[0]["children"][1]["budget_account"]["id"] == ledger.daily
+
+    moved = client.patch(url, json={"budget_account_id": yearly, "budget_amount": "6000"})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["budget_account_id"] == yearly
+    assert _versions(ledger.dining) == [(this_january, "6000.00")]
+
+    # Between two annual accounts the history moves along; no budget_amount needed.
+    same = client.patch(url, json={"budget_account_id": other_yearly})
+    assert same.status_code == 200
+    assert _versions(ledger.dining) == [(this_january, "6000.00")]
+
+    # Back to monthly with "no budget": no version at all.
+    back = client.patch(url, json={"budget_account_id": fixed, "budget_amount": None})
+    assert back.status_code == 200
+    assert _versions(ledger.dining) == []
+
+    again = client.patch(url, json={"budget_account_id": yearly, "budget_amount": "0"})
+    assert again.status_code == 200
+    assert _versions(ledger.dining) == [(this_january, "0.00")]
+    monthly = client.patch(url, json={"budget_account_id": fixed, "budget_amount": "500"})
+    assert monthly.status_code == 200
+    assert _versions(ledger.dining) == [(this_month, "500.00")]
+
+    # Same-period moves keep the whole history, as before.
+    ledger.set_budgets("2025-01", {ledger.metro: "100"})
+    metro_url = f"{API}/categories/{ledger.metro}"
+    assert client.patch(metro_url, json={"budget_account_id": fixed}).status_code == 200
+    assert _versions(ledger.metro) == [("2025-01", "100.00")]

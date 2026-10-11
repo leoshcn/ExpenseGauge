@@ -12,6 +12,20 @@ import { S } from "@/strings.zh";
 
 const ALL = "all";
 
+/** The account's name; an annual one is marked, monthly is the default and unmarked. */
+function AccountName({ account }: { account: Schemas["BudgetAccountOut"] }) {
+  return (
+    <>
+      <span className="truncate">{account.name}</span>
+      {account.period === "year" ? (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {S.settings.budgetAccounts.periods.year}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /** Picks the one budget account a level-2 category belongs to (no "全部"). */
 export function BudgetAccountPicker({
   id,
@@ -44,7 +58,7 @@ export function BudgetAccountPicker({
       <SelectContent position="popper">
         {budgetAccounts.map((account) => (
           <SelectItem key={account.id} value={String(account.id)}>
-            <span className="truncate">{account.name}</span>
+            <AccountName account={account} />
           </SelectItem>
         ))}
       </SelectContent>
@@ -79,7 +93,7 @@ export function BudgetAccountSelect({
         {budgetAccounts.length > 0 ? <SelectSeparator /> : null}
         {budgetAccounts.map((account) => (
           <SelectItem key={account.id} value={String(account.id)}>
-            <span className="truncate">{account.name}</span>
+            <AccountName account={account} />
           </SelectItem>
         ))}
       </SelectContent>

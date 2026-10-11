@@ -18,6 +18,8 @@ ExpenseGauge, and for the agent itself. Everything here is taken from the code i
   reference information only**: any level-2 category may be used for a transaction from
   any channel. A rent paid from the everyday card goes into "居住 / 房租" and therefore
   counts towards whatever budget account "房租" belongs to; nothing special is needed.
+  A budget account is monthly or annual (`period`, see `get_budgets`); submitting
+  transactions works the same for both.
 
 All amounts are in one **base currency** (基础币种), set by the user (`currency` in
 `get_budgets`). There is no currency conversion in ExpenseGauge.
@@ -149,12 +151,15 @@ The global two-level category tree.
   "categories": [
     { "id": 10, "name": "餐饮", "children": [
         { "id": 11, "name": "超市", "description": "线下商超、便利店；不含外卖",
-          "budget_account": { "id": 1, "name": "日常" } },
+          "budget_account": { "id": 1, "name": "日常", "period": "month" } },
         { "id": 12, "name": "外卖", "description": null,
-          "budget_account": { "id": 1, "name": "日常" } } ] },
+          "budget_account": { "id": 1, "name": "日常", "period": "month" } } ] },
     { "id": 20, "name": "居住", "children": [
         { "id": 21, "name": "房租", "description": null,
-          "budget_account": { "id": 2, "name": "固定" } } ] }
+          "budget_account": { "id": 2, "name": "固定", "period": "month" } } ] },
+    { "id": 30, "name": "年度开支", "children": [
+        { "id": 31, "name": "保险", "description": null,
+          "budget_account": { "id": 3, "name": "年度", "period": "year" } } ] }
   ]
 }
 ```
@@ -171,7 +176,9 @@ wrote none. Only the user can edit it (web UI, 设置 → 分类); the agent can
 `budget_account` is the budget pool the category counts towards. It is for reference
 (for example to tell the user "this goes against your 固定 budget") and does **not**
 restrict which channel may use the category. The user may move a category to another
-budget account at any time; its history moves with it.
+budget account at any time; its history moves with it (or, when the move is between a
+monthly and an annual budget account, the user sets a new budget). Its `period` is
+explained under `get_budgets`.
 
 ### `get_budgets(month: str | None = None, budget_account_id: int | None = None)`
 
@@ -186,11 +193,14 @@ without it, all of them.
   "month": "2026-10",
   "budgets": [
     { "category_id": 11, "category_name": "超市", "parent_id": 10, "parent_name": "餐饮",
-      "budget_account_id": 1, "budget_account_name": "日常",
+      "budget_account_id": 1, "budget_account_name": "日常", "period": "month",
       "amount": "1200.00", "effective_from": "2026-01" },
     { "category_id": 21, "category_name": "房租", "parent_id": 20, "parent_name": "居住",
-      "budget_account_id": 2, "budget_account_name": "固定",
-      "amount": null, "effective_from": null }
+      "budget_account_id": 2, "budget_account_name": "固定", "period": "month",
+      "amount": null, "effective_from": null },
+    { "category_id": 31, "category_name": "保险", "parent_id": 30, "parent_name": "年度开支",
+      "budget_account_id": 3, "budget_account_name": "年度", "period": "year",
+      "amount": "12000.00", "effective_from": "2026-01" }
   ]
 }
 ```
@@ -198,6 +208,15 @@ without it, all of them.
 `amount: null` means **no budget** that month (never set, or cleared). `"0.00"` is a real
 budget of zero. A level-1 budget is the sum of its children and is not returned.
 `currency` is the base currency.
+
+`period` is the period of the line's budget account:
+
+- `"month"`: `amount` is the budget for that one month. Compare it with the month's
+  spending.
+- `"year"`: `amount` is the budget for the **whole calendar year** of `month`, and
+  `effective_from` is always January (`YYYY-01`). Compare it with the spending from
+  January up to now, never with a single month's, and do not divide it by 12. One large
+  payment (an annual insurance premium, a holiday) is expected in such a category.
 
 ### `submit_transactions(channel_id: int, items: list[item])`
 

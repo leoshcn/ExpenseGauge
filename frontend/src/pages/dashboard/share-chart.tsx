@@ -18,14 +18,20 @@ const T = S.dashboard.share;
 const sliceName = (slice: ShareSlice) => slice.name ?? T.other;
 const sliceColor = (slice: ShareSlice) => `var(--chart-${slice.colorSlot})`;
 
-/** Level-1 categories as shares of the month's spending: a donut and the list it is read from. */
+/**
+ * Level-1 categories as shares of the month's spending (or, `variant="year"`, of an annual
+ * account's spending since January): a donut and the list it is read from.
+ */
 export function ShareChart({
   detail,
+  variant = "month",
   className,
 }: {
-  detail: Schemas["MonthDetailOut"];
+  detail: Pick<Schemas["MonthDetailOut"], "currency" | "categories">;
+  variant?: "month" | "year";
   className?: string;
 }) {
+  const copy = variant === "year" ? { ...T, ...S.dashboard.annual.share } : T;
   const { slices, total, excluded } = shares(detail.categories);
   const money = (value: string) => formatMoney(value, detail.currency);
   const config: ChartConfig = Object.fromEntries(
@@ -36,10 +42,10 @@ export function ShareChart({
   return (
     <section className={cn("rounded-xl border bg-card p-5 shadow-card", className)}>
       <h2 className="text-base font-semibold">{T.title}</h2>
-      <p className="text-xs text-muted-foreground">{T.description}</p>
+      <p className="text-xs text-muted-foreground">{copy.description}</p>
 
       {slices.length === 0 ? (
-        <div className="flex h-48 items-center justify-center text-muted-foreground">{T.empty}</div>
+        <div className="flex h-48 items-center justify-center text-muted-foreground">{copy.empty}</div>
       ) : (
         <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
           <div className="relative mx-auto size-44 shrink-0">

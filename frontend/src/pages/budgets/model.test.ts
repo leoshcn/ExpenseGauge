@@ -12,6 +12,7 @@ import {
   rowState,
   sameBudget,
   sumBudgets,
+  sumByPeriod,
 } from "./model";
 
 const line = (category_id: number, amount: string | null, parent_id = 1): Schemas["BudgetLine"] => ({
@@ -21,11 +22,12 @@ const line = (category_id: number, amount: string | null, parent_id = 1): Schema
   parent_name: `p${parent_id}`,
   budget_account_id: 1,
   budget_account_name: "日常",
+  period: "month",
   amount,
   effective_from: amount === null ? null : "2026-07",
 });
 
-const daily = { id: 1, name: "日常" };
+const daily = { id: 1, name: "日常", period: "month" as const };
 
 describe("parseBudgetInput", () => {
   it("reads an empty input as no budget, not zero", () => {
@@ -167,5 +169,22 @@ describe("draftAfterSave", () => {
     const sent = { 11: "500", 12: "" };
     expect(draftAfterSave(sent, sent)).toEqual({});
     expect(draftAfterSave({ 11: "600", 12: "", 21: "8" }, sent)).toEqual({ 11: "600", 21: "8" });
+  });
+});
+
+describe("sumByPeriod", () => {
+  const annual = (category_id: number, amount: string | null): Schemas["BudgetLine"] => ({
+    ...line(category_id, amount),
+    period: "year",
+  });
+
+  it("leaves a period out when it has no lines, so monthly-only totals stay as they were", () => {
+    expect(sumByPeriod([line(11, "500.00"), line(12, null)], {})).toEqual({ month: "500.00", year: undefined });
+  });
+
+  it("never adds monthly and annual amounts, and follows the draft", () => {
+    const lines = [line(11, "500.00"), annual(21, "12000.00"), annual(22, null)];
+    expect(sumByPeriod(lines, { 22: "3000" })).toEqual({ month: "500.00", year: "15000.00" });
+    expect(sumByPeriod([annual(21, null)], {})).toEqual({ month: undefined, year: null });
   });
 });

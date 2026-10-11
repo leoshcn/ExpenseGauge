@@ -168,8 +168,10 @@ class Ledger:
         self.transport = self.category("交通")
         self.metro = self.category("地铁", self.transport)
 
-    def budget_account(self, name: str) -> int:
-        response = self.client.post(f"{API}/budget-accounts", json={"name": name})
+    def budget_account(self, name: str, period: str | None = None) -> int:
+        """A monthly budget account, or one of `period` ("month" / "year") when given."""
+        body = {"name": name} if period is None else {"name": name, "period": period}
+        response = self.client.post(f"{API}/budget-accounts", json=body)
         assert response.status_code == 201, response.text
         return response.json()["id"]
 

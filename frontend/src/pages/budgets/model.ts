@@ -107,6 +107,21 @@ export function effectiveAmount(line: Schemas["BudgetLine"], draft: BudgetDraft)
   return parsed.valid ? parsed.amount : line.amount;
 }
 
+/**
+ * Subtotals kept apart by period: a monthly and an annual amount cannot be added. Each is
+ * `sumBudgets` of its lines; `undefined` when there are no lines of that period at all.
+ */
+export function sumByPeriod(
+  lines: readonly Schemas["BudgetLine"][],
+  draft: BudgetDraft,
+): { month?: string | null; year?: string | null } {
+  const sum = (period: Schemas["BudgetLine"]["period"]) => {
+    const of = lines.filter((line) => line.period === period);
+    return of.length === 0 ? undefined : sumBudgets(of.map((line) => effectiveAmount(line, draft)));
+  };
+  return { month: sum("month"), year: sum("year") };
+}
+
 export type BudgetGroup = {
   id: number;
   name: string;

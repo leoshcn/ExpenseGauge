@@ -8,7 +8,7 @@ import type { Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
 import type { BudgetScope } from "@/api/queries";
 
-const daily = { id: 1, name: "日常" };
+const daily = { id: 1, name: "日常", period: "month" as const };
 
 const tree: Schemas["CategoryTree"] = {
   budget_account_id: null,
@@ -27,6 +27,7 @@ const budgets = (scope: BudgetScope, month: string, amount: string | null): Sche
       parent_name: "餐饮",
       budget_account_id: daily.id,
       budget_account_name: daily.name,
+      period: "month",
       amount,
       effective_from: amount === null ? null : month,
     },
@@ -41,7 +42,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
     ...actual,
     budgetAccountsQuery: queryOptions({
       queryKey: actual.keys.budgetAccounts,
-      queryFn: async (): Promise<Schemas["BudgetAccountOut"][]> => [daily, { id: 2, name: "固定" }],
+      queryFn: async (): Promise<Schemas["BudgetAccountOut"][]> => [daily, { id: 2, name: "固定", period: "month" }],
     }),
     categoriesQuery: (scope: BudgetScope = null) =>
       queryOptions({ queryKey: actual.keys.categories(scope), queryFn: async () => tree }),

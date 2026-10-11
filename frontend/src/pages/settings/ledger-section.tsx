@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { S } from "@/strings.zh";
 
+import { CreateBudgetAccountDialog } from "./budget-account-dialog";
 import { leafCounts } from "./model";
 import { SectionCard } from "./section-card";
 
@@ -104,7 +105,13 @@ function BudgetAccountsCard({ budgetAccounts }: { budgetAccounts: readonly Schem
         {budgetAccounts.map((account) => (
           <li key={account.id} className="flex items-center gap-3 border-t px-4 py-3 sm:px-5">
             <div className="min-w-0 flex-1">
-              <div className="truncate font-medium">{account.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="min-w-0 truncate font-medium">{account.name}</span>
+                <span className="shrink-0 rounded-full border px-1.5 text-[11px] leading-[1.125rem] text-muted-foreground">
+                  <span className="sr-only">{B.periodPrefix}</span>
+                  {B.periods[account.period]}
+                </span>
+              </div>
               <div className="num text-xs text-muted-foreground">
                 {B.id(account.id)}
                 {counts ? ` · ${B.leafCount(counts.get(account.id) ?? 0)}` : null}
@@ -124,14 +131,9 @@ function BudgetAccountsCard({ budgetAccounts }: { budgetAccounts: readonly Schem
         ))}
       </ul>
       {adding ? (
-        <NameDialog
-          title={B.addTitle}
-          label={B.name}
-          placeholder={B.namePlaceholder}
-          submitLabel={B.create}
-          pendingLabel={B.creating}
-          onSubmit={async (name) => {
-            await createBudgetAccount({ name });
+        <CreateBudgetAccountDialog
+          onSubmit={async (body) => {
+            await createBudgetAccount(body);
             await queryClient.invalidateQueries({ queryKey: keys.budgetAccounts });
           }}
           onClose={() => setAdding(false)}

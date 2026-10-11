@@ -4,12 +4,14 @@ import type { Schemas } from "@/api/client";
 
 import {
   activeFirst,
+  budgetReset,
   categoryChanges,
   categoryCreateBody,
   categoryFields,
   hermesConfig,
   leafCounts,
   mcpEndpoint,
+  periodOf,
 } from "./model";
 
 describe("categoryFields / categoryChanges", () => {
@@ -45,8 +47,8 @@ describe("categoryFields / categoryChanges", () => {
 
 describe("leafCounts", () => {
   it("counts level-2 categories per budget account across level-1 categories", () => {
-    const daily = { id: 1, name: "日常" };
-    const fixed = { id: 2, name: "固定" };
+    const daily = { id: 1, name: "日常", period: "month" as const };
+    const fixed = { id: 2, name: "固定", period: "month" as const };
     const leaf = (id: number, budget_account: typeof daily) => ({ id, name: `c${id}`, description: null, budget_account });
     const counts = leafCounts({
       budget_account_id: null,
@@ -92,5 +94,24 @@ describe("activeFirst", () => {
       token(4, "2026-10-05T00:00:00Z"),
     ];
     expect(activeFirst(list).map((t) => t.id)).toEqual([3, 1, 4, 2]);
+  });
+});
+
+describe("budgetReset / periodOf", () => {
+  it("needs an amount or an explicit 无预算", () => {
+    expect(budgetReset("", false)).toEqual({ valid: false, reason: "required" });
+    expect(budgetReset("-1", false)).toEqual({ valid: false, reason: "invalid" });
+    expect(budgetReset("12,000", false)).toEqual({ valid: true, amount: "12000.00" });
+    expect(budgetReset("0", false)).toEqual({ valid: true, amount: "0.00" });
+    expect(budgetReset("abc", true)).toEqual({ valid: true, amount: null });
+  });
+
+  it("finds a budget account's period", () => {
+    const accounts: Schemas["BudgetAccountOut"][] = [
+      { id: 1, name: "日常", period: "month" },
+      { id: 3, name: "年度", period: "year" },
+    ];
+    expect(periodOf(accounts, 3)).toBe("year");
+    expect(periodOf(accounts, 9)).toBeUndefined();
   });
 });

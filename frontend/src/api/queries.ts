@@ -28,6 +28,9 @@ export const keys = {
     ["ledger", "summary", "monthly", scopeKey(scope), from, to] as const,
   monthDetail: (scope: BudgetScope, month: string) =>
     ["ledger", "summary", "month", scopeKey(scope), month] as const,
+  /** Year to date through `month`; `null` scope = every annual budget account. */
+  annualSummary: (scope: BudgetScope, month: string) =>
+    ["ledger", "summary", "annual", scopeKey(scope), month] as const,
   transactions: ["ledger", "transactions"] as const,
   transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
   budgets: ["ledger", "budgets"] as const,
@@ -106,6 +109,21 @@ export const monthDetailQuery = (scope: BudgetScope, month: string) =>
     queryFn: () =>
       unwrap(
         api.GET("/api/v1/summary/months/{month}", {
+          params: { path: { month }, query: { budget_account_id: scope } },
+        }),
+      ),
+  });
+
+/**
+ * Annual budget accounts from January to the end of `month`: one (`scope`, which must be
+ * annual) or all of them (`null`, possibly none).
+ */
+export const annualSummaryQuery = (scope: BudgetScope, month: string) =>
+  queryOptions({
+    queryKey: keys.annualSummary(scope, month),
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/summary/annual/{month}", {
           params: { path: { month }, query: { budget_account_id: scope } },
         }),
       ),

@@ -45,6 +45,8 @@
   --chart-budget: oklch(0.885 0.014 195);
   --chart-actual: var(--primary);
   --chart-over: var(--over);
+  /* Annual budget accounts' spending (stacked in "全部", the running total in an annual view). */
+  --chart-annual: var(--chart-4);
   --chart-grid: oklch(0.93 0.005 90);
   /* Categorical. No amber and no red: those two hues mean "near" and "over". */
   --chart-1: oklch(0.54 0.085 195);
@@ -139,6 +141,7 @@
   --color-chart-budget: var(--chart-budget);
   --color-chart-actual: var(--chart-actual);
   --color-chart-over: var(--chart-over);
+  --color-chart-annual: var(--chart-annual);
   --color-chart-grid: var(--chart-grid);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);

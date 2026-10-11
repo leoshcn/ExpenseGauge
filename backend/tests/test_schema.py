@@ -269,6 +269,71 @@ def test_0004_rebuilds_business_tables_and_keeps_users_and_tokens(app, client, t
     assert _table_exists("payment_channels")
 
 
+def test_0005_makes_existing_budget_accounts_monthly(client):
+    """AC1 (R1.3): upgrading 0004 -> 0005 keeps budget accounts, categories, budgets and
+    transactions and makes every budget account monthly; only month/year are accepted.
+    The downgrade drops the period and nothing else."""
+
+    def snapshot() -> list:
+        with get_engine().connect() as connection:
+            return [
+                [tuple(row) for row in connection.execute(text(f"SELECT * FROM {t} ORDER BY id"))]
+                for t in ("budget_accounts", "categories", "budgets", "transactions")
+            ]
+
+    config = alembic_config()
+    get_engine().dispose()
+    try:
+        command.downgrade(config, "0004")
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("INSERT INTO budget_accounts (id, name) VALUES (1, '日常'), (2, '固定')")
+            )
+            connection.execute(text("INSERT INTO payment_channels (id, name) VALUES (1, '储蓄卡')"))
+            connection.execute(
+                text(
+                    "INSERT INTO categories (id, parent_id, name, budget_account_id) VALUES"
+                    " (1, NULL, '餐饮', NULL), (2, 1, '买菜', 1), (3, 1, '外食', 2)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
+                    " (2, '2026-01-01', 1000), (2, '2026-06-01', NULL), (3, '2026-03-01', 0)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO transactions (channel_id, category_id, date, amount,"
+                    " counterparty, description, fingerprint) VALUES"
+                    " (1, 2, '2026-09-15', 35.50, '盒马', '', 'f')"
+                )
+            )
+        before = snapshot()
+
+        command.upgrade(config, "0005")
+        after = snapshot()
+        assert after[0] == [(1, "日常", "month"), (2, "固定", "month")]
+        assert after[1:] == before[1:]
+        with pytest.raises(IntegrityError), get_engine().begin() as connection:
+            connection.execute(
+                text("INSERT INTO budget_accounts (name, period) VALUES ('季度', 'quarter')")
+            )
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("INSERT INTO budget_accounts (id, name, period) VALUES (3, '年度', 'year')")
+            )
+
+        get_engine().dispose()
+        command.downgrade(config, "0004")
+        downgraded = snapshot()
+        assert downgraded[0] == [(1, "日常"), (2, "固定"), (3, "年度")]
+        assert downgraded[1:] == before[1:]
+    finally:
+        get_engine().dispose()
+        command.upgrade(config, "head")
+
+
 def test_exported_openapi_document_is_current(app):
     """`backend/openapi.json` is the frontend's contract; regenerate it with
     `uv run python -m scripts.export_openapi` after changing the API."""

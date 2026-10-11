@@ -2,12 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/api/client";
 
-import { isWindowEmpty, niceTicks, shares, trendPoints } from "./model";
+import { annualTrendPoints, hasAnnual, isWindowEmpty, niceTicks, shares, trendPoints } from "./model";
 
-const month = (m: string, budget: string | null, actual: string): Schemas["MonthTotal"] => ({
+const month = (
+  m: string,
+  budget: string | null,
+  actual: string,
+  annual_actual = "0.00",
+): Schemas["MonthTotal"] => ({
   month: m,
   budget,
   actual,
+  annual_actual,
 });
 
 const row = (id: number, name: string, actual: string): Schemas["Level1Row"] => ({
@@ -87,5 +93,37 @@ describe("shares", () => {
 
   it("is empty when nothing was spent", () => {
     expect(shares([row(1, "餐饮", "0.00")])).toEqual({ slices: [], total: "0.00", excluded: 0 });
+  });
+});
+
+describe("annual spending in the trend", () => {
+  it("stacks annual spending apart from the monthly actual, which alone is compared with the budget", () => {
+    const [point] = trendPoints([month("2026-03", "6000.00", "5000.00", "6000.00")]);
+    expect(point).toMatchObject({ actual: 5000, annual: 6000, over: false, annualText: "6000.00" });
+    expect(hasAnnual([point!])).toBe(true);
+    expect(hasAnnual(trendPoints([month("2026-03", null, "1.00")]))).toBe(false);
+    // The axis covers the stacked height (11000), not just the monthly part.
+    expect(niceTicks([point!])).toEqual([0, 5000, 10000, 15000]);
+  });
+
+  it("does not call a window empty when only annual accounts spent", () => {
+    expect(isWindowEmpty([month("2026-03", null, "0.00", "120.00")])).toBe(false);
+  });
+
+  it("builds the annual year: actual and running total through the last month, pace for all twelve", () => {
+    const points = annualTrendPoints(
+      2026,
+      [
+        { month: "2026-01", actual: "6000.00" },
+        { month: "2026-02", actual: "0.00" },
+        { month: "2026-03", actual: "2000.00" },
+      ],
+      "30000.00",
+    );
+    expect(points).toHaveLength(12);
+    expect(points[2]).toMatchObject({ month: "2026-03", actual: 2000, cumulative: 8000, pace: 7500, cumulativeText: "8000.00" });
+    expect(points[3]).toMatchObject({ month: "2026-04", actual: null, cumulative: null, pace: 10000 });
+    expect(points[11]?.pace).toBe(30000);
+    expect(annualTrendPoints(2026, [], null)[0]?.pace).toBeNull();
   });
 });

@@ -155,7 +155,9 @@ export interface paths {
         /**
          * Update Category
          * @description Partial update: name, and for level 2 description and budget account. Omitted
-         *     fields are kept. A new budget account takes the category's history with it.
+         *     fields are kept. A new budget account of the same period takes the category's history
+         *     with it; one of the other period needs `budget_amount` (422 `BUDGET_RESET_REQUIRED`)
+         *     and replaces the history with that budget.
          */
         patch: operations["update_category_api_v1_categories__category_id__patch"];
         trace?: never;
@@ -296,6 +298,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/summary/annual/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Annual Summary
+         * @description Year to date (January to the end of `month`) per annual budget account: annual
+         *     budget, actual, actual per month and per category. Every annual account, or one
+         *     (a monthly one is 422 `NOT_ANNUAL_ACCOUNT`).
+         */
+        get: operations["annual_summary_api_v1_summary_annual__month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/summary/monthly": {
         parameters: {
             query?: never;
@@ -306,7 +330,8 @@ export interface paths {
         /**
          * Monthly Summary
          * @description Per month: total budget and total actual, for everything or one budget account.
-         *     Defaults to the 12 months ending at `to`.
+         *     Defaults to the 12 months ending at `to`. Budget and actual cover monthly budget
+         *     accounts only; annual accounts' spending is `annual_actual`.
          */
         get: operations["monthly_summary_api_v1_summary_monthly_get"];
         put?: never;
@@ -326,7 +351,8 @@ export interface paths {
         };
         /**
          * Month Detail
-         * @description Level-1 rows with nested level-2 rows: budget and actual.
+         * @description Level-1 rows with nested level-2 rows: budget and actual, for monthly budget
+         *     accounts' categories. Annual accounts' spending of the month is `annual_actual`.
          */
         get: operations["month_detail_api_v1_summary_months__month__get"];
         put?: never;
@@ -414,6 +440,54 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnnualAccount */
+        AnnualAccount: {
+            /**
+             * Actual
+             * @description Actual from January to the end of `through`
+             */
+            actual: string;
+            /**
+             * Budget
+             * @description Sum of the year's budgets of its categories; null if none has one
+             */
+            budget: string | null;
+            /** Budget Account Id */
+            budget_account_id: number;
+            /**
+             * Categories
+             * @description Rows with the annual budget and the year-to-date actual
+             */
+            categories: components["schemas"]["Level1Row"][];
+            /**
+             * Months
+             * @description January to `through`, one entry per month
+             */
+            months: components["schemas"]["AnnualMonth"][];
+            /** Name */
+            name: string;
+        };
+        /** AnnualMonth */
+        AnnualMonth: {
+            /** Actual */
+            actual: string;
+            /** Month */
+            month: string;
+        };
+        /** AnnualSummaryOut */
+        AnnualSummaryOut: {
+            /** Accounts */
+            accounts: components["schemas"]["AnnualAccount"][];
+            /** Currency */
+            currency: string;
+            /**
+             * Through
+             * @description Last month included (year to date)
+             */
+            through: string;
+            /** Year */
+            year: number;
+        };
         /** BatchAcceptedOut */
         BatchAcceptedOut: {
             /**
@@ -467,6 +541,13 @@ export interface components {
         BudgetAccountCreateIn: {
             /** Name */
             name: string;
+            /**
+             * Period
+             * @description `month`: budgets per month; `year`: one budget per calendar year. Cannot be changed later
+             * @default month
+             * @enum {string}
+             */
+            period: "month" | "year";
         };
         /** BudgetAccountOut */
         BudgetAccountOut: {
@@ -474,8 +555,16 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /**
+             * Period
+             * @enum {string}
+             */
+            period: "month" | "year";
         };
-        /** BudgetAccountUpdateIn */
+        /**
+         * BudgetAccountUpdateIn
+         * @description Only the name is editable; the period is fixed at creation.
+         */
         BudgetAccountUpdateIn: {
             /** Name */
             name: string;
@@ -494,7 +583,7 @@ export interface components {
         BudgetLine: {
             /**
              * Amount
-             * @description Budget in force for the month; null means no budget (never set, or cleared)
+             * @description Budget in force for the month; null means no budget (never set, or cleared). For `period: year` it is the amount for the whole year
              */
             amount: string | null;
             /** Budget Account Id */
@@ -507,13 +596,19 @@ export interface components {
             category_name: string;
             /**
              * Effective From
-             * @description Month the in-force amount started; null when there is no budget
+             * @description Month the in-force amount started (`YYYY-01` for an annual budget); null when there is no budget
              */
             effective_from: string | null;
             /** Parent Id */
             parent_id: number;
             /** Parent Name */
             parent_name: string;
+            /**
+             * Period
+             * @description Period of the budget account: `month` (amount per month) or `year` (amount for the whole calendar year)
+             * @enum {string}
+             */
+            period: "month" | "year";
         };
         /** BudgetsOut */
         BudgetsOut: {
@@ -531,7 +626,10 @@ export interface components {
         };
         /** BudgetsPutIn */
         BudgetsPutIn: {
-            /** Effective From */
+            /**
+             * Effective From
+             * @description First month of the new versions. A category of an annual budget account gets its version at January of this month's year (one version per year)
+             */
             effective_from: string;
             /** Items */
             items: components["schemas"]["BudgetItemIn"][];
@@ -607,11 +705,19 @@ export interface components {
          * @description Partial update: fields left out keep their value. `description` null or blank clears it.
          *
          *     `budget_account_id` (level 2 only) moves the category, with its whole history, to
-         *     another budget account.
+         *     another budget account of the same period. A move to a budget account of the other
+         *     period also needs `budget_amount`: the old budget versions are deleted and the new
+         *     budget starts at the current month (monthly target) or at January of the current
+         *     year (annual target).
          */
         CategoryUpdateIn: {
             /** Budget Account Id */
             budget_account_id?: number;
+            /**
+             * Budget Amount
+             * @description Only with a `budget_account_id` of the other period, and then required: the new budget; null means no budget
+             */
+            budget_amount?: number | string | null;
             /** Description */
             description?: string | null;
             /** Name */
@@ -703,8 +809,16 @@ export interface components {
         };
         /** MonthDetailOut */
         MonthDetailOut: {
-            /** Actual */
+            /**
+             * Actual
+             * @description Actual of the monthly budget accounts' categories
+             */
             actual: string;
+            /**
+             * Annual Actual
+             * @description Actual of the annual budget accounts' categories in the month; they are in neither `actual` nor `categories`
+             */
+            annual_actual: string;
             /** Budget */
             budget: string | null;
             /**
@@ -721,11 +835,19 @@ export interface components {
         };
         /** MonthTotal */
         MonthTotal: {
-            /** Actual */
+            /**
+             * Actual
+             * @description Actual of the monthly budget accounts' categories
+             */
             actual: string;
             /**
+             * Annual Actual
+             * @description Actual of the annual budget accounts' categories in the month; not included in `actual`
+             */
+            annual_actual: string;
+            /**
              * Budget
-             * @description Sum of budgets in force; null if no category has one
+             * @description Sum of monthly budgets in force; null if no category has one
              */
             budget: string | null;
             /** Month */
@@ -1734,6 +1856,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    annual_summary_api_v1_summary_annual__month__get: {
+        parameters: {
+            query?: {
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path: {
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnualSummaryOut"];
                 };
             };
             /** @description Validation error */

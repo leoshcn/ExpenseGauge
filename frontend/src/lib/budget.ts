@@ -1,6 +1,7 @@
 /** How spending compares with a budget. Shared by every view that shows a budget. */
 
 import { formatPercent, fromCents, toCents } from "@/lib/money";
+import { monthOf, parseMonth } from "@/lib/month";
 
 export type BudgetState = "none" | "ok" | "near" | "over";
 
@@ -33,6 +34,22 @@ export function usage(budget: string | null, actual: string): Usage {
 /** "128%", or null when there is nothing to divide by (no budget, or a budget of zero). */
 export function usagePercent(used: Usage): string | null {
   return used.ratio === null ? null : formatPercent(Math.max(used.ratio, 0));
+}
+
+/**
+ * Share of the calendar year covered by an annual budget's view "through" a month (0..1),
+ * the time marker on annual meters. For the current month it is today's position in the
+ * year (today counts as passed, as in `monthElapsed`); for any other month it is whole
+ * months, `month / 12` (through March = 25%).
+ */
+export function yearProgress(through: string, now: Date): number {
+  const { year, month } = parseMonth(through);
+  if (monthOf(now) !== through) return month / 12;
+  const startOfYear = Date.UTC(year, 0, 1);
+  const today = Date.UTC(year, now.getMonth(), now.getDate());
+  const daysInYear = (Date.UTC(year + 1, 0, 1) - startOfYear) / 86_400_000;
+  const dayOfYear = (today - startOfYear) / 86_400_000 + 1;
+  return dayOfYear / daysInYear;
 }
 
 export function countByState(rows: readonly { budget: string | null; actual: string }[]) {

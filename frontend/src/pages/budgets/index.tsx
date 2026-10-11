@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { formatMonth } from "@/lib/date";
-import { addMonths, isMonth, monthOf } from "@/lib/month";
+import { addMonths, isMonth, monthOf, parseMonth } from "@/lib/month";
 import { S } from "@/strings.zh";
 
 import { BudgetTable } from "./budget-table";
@@ -34,10 +34,13 @@ function BudgetsSkeleton() {
 function MonthCard({
   month,
   current,
+  annual,
   onChange,
 }: {
   month: string;
   current: string;
+  /** Some lines are annual: say which year their amounts apply to. */
+  annual: boolean;
   onChange: (month: string) => void;
 }) {
   const label = formatMonth(month);
@@ -86,6 +89,9 @@ function MonthCard({
         <div className="space-y-1">
           <p className="font-medium">{T.explain.title(label)}</p>
           <p className="text-[13px] leading-5 opacity-90">{T.explain.body(label)}</p>
+          {annual ? (
+            <p className="text-[13px] leading-5 opacity-90">{T.explain.annual(parseMonth(month).year)}</p>
+          ) : null}
         </div>
       </div>
     </section>
@@ -207,7 +213,14 @@ function BudgetsBody({
     );
   }
 
-  const monthCard = <MonthCard month={month} current={current} onChange={onMonthChange} />;
+  const monthCard = (
+    <MonthCard
+      month={month}
+      current={current}
+      annual={budgets.data?.budgets.some((line) => line.period === "year") ?? false}
+      onChange={onMonthChange}
+    />
+  );
   if (!tree.data || !budgets.data) {
     return (
       <div className="space-y-5">
@@ -242,6 +255,7 @@ function BudgetsBody({
         groups={groupLines(tree.data, lines)}
         draft={draft}
         currency={budgets.data.currency}
+        year={parseMonth(month).year}
         // In "全部" each row says which budget account it counts towards.
         showBudgetAccount={scope === null}
         onChange={(id, text) => {

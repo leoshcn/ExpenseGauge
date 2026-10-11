@@ -7,7 +7,7 @@ import type { Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
 import type { TransactionFilter } from "@/api/queries";
 
-const daily = { id: 1, name: "日常" };
+const daily = { id: 1, name: "日常", period: "month" as const };
 
 const tree: Schemas["CategoryTree"] = {
   budget_account_id: null,

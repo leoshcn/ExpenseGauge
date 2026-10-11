@@ -13,6 +13,12 @@ const T = S.dashboard.table;
 
 type RowData = { name: string; budget: string | null; actual: string };
 
+/** A tick on every meter (the year's time progress in an annual view). */
+type Marker = { at: number; label: string };
+
+/** What the table shows: a month's detail, or an annual account's year to date. */
+type TableData = Pick<Schemas["MonthDetailOut"], "currency" | "budget" | "actual" | "categories">;
+
 /** Budget, actual, remaining and meter for one row, at either level or for the total. */
 function Row({
   row,
@@ -20,12 +26,14 @@ function Row({
   kind,
   expanded,
   onToggle,
+  marker,
 }: {
   row: RowData;
   currency: string;
   kind: "parent" | "child" | "total";
   expanded?: boolean;
   onToggle?: () => void;
+  marker?: Marker;
 }) {
   const used = usage(row.budget, row.actual);
   const money = (value: string) => formatMoney(value, currency);
@@ -87,7 +95,13 @@ function Row({
         <div className={cn("mt-1.5 space-y-1.5 md:hidden", kind !== "total" && "pl-7")}>
           {used.state === "none" ? null : (
             <div className="flex h-[1.125rem] items-center">
-              <BudgetMeter usage={used} label={meterLabel} className="flex-1" />
+              <BudgetMeter
+                usage={used}
+                label={meterLabel}
+                marker={marker?.at}
+                markerLabel={marker?.label}
+                className="flex-1"
+              />
             </div>
           )}
           <div className={cn("num text-xs text-muted-foreground", over && "text-over")}>
@@ -121,7 +135,13 @@ function Row({
           <span className="text-xs text-muted-foreground">{T.noBudgetProgress}</span>
         ) : (
           <div className="flex items-center gap-2">
-            <BudgetMeter usage={used} label={meterLabel} className="flex-1" />
+            <BudgetMeter
+              usage={used}
+              label={meterLabel}
+              marker={marker?.at}
+              markerLabel={marker?.label}
+              className="flex-1"
+            />
             <span className={cn("num w-11 text-right text-xs text-muted-foreground", over && "font-medium text-over")}>
               {percent ?? S.common.none}
             </span>
@@ -135,14 +155,21 @@ function Row({
 /**
  * The selected month by level-1 category; each row opens to its level-2 rows.
  * Rows keep the API's order so a category stays in the same place from month to month.
+ * `variant="year"` shows an annual account's year to date: annual budgets, actual since
+ * January, and `marker` (the year's time progress) on every meter.
  */
 export function CategoryTable({
   detail,
+  variant = "month",
+  marker,
   className,
 }: {
-  detail: Schemas["MonthDetailOut"];
+  detail: TableData;
+  variant?: "month" | "year";
+  marker?: Marker;
   className?: string;
 }) {
+  const headings = variant === "year" ? S.dashboard.annual.table : T;
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   const allOpen = detail.categories.length > 0 && detail.categories.every((c) => open.has(c.category_id));
 
@@ -174,10 +201,10 @@ export function CategoryTable({
               {T.category}
             </th>
             <th scope="col" className={cn(heading, "hidden text-right md:table-cell")}>
-              {T.budget}
+              {headings.budget}
             </th>
             <th scope="col" className={cn(heading, "px-4 text-right sm:px-5 md:px-3")}>
-              {T.actual}
+              {headings.actual}
             </th>
             <th scope="col" className={cn(heading, "hidden text-right md:table-cell")}>
               {T.remaining}
@@ -198,10 +225,17 @@ export function CategoryTable({
                   kind="parent"
                   expanded={expanded}
                   onToggle={() => toggle(parent.category_id)}
+                  marker={marker}
                 />
                 {expanded
                   ? parent.children.map((child) => (
-                      <Row key={child.category_id} row={child} currency={detail.currency} kind="child" />
+                      <Row
+                        key={child.category_id}
+                        row={child}
+                        currency={detail.currency}
+                        kind="child"
+                        marker={marker}
+                      />
                     ))
                   : null}
               </Fragment>
@@ -213,6 +247,7 @@ export function CategoryTable({
             row={{ name: T.total, budget: detail.budget, actual: detail.actual }}
             currency={detail.currency}
             kind="total"
+            marker={marker}
           />
         </tfoot>
       </table>

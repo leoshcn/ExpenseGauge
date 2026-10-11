@@ -138,6 +138,23 @@ def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger
     assert amounts("2026-12") == amounts("2026-06")
 
 
+def test_get_budgets_reports_the_period_of_each_line(server_url, client, token, ledger):
+    """AC3 over MCP: each line carries its budget account's period, as over REST."""
+    yearly = ledger.budget_account("年度", "year")
+    insurance = ledger.category("保险", ledger.food, yearly)
+    ledger.set_budgets("2026-08", {insurance: "12000", ledger.groceries: "1000"})
+    result = call(f"{server_url}/mcp", token["token"], "get_budgets", {"month": "2026-03"})
+    assert result.is_error is False
+    assert (
+        result.structured_content
+        == client.get(f"{API}/budgets", params={"month": "2026-03"}).json()
+    )
+    lines = {line["category_id"]: line for line in result.structured_content["budgets"]}
+    assert (lines[insurance]["period"], lines[insurance]["amount"]) == ("year", "12000.00")
+    assert lines[insurance]["effective_from"] == "2026-01"
+    assert (lines[ledger.groceries]["period"], lines[ledger.groceries]["amount"]) == ("month", None)
+
+
 def test_submit_transactions_matches_rest(server_url, client, token, ledger):
     url = f"{server_url}/mcp"
     arguments = {

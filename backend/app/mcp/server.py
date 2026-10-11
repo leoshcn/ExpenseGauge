@@ -107,7 +107,9 @@ def create_mcp_server() -> MCPServer:
         `month` is `YYYY-MM` and defaults to the current month. `budget_account_id`
         narrows the list to one budget account; omitted, every level-2 category is listed.
         `amount: null` means the category has no budget that month (never set, or
-        cleared); `"0.00"` is a real budget.
+        cleared); `"0.00"` is a real budget. `period` is the budget account's period:
+        `"month"` means `amount` is per month; `"year"` means `amount` is for the whole
+        calendar year (compare it with the year-to-date spending, not one month's).
         """
         try:
             budgets = await _run(

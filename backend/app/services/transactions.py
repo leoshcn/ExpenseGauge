@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_by_id
 from app.errors import AppError, invalid, not_found
-from app.models import Category, Transaction
+from app.models import BudgetAccount, Category, Transaction
 from app.months import add_months, parse_month
 from app.schemas.category import CategoryLeaf
 from app.schemas.transaction import (
@@ -29,7 +29,7 @@ from app.schemas.transaction import (
     TransactionPage,
     TransactionUpdateIn,
 )
-from app.services.budget_accounts import budget_account_names, get_budget_account
+from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 from app.services.categories import build_nodes, load_categories
 from app.services.channels import channel_names, get_channel
 from app.services.locks import lock_channel_transactions
@@ -66,14 +66,14 @@ class _Names:
 
     categories: dict[int, Category]
     channels: dict[int, str]
-    budget_accounts: dict[int, str]
+    budget_accounts: dict[int, BudgetAccount]
 
 
 def _load_names(db: Session) -> _Names:
     return _Names(
         categories={c.id: c for c in load_categories(db)},
         channels=channel_names(db),
-        budget_accounts=budget_account_names(db),
+        budget_accounts=budget_accounts_by_id(db),
     )
 
 
@@ -89,7 +89,7 @@ def to_out(transaction: Transaction, names: _Names) -> TransactionOut:
         parent_category_id=parent.id,
         parent_category_name=parent.name,
         budget_account_id=category.budget_account_id,
-        budget_account_name=names.budget_accounts[category.budget_account_id],
+        budget_account_name=names.budget_accounts[category.budget_account_id].name,
         date=transaction.date,
         amount=transaction.amount,
         counterparty=transaction.counterparty,

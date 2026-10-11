@@ -81,7 +81,7 @@ function LedgerStep({
   const save = useMutation({
     mutationFn: async (input: { currency: string; name: string | null }) => {
       if (input.currency !== settings.currency) await updateSettings({ currency: input.currency });
-      if (input.name !== null) await createBudgetAccount({ name: input.name });
+      if (input.name !== null) await createBudgetAccount({ name: input.name, period: "month" });
     },
     // Also after a failure: the currency may have been saved before the account failed.
     onSettled: () =>
@@ -318,7 +318,7 @@ function CategoryStep({
           submitLabel={S.settings.budgetAccounts.create}
           pendingLabel={S.settings.budgetAccounts.creating}
           onSubmit={async (name) => {
-            await createBudgetAccount({ name });
+            await createBudgetAccount({ name, period: "month" });
             await queryClient.invalidateQueries({ queryKey: keys.budgetAccounts });
           }}
           onClose={() => setAddingAccount(false)}
