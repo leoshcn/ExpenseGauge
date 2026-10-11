@@ -5,8 +5,14 @@ from app.schemas.common import Money, Month, Schema
 
 class MonthTotal(Schema):
     month: Month
-    budget: Money | None = Field(description="Sum of budgets in force; null if no category has one")
-    actual: Money
+    budget: Money | None = Field(
+        description="Sum of monthly budgets in force; null if no category has one"
+    )
+    actual: Money = Field(description="Actual of the monthly budget accounts' categories")
+    annual_actual: Money = Field(
+        description="Actual of the annual budget accounts' categories in the month; not"
+        " included in `actual`"
+    )
 
 
 class MonthlySummaryOut(Schema):
@@ -39,5 +45,34 @@ class MonthDetailOut(Schema):
     currency: str
     month: Month
     budget: Money | None
-    actual: Money
+    actual: Money = Field(description="Actual of the monthly budget accounts' categories")
+    annual_actual: Money = Field(
+        description="Actual of the annual budget accounts' categories in the month; they are"
+        " in neither `actual` nor `categories`"
+    )
     categories: list[Level1Row]
+
+
+class AnnualMonth(Schema):
+    month: Month
+    actual: Money
+
+
+class AnnualAccount(Schema):
+    budget_account_id: int
+    name: str
+    budget: Money | None = Field(
+        description="Sum of the year's budgets of its categories; null if none has one"
+    )
+    actual: Money = Field(description="Actual from January to the end of `through`")
+    months: list[AnnualMonth] = Field(description="January to `through`, one entry per month")
+    categories: list[Level1Row] = Field(
+        description="Rows with the annual budget and the year-to-date actual"
+    )
+
+
+class AnnualSummaryOut(Schema):
+    currency: str
+    year: int
+    through: Month = Field(description="Last month included (year to date)")
+    accounts: list[AnnualAccount]

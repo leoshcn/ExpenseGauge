@@ -1,6 +1,7 @@
 /** Pure helpers of the settings page. */
 
 import type { Schemas } from "@/api/client";
+import { parseBudgetInput } from "@/pages/budgets/model";
 
 /** Path of the MCP server, served by the same origin as the app (nginx, or the Vite proxy). */
 export const MCP_PATH = "/mcp";
@@ -51,6 +52,31 @@ export function categoryChanges(
   if (next.description !== initial.description) changes.description = next.description;
   if (next.budgetAccountId !== initial.budgetAccountId) changes.budget_account_id = next.budgetAccountId;
   return Object.keys(changes).length > 0 ? changes : null;
+}
+
+export type BudgetPeriod = Schemas["BudgetAccountOut"]["period"];
+
+/** The period of a budget account, or undefined when it is not in the list. */
+export function periodOf(
+  budgetAccounts: readonly Schemas["BudgetAccountOut"][],
+  id: number,
+): BudgetPeriod | undefined {
+  return budgetAccounts.find((account) => account.id === id)?.period;
+}
+
+export type BudgetReset = { valid: true; amount: string | null } | { valid: false; reason: "required" | "invalid" };
+
+/**
+ * The `budget_amount` of a move to a budget account of the other period: the typed amount,
+ * or `null` when "no budget" is chosen explicitly. An empty input is not "no budget" here
+ * (the API requires a decision), and `"0"` is a budget of zero.
+ */
+export function budgetReset(text: string, none: boolean): BudgetReset {
+  if (none) return { valid: true, amount: null };
+  const parsed = parseBudgetInput(text);
+  if (!parsed.valid) return { valid: false, reason: "invalid" };
+  if (parsed.amount === null) return { valid: false, reason: "required" };
+  return { valid: true, amount: parsed.amount };
 }
 
 /** How many level-2 categories each budget account has, by budget account id. */

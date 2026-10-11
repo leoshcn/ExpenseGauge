@@ -18,13 +18,17 @@ import { useRestoreFocus } from "@/hooks/use-restore-focus";
 import { S } from "@/strings.zh";
 
 import {
+  budgetReset,
   CATEGORY_DESCRIPTION_MAX,
   categoryChanges,
   categoryFields,
   type CategoryFields,
+  periodOf,
 } from "./model";
 
 const T = S.settings.categories;
+const R = T.budgetReset;
+const PERIOD_NAMES = S.settings.budgetAccounts.periods;
 const NAME_MAX = 100;
 
 /**
@@ -61,26 +65,39 @@ export function CategoryDialog({
   // The settings page renders categories only once a budget account exists.
   const [account, setAccount] = useState(initial?.budgetAccountId ?? budgetAccounts[0]?.id ?? 0);
   const [error, setError] = useState<string>();
+  // The new budget, asked for only when the category moves to the other period.
+  const [budgetText, setBudgetText] = useState("");
+  const [noBudget, setNoBudget] = useState(false);
+  const [budgetError, setBudgetError] = useState<string>();
   const submit = useMutation({
     mutationFn: ({ fields, changes }: { fields: CategoryFields; changes: Schemas["CategoryUpdateIn"] }) =>
       onSubmit(fields, changes),
     onSuccess: onClose,
   });
 
+  const moved = initial !== undefined && account !== initial.budgetAccountId;
+  const fromPeriod = initial ? periodOf(budgetAccounts, initial.budgetAccountId) : undefined;
+  const toPeriod = periodOf(budgetAccounts, account);
+  // A move between a monthly and an annual budget account clears the old budgets, so the
+  // API needs the new one (BUDGET_RESET_REQUIRED otherwise).
+  const periodChange =
+    moved && fromPeriod !== undefined && toPeriod !== undefined && fromPeriod !== toPeriod
+      ? { from: fromPeriod, to: toPeriod }
+      : null;
+
   function handle(event: React.FormEvent) {
     event.preventDefault();
     const fields = categoryFields(name, description, account);
-    if (!fields.name) {
-      setError(S.common.nameRequired);
-      return;
-    }
-    setError(undefined);
+    const reset = periodChange ? budgetReset(budgetText, noBudget) : null;
+    setError(fields.name ? undefined : S.common.nameRequired);
+    setBudgetError(
+      reset && !reset.valid ? (reset.reason === "required" ? R.required : S.budgets.invalid) : undefined,
+    );
+    if (!fields.name || (reset && !reset.valid)) return;
     const changes = initial ? categoryChanges(initial, fields) : {};
     if (changes === null) onClose();
-    else submit.mutate({ fields, changes });
+    else submit.mutate({ fields, changes: reset?.valid ? { ...changes, budget_amount: reset.amount } : changes });
   }
-
-  const moved = initial !== undefined && account !== initial.budgetAccountId;
 
   return (
     <Dialog open onOpenChange={(open) => (!open && !submit.isPending ? onClose() : undefined)}>
@@ -111,9 +128,44 @@ export function CategoryDialog({
               id={`${budgetAccountId}-note`}
               className={moved ? "text-xs text-warning-foreground" : "text-xs text-muted-foreground"}
             >
-              {moved ? T.budgetAccountMoveHint : T.budgetAccountHint}
+              {periodChange
+                ? R.warning(PERIOD_NAMES[periodChange.from], PERIOD_NAMES[periodChange.to])
+                : moved
+                  ? T.budgetAccountMoveHint
+                  : T.budgetAccountHint}
             </p>
           </div>
+          {periodChange ? (
+            <div className="space-y-2 rounded-lg bg-warning-soft/60 p-3">
+              <FormField
+                label={R.label[periodChange.to]}
+                hint={R.hint[periodChange.to]}
+                error={budgetError}
+                value={noBudget ? "" : budgetText}
+                onChange={(event) => {
+                  setBudgetError(undefined);
+                  setBudgetText(event.target.value);
+                }}
+                disabled={noBudget}
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder={noBudget ? S.budgets.noBudget : undefined}
+                className="num bg-card text-right"
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={noBudget}
+                  onChange={(event) => {
+                    setBudgetError(undefined);
+                    setNoBudget(event.target.checked);
+                  }}
+                  className="accent-primary"
+                />
+                {R.none}
+              </label>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label htmlFor={descriptionId}>{T.descriptionLabel}</Label>
             <Textarea

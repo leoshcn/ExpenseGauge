@@ -12,6 +12,7 @@ const detail: Schemas["MonthDetailOut"] = {
   month: "2026-10",
   budget: "1500.00",
   actual: "3599.80",
+  annual_actual: "0.00",
   categories: [
     {
       category_id: 1,

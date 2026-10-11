@@ -31,6 +31,7 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "parent_name": "餐饮",
             "budget_account_id": ledger.daily,
             "budget_account_name": "日常",
+            "period": "month",
             "amount": "1500.00",
             "effective_from": "2026-03",
         },
@@ -41,6 +42,7 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "parent_name": "餐饮",
             "budget_account_id": ledger.daily,
             "budget_account_name": "日常",
+            "period": "month",
             "amount": None,  # no budget
             "effective_from": None,
         },
@@ -51,6 +53,7 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "parent_name": "交通",
             "budget_account_id": ledger.daily,
             "budget_account_name": "日常",
+            "period": "month",
             "amount": "0.00",  # zero is a real budget, not "no budget"
             "effective_from": "2026-03",
         },
@@ -154,6 +157,7 @@ def test_clearing_a_budget_applies_from_the_chosen_month(client, agent, ledger):
         "parent_name": "餐饮",
         "budget_account_id": ledger.daily,
         "budget_account_name": "日常",
+        "period": "month",
         "amount": None,
         "effective_from": None,
     }
@@ -356,3 +360,45 @@ def test_budgets_per_budget_account_and_set_across_accounts(client, agent, ledge
     # An empty budget account has no lines.
     empty = ledger.budget_account("储蓄")
     assert lines(empty) == {}
+
+
+def test_annual_budget_versions_start_in_january(client, agent, ledger):
+    """AC2/AC3 (R2): an annual category's budget saved in any month of a year is that
+    year's January version; one request may mix monthly and annual categories."""
+    yearly = ledger.budget_account("年度", "year")
+    annual_group = ledger.category("年度开支")
+    insurance = ledger.category("保险", annual_group, yearly)
+
+    saved = ledger.set_budgets("2026-10", {insurance: "12000", ledger.groceries: "1000"})
+    assert _stored(insurance) == [("2026-01", "12000.00")]
+    assert _stored(ledger.groceries) == [("2026-10", "1000.00")]
+    line = {line["category_id"]: line for line in saved["budgets"]}[insurance]
+    assert (line["period"], line["amount"], line["effective_from"]) == (
+        "year",
+        "12000.00",
+        "2026-01",
+    )
+
+    ledger.set_budgets("2026-03", {insurance: "15000"})
+    assert _stored(insurance) == [("2026-01", "15000.00")]
+    # In force for every month of the year, also months before the one it was saved in.
+    for month in ("2026-01", "2026-06", "2026-12"):
+        assert _lines(client, ledger, month)[insurance]["amount"] == "15000.00"
+
+    ledger.set_budgets("2027-07", {insurance: "18000"})
+    assert _stored(insurance) == [("2026-01", "15000.00"), ("2027-01", "18000.00")]
+    assert _lines(client, ledger, "2027-02")[insurance]["amount"] == "18000.00"
+
+    # Clearing an annual budget clears it from January of that year.
+    ledger.set_budgets("2027-05", {insurance: None})
+    assert _stored(insurance) == [("2026-01", "15000.00"), ("2027-01", None)]
+    assert _lines(client, ledger, "2027-02")[insurance]["amount"] is None
+
+    # Every line reports its budget account's period, also to an agent token.
+    lines = _lines(agent, ledger, "2026-05")
+    assert {category_id: line["period"] for category_id, line in lines.items()} == {
+        ledger.groceries: "month",
+        ledger.dining: "month",
+        ledger.metro: "month",
+        insurance: "year",
+    }

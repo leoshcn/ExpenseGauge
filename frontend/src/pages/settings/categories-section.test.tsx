@@ -1,13 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
 
-const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常" };
-const fixed: Schemas["BudgetAccountOut"] = { id: 2, name: "固定" };
+const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常", period: "month" };
+const fixed: Schemas["BudgetAccountOut"] = { id: 2, name: "固定", period: "month" };
+const yearly: Schemas["BudgetAccountOut"] = { id: 3, name: "年度", period: "year" };
 
 const tree: Schemas["CategoryTree"] = {
   budget_account_id: null,
@@ -53,7 +54,7 @@ function renderSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <CategoriesSection budgetAccounts={[daily, fixed]} />
+      <CategoriesSection budgetAccounts={[daily, fixed, yearly]} />
     </QueryClientProvider>,
   );
 }
@@ -111,6 +112,60 @@ describe("CategoriesSection", () => {
     await user.clear(within(dialog).getByLabelText("说明（选填）"));
     await user.click(within(dialog).getByRole("button", { name: "保存" }));
     await waitFor(() => expect(queries.updateCategory).toHaveBeenCalledExactlyOnceWith(11, { description: null }));
+  });
+
+  /** Radix Select keeps a hidden native select in a form; changing it is what autofill does. */
+  const chooseBudgetAccount = (dialog: HTMLElement, id: number) =>
+    fireEvent.change(dialog.querySelector("select")!, { target: { value: String(id) } });
+
+  it("moves within the same period without asking for a budget", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "编辑「外食」" }));
+    const dialog = await screen.findByRole("dialog");
+    chooseBudgetAccount(dialog, 2);
+    expect(within(dialog).getByRole("combobox", { name: "预算账户" })).toHaveTextContent("固定");
+    expect(within(dialog).queryByLabelText("新的年度预算")).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() => expect(queries.updateCategory).toHaveBeenCalledExactlyOnceWith(12, { budget_account_id: 2 }));
+  });
+
+  it("asks for the new budget when moving to the other period, and sends it", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "编辑「外食」" }));
+    const dialog = await screen.findByRole("dialog");
+    chooseBudgetAccount(dialog, 3);
+    expect(within(dialog).getByText(/原有的全部预算会被清除/)).toBeInTheDocument();
+    const amount = within(dialog).getByLabelText("新的年度预算");
+
+    // Neither an amount nor "无预算": refused before any request.
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    expect(within(dialog).getByText("请输入新的预算，或选择「无预算」")).toBeInTheDocument();
+    expect(queries.updateCategory).not.toHaveBeenCalled();
+
+    await user.type(amount, "6000");
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(queries.updateCategory).toHaveBeenCalledExactlyOnceWith(12, {
+        budget_account_id: 3,
+        budget_amount: "6000.00",
+      }),
+    );
+  });
+
+  it("sends budget_amount null when 无预算 is chosen", async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole("button", { name: "编辑「外食」" }));
+    const dialog = await screen.findByRole("dialog");
+    chooseBudgetAccount(dialog, 3);
+    await user.click(within(dialog).getByRole("checkbox", { name: "无预算（只统计实际支出）" }));
+    expect(within(dialog).getByLabelText("新的年度预算")).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(queries.updateCategory).toHaveBeenCalledExactlyOnceWith(12, { budget_account_id: 3, budget_amount: null }),
+    );
   });
 
   it("adds a level-2 category with its description, in the first budget account by default", async () => {

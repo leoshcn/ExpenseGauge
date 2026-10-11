@@ -36,6 +36,7 @@ Components never use raw colour values.
 | `--over` (+`-soft`) | `oklch(0.56 0.19 27)` | `oklch(0.69 0.17 27)` | Over budget; also form errors (`--destructive`) |
 | `--positive` (+`-soft`) | `oklch(0.55 0.105 165)` | `oklch(0.74 0.11 165)` | "All within budget" chip, completed step |
 | `--track` | `oklch(0.925 0.006 90)` | `oklch(0.285 0.01 255)` | Empty part of a meter |
+| `--chart-annual` | `var(--chart-4)` | `var(--chart-4)` | Annual budget accounts' spending: the stacked segment in "全部", the running total in an annual view, the swatch before "另有年度开支" |
 
 Rationale:
 
@@ -69,6 +70,18 @@ The over-budget notch sits at `budget / actual`, so the part to its right is the
 242% reads as "the budget, and then that much again and more". The month total's meter also
 carries a thin "today" tick at the share of the month that has passed, so 93% used at 32%
 of the month reads as a pace problem at a glance. It is shown for the current month only.
+
+**Annual budget accounts** use the same states against the year to date, with the tick at
+the year's time progress (`yearProgress()`: today's place in the year for the current
+month, otherwise whole months / 12) on every meter, for any month. Only spending above the
+annual budget is "over"; spending ahead of the tick gets no colour of its own. Annual
+amounts carry "/年" (monthly "/月") on the budgets page, and monthly and annual sums are
+never added. In "全部" the monthly comparison leaves annual accounts out: their month's
+spending is a line under the total and a second, indigo segment on the trend bars, and
+an "年度预算" card lists each annual account (shown only when one exists). An annual
+account's trend shows its calendar year: monthly bars, the running total as a line, the
+annual budget as a solid line and the even pace as a dashed one; months after the selected
+one are empty.
 
 ## Typography
 

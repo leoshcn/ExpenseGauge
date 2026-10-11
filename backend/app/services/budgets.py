@@ -4,7 +4,12 @@ A version whose amount is NULL clears the budget: from its month on the category
 "no budget", exactly as if it never had one. Amount 0 is a real budget.
 
 A budget belongs to its category, and through it to the category's current budget
-account: moving a category to another budget account moves its whole history (D4).
+account: moving a category to another budget account of the same period moves its whole
+history (D4); a move to the other period resets it (`services/categories.py`).
+
+In an annual budget account (`period == "year"`) a version is the amount for a whole
+calendar year and always starts in January: `set_budgets` stores it at January 1 of the
+requested month's year, so `in_force` returns that year's version for any of its months.
 """
 
 from bisect import bisect_right
@@ -19,7 +24,7 @@ from app.errors import invalid
 from app.models import Budget, Category
 from app.months import format_month, parse_month
 from app.schemas.budget import BudgetItemIn, BudgetLine, BudgetsOut
-from app.services.budget_accounts import budget_account_names, get_budget_account
+from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 from app.services.categories import load_categories
 from app.services.settings import require_currency
 
@@ -69,21 +74,23 @@ def get_budgets(db: Session, month: str | None, budget_account_id: int | None = 
     month_date = parse_month(month) if month else date.today().replace(day=1)
     categories = load_categories(db, budget_account_id)
     names = {c.id: c.name for c in categories}
-    budget_accounts = budget_account_names(db)
+    budget_accounts = budget_accounts_by_id(db)
     history = load_history(db, budget_account_id)
     lines = []
     for category in categories:
         if category.parent_id is None:
             continue
         row = history.in_force(category.id, month_date)
+        budget_account = budget_accounts[category.budget_account_id]
         lines.append(
             BudgetLine(
                 category_id=category.id,
                 category_name=category.name,
                 parent_id=category.parent_id,
                 parent_name=names[category.parent_id],
-                budget_account_id=category.budget_account_id,
-                budget_account_name=budget_accounts[category.budget_account_id],
+                budget_account_id=budget_account.id,
+                budget_account_name=budget_account.name,
+                period=budget_account.period,
                 amount=row.amount if row else None,
                 effective_from=format_month(row.effective_from) if row else None,
             )
@@ -99,14 +106,18 @@ def get_budgets(db: Session, month: str | None, budget_account_id: int | None = 
 def set_budgets(db: Session, effective_from: str, items: list[BudgetItemIn]) -> BudgetsOut:
     """Upserts one budget version per item at `effective_from`; all items or none.
 
-    Any level-2 category may be in the request, whatever its budget account. An item with
-    amount None clears the budget from that month. Afterwards each touched category's
-    clearing versions with no budget in force before them are removed
-    (`_drop_redundant_clears`), in the same transaction. Returns every budget line of
-    the month.
+    Any level-2 category may be in the request, whatever its budget account. A category
+    of an annual budget account gets its version at January of `effective_from`'s year
+    instead, so a year has a single version and saving it mid-year rewrites that one;
+    one request may mix monthly and annual categories. An item with amount None clears
+    the budget from that version's month. Afterwards each touched category's clearing
+    versions with no budget in force before them are removed (`_drop_redundant_clears`),
+    in the same transaction. Returns every budget line of the month.
     """
     require_currency(db)  # the response reports it: fail before writing anything
     month_date = parse_month(effective_from)
+    year_start = date(month_date.year, 1, 1)
+    periods = {row.id: row.period for row in budget_accounts_by_id(db).values()}
     categories = {c.id: c for c in load_categories(db)}
     seen: set[int] = set()
     for item in items:
@@ -124,8 +135,11 @@ def set_budgets(db: Session, effective_from: str, items: list[BudgetItemIn]) -> 
             raise invalid("DUPLICATE_CATEGORY", "同一分类在请求中出现多次", details)
         seen.add(item.category_id)
     for item in items:
+        annual = periods[categories[item.category_id].budget_account_id] == "year"
         statement = insert(Budget).values(
-            category_id=item.category_id, effective_from=month_date, amount=item.amount
+            category_id=item.category_id,
+            effective_from=year_start if annual else month_date,
+            amount=item.amount,
         )
         db.execute(
             statement.on_conflict_do_update(

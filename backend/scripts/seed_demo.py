@@ -3,7 +3,8 @@
     uv run python -m scripts.dev_server --reset      # terminal 1
     uv run python -m scripts.seed_demo               # terminal 2
 
-Creates the user (or signs in as it), the base currency (CNY), three budget accounts,
+Creates the user (or signs in as it), the base currency (CNY), four budget accounts
+(one of them annual, with a yearly budget and a few large payments),
 four payment channels, a global two-level category tree in Chinese, budgets with one
 mid-range change, and nine months of transactions ending today: refunds, over-budget
 categories, unbudgeted categories, a budget account with no transactions and fixed
@@ -84,8 +85,9 @@ class Ledger:
         self.channels: dict[str, int] = {}
         self.count: dict[str, int] = {}
 
-    def budget_account(self, name: str) -> int:
-        created = self.api.call("POST", "/budget-accounts", 201, json={"name": name})
+    def budget_account(self, name: str, period: str = "month") -> int:
+        body = {"name": name, "period": period}
+        created = self.api.call("POST", "/budget-accounts", 201, json=body)
         self.budget_accounts[name] = created["id"]
         return created["id"]
 
@@ -223,11 +225,14 @@ BUDGET_ACCOUNT_OF = {
     "云服务": "固定",
     "机酒交通": "旅行基金",
     "住宿": "旅行基金",
+    "保险": "年度",
+    "长假旅行": "年度",
 }
 # Which channel paid each level-2 category; the rest is paid by credit card. Rent and
 # utilities come from the savings card yet count in "固定" through their category.
 CHANNEL_OF = {
     "房租": "储蓄卡",
+    "保险": "储蓄卡",
     "水电燃气": "储蓄卡",
     "物业网络": "储蓄卡",
     "买菜": "支付宝",
@@ -320,6 +325,24 @@ USD_BUDGETS = {"软件订阅": "290", "云服务": "290"}
 # empty state when it is selected.
 FUND_TREE = {"长途旅行": ["机酒交通", "住宿"]}
 
+# The annual budget account "年度": one budget per calendar year (PUT /budgets stores it
+# at January whatever month it is saved in), paid in a few large amounts.
+ANNUAL_TREE = {"年度开支": ["保险", "长假旅行"]}
+ANNUAL_BUDGETS = {"保险": "9000", "长假旅行": "15000"}
+
+
+def annual_month(m: Month, offset: int) -> dict[str, list[Tx]]:
+    items: dict[str, list[Tx]] = {"保险": [], "长假旅行": []}
+    if offset == -6:
+        items["保险"] = m.fixed(10, "6380.00", "平安保险", "年度重疾险保费")
+    if offset == -4:
+        items["保险"] = m.fixed(22, "1460.00", "众安保险", "家财险 + 意外险")
+    if offset == -1:
+        items["长假旅行"] = m.fixed(6, "5200.00", "携程旅行", "日本 机票 + 酒店") + m.fixed(
+            12, "2380.00", "携程旅行", "当地行程"
+        )
+    return items
+
 
 def usd_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     items = {
@@ -376,21 +399,26 @@ def main() -> None:
     ledger = Ledger(api)
     for name in ("日常", "固定", "旅行基金"):
         ledger.budget_account(name)
+    ledger.budget_account("年度", "year")
     for name in ("储蓄卡", CREDIT_CARD, "支付宝", "美元信用卡"):
         ledger.channel(name)
-    ledger.tree({**DAILY_TREE, **USD_TREE, **FUND_TREE}, BUDGET_ACCOUNT_OF)
+    ledger.tree({**DAILY_TREE, **USD_TREE, **FUND_TREE, **ANNUAL_TREE}, BUDGET_ACCOUNT_OF)
     channel_of = {leaf: CHANNEL_OF.get(leaf, CREDIT_CARD) for leaf in ledger.leaf}
 
     ledger.set_budgets(add_months(current, -(MONTHS - 1)), DAILY_BUDGETS)
     ledger.set_budgets(add_months(current, -3), DAILY_BUDGET_RAISE)
     ledger.set_budgets(add_months(current, -4), USD_BUDGETS)
     ledger.set_budgets(current, {"机酒交通": "2000", "住宿": "3000"})
+    # Annual: the window may start in the previous year, which gets its own version.
+    ledger.set_budgets(add_months(current, -(MONTHS - 1)), ANNUAL_BUDGETS)
+    ledger.set_budgets(current, ANNUAL_BUDGETS)
 
     for offset in range(-(MONTHS - 1), 1):
         first = add_months(current, offset)
         days = calendar.monthrange(first.year, first.month)[1]
         month = Month(rng, first, today.day if offset == 0 else days)
         ledger.submit(first, daily_month(month, offset), channel_of)
+        ledger.submit(first, annual_month(month, offset), channel_of)
         if offset >= -4:
             ledger.submit(first, usd_month(month, offset), channel_of)
 

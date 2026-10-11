@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { countByState, usage, usagePercent } from "./budget";
+import { countByState, usage, usagePercent, yearProgress } from "./budget";
+
+describe("yearProgress", () => {
+  it("counts whole months for a month that is not the current one", () => {
+    const now = new Date(2026, 9, 11);
+    expect(yearProgress("2026-03", now)).toBe(0.25);
+    expect(yearProgress("2026-01", now)).toBeCloseTo(1 / 12);
+    expect(yearProgress("2025-12", now)).toBe(1);
+  });
+
+  it("uses today's place in the year for the current month", () => {
+    // 2026-10-11 is day 284 of 365.
+    expect(yearProgress("2026-10", new Date(2026, 9, 11, 23, 30))).toBeCloseTo(284 / 365);
+    expect(yearProgress("2026-01", new Date(2026, 0, 1))).toBeCloseTo(1 / 365);
+    expect(yearProgress("2026-12", new Date(2026, 11, 31))).toBe(1);
+  });
+
+  it("knows leap years", () => {
+    expect(yearProgress("2028-03", new Date(2028, 2, 1))).toBeCloseTo(61 / 366);
+  });
+});
 
 describe("usage", () => {
   it("has no state without a budget", () => {

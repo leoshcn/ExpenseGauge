@@ -21,7 +21,7 @@ const failed = <T>(error: unknown, refetch: () => unknown = () => {}): Step<T> =
 });
 
 const user: Schemas["UserOut"] = { id: 1, username: "demo", created_at: "2026-10-10T00:00:00Z" };
-const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常" };
+const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常", period: "month" };
 const card: Schemas["ChannelOut"] = { id: 1, name: "储蓄卡" };
 const tree = (children: number): Schemas["CategoryTree"] => ({
   budget_account_id: null,

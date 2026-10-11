@@ -1,6 +1,113 @@
 {
   "components": {
     "schemas": {
+      "AnnualAccount": {
+        "properties": {
+          "actual": {
+            "description": "Actual from January to the end of `through`",
+            "title": "Actual",
+            "type": "string"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of the year's budgets of its categories; null if none has one",
+            "title": "Budget"
+          },
+          "budget_account_id": {
+            "title": "Budget Account Id",
+            "type": "integer"
+          },
+          "categories": {
+            "description": "Rows with the annual budget and the year-to-date actual",
+            "items": {
+              "$ref": "#/components/schemas/Level1Row"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "months": {
+            "description": "January to `through`, one entry per month",
+            "items": {
+              "$ref": "#/components/schemas/AnnualMonth"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "budget_account_id",
+          "name",
+          "budget",
+          "actual",
+          "months",
+          "categories"
+        ],
+        "title": "AnnualAccount",
+        "type": "object"
+      },
+      "AnnualMonth": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "string"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "actual"
+        ],
+        "title": "AnnualMonth",
+        "type": "object"
+      },
+      "AnnualSummaryOut": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/AnnualAccount"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "through": {
+            "description": "Last month included (year to date)",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Through",
+            "type": "string"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "year",
+          "through",
+          "accounts"
+        ],
+        "title": "AnnualSummaryOut",
+        "type": "object"
+      },
       "BatchAcceptedOut": {
         "properties": {
           "accepted": {
@@ -111,6 +218,16 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "period": {
+            "default": "month",
+            "description": "`month`: budgets per month; `year`: one budget per calendar year. Cannot be changed later",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
+            "type": "string"
           }
         },
         "required": [
@@ -128,17 +245,27 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "period": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
+            "type": "string"
           }
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "period"
         ],
         "title": "BudgetAccountOut",
         "type": "object"
       },
       "BudgetAccountUpdateIn": {
         "additionalProperties": false,
+        "description": "Only the name is editable; the period is fixed at creation.",
         "properties": {
           "name": {
             "maxLength": 100,
@@ -195,7 +322,7 @@
                 "type": "null"
               }
             ],
-            "description": "Budget in force for the month; null means no budget (never set, or cleared)",
+            "description": "Budget in force for the month; null means no budget (never set, or cleared). For `period: year` it is the amount for the whole year",
             "title": "Amount"
           },
           "budget_account_id": {
@@ -224,7 +351,7 @@
                 "type": "null"
               }
             ],
-            "description": "Month the in-force amount started; null when there is no budget",
+            "description": "Month the in-force amount started (`YYYY-01` for an annual budget); null when there is no budget",
             "title": "Effective From"
           },
           "parent_id": {
@@ -233,6 +360,15 @@
           },
           "parent_name": {
             "title": "Parent Name",
+            "type": "string"
+          },
+          "period": {
+            "description": "Period of the budget account: `month` (amount per month) or `year` (amount for the whole calendar year)",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Period",
             "type": "string"
           }
         },
@@ -243,6 +379,7 @@
           "parent_name",
           "budget_account_id",
           "budget_account_name",
+          "period",
           "amount",
           "effective_from"
         ],
@@ -293,6 +430,7 @@
         "additionalProperties": false,
         "properties": {
           "effective_from": {
+            "description": "First month of the new versions. A category of an annual budget account gets its version at January of this month's year (one version per year)",
             "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
             "title": "Effective From",
             "type": "string"
@@ -513,11 +651,27 @@
       },
       "CategoryUpdateIn": {
         "additionalProperties": false,
-        "description": "Partial update: fields left out keep their value. `description` null or blank clears it.\n\n`budget_account_id` (level 2 only) moves the category, with its whole history, to\nanother budget account.",
+        "description": "Partial update: fields left out keep their value. `description` null or blank clears it.\n\n`budget_account_id` (level 2 only) moves the category, with its whole history, to\nanother budget account of the same period. A move to a budget account of the other\nperiod also needs `budget_amount`: the old budget versions are deleted and the new\nbudget starts at the current month (monthly target) or at January of the current\nyear (annual target).",
         "properties": {
           "budget_account_id": {
             "title": "Budget Account Id",
             "type": "integer"
+          },
+          "budget_amount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only with a `budget_account_id` of the other period, and then required: the new budget; null means no budget",
+            "title": "Budget Amount"
           },
           "description": {
             "anyOf": [
@@ -743,7 +897,13 @@
       "MonthDetailOut": {
         "properties": {
           "actual": {
+            "description": "Actual of the monthly budget accounts' categories",
             "title": "Actual",
+            "type": "string"
+          },
+          "annual_actual": {
+            "description": "Actual of the annual budget accounts' categories in the month; they are in neither `actual` nor `categories`",
+            "title": "Annual Actual",
             "type": "string"
           },
           "budget": {
@@ -792,6 +952,7 @@
           "month",
           "budget",
           "actual",
+          "annual_actual",
           "categories"
         ],
         "title": "MonthDetailOut",
@@ -800,7 +961,13 @@
       "MonthTotal": {
         "properties": {
           "actual": {
+            "description": "Actual of the monthly budget accounts' categories",
             "title": "Actual",
+            "type": "string"
+          },
+          "annual_actual": {
+            "description": "Actual of the annual budget accounts' categories in the month; not included in `actual`",
+            "title": "Annual Actual",
             "type": "string"
           },
           "budget": {
@@ -812,7 +979,7 @@
                 "type": "null"
               }
             ],
-            "description": "Sum of budgets in force; null if no category has one",
+            "description": "Sum of monthly budgets in force; null if no category has one",
             "title": "Budget"
           },
           "month": {
@@ -824,7 +991,8 @@
         "required": [
           "month",
           "budget",
-          "actual"
+          "actual",
+          "annual_actual"
         ],
         "title": "MonthTotal",
         "type": "object"
@@ -1791,7 +1959,7 @@
         ]
       },
       "patch": {
-        "description": "Partial update: name, and for level 2 description and budget account. Omitted\nfields are kept. A new budget account takes the category's history with it.",
+        "description": "Partial update: name, and for level 2 description and budget account. Omitted\nfields are kept. A new budget account of the same period takes the category's history\nwith it; one of the other period needs `budget_amount` (422 `BUDGET_RESET_REQUIRED`)\nand replaces the history with that budget.",
         "operationId": "update_category_api_v1_categories__category_id__patch",
         "parameters": [
           {
@@ -2312,9 +2480,79 @@
         ]
       }
     },
+    "/api/v1/summary/annual/{month}": {
+      "get": {
+        "description": "Year to date (January to the end of `month`) per annual budget account: annual\nbudget, actual, actual per month and per category. Every annual account, or one\n(a monthly one is 422 `NOT_ANNUAL_ACCOUNT`).",
+        "operationId": "annual_summary_api_v1_summary_annual__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnualSummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Annual Summary",
+        "tags": [
+          "summary"
+        ]
+      }
+    },
     "/api/v1/summary/monthly": {
       "get": {
-        "description": "Per month: total budget and total actual, for everything or one budget account.\nDefaults to the 12 months ending at `to`.",
+        "description": "Per month: total budget and total actual, for everything or one budget account.\nDefaults to the 12 months ending at `to`. Budget and actual cover monthly budget\naccounts only; annual accounts' spending is `annual_actual`.",
         "operationId": "monthly_summary_api_v1_summary_monthly_get",
         "parameters": [
           {
@@ -2408,7 +2646,7 @@
     },
     "/api/v1/summary/months/{month}": {
       "get": {
-        "description": "Level-1 rows with nested level-2 rows: budget and actual.",
+        "description": "Level-1 rows with nested level-2 rows: budget and actual, for monthly budget\naccounts' categories. Annual accounts' spending of the month is `annual_actual`.",
         "operationId": "month_detail_api_v1_summary_months__month__get",
         "parameters": [
           {

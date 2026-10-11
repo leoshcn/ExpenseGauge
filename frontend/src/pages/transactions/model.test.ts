@@ -16,8 +16,8 @@ import {
   transactionChanges,
 } from "./model";
 
-const daily = { id: 1, name: "日常" };
-const fixed = { id: 2, name: "固定" };
+const daily = { id: 1, name: "日常", period: "month" as const };
+const fixed = { id: 2, name: "固定", period: "month" as const };
 
 const tree: Schemas["CategoryTree"] = {
   budget_account_id: null,

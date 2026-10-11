@@ -159,6 +159,8 @@ export const S = {
       overCategories: (count: number) => `${count} 个分类超支`,
       nearCategories: (count: number) => `${count} 个分类接近预算`,
       allWithin: "所有分类都在预算内",
+      annualExtra: (amount: string) => `另有年度开支 ${amount}`,
+      annualExtraHint: "年度预算账户的支出，不计入本月的预算对比",
     },
     trend: {
       title: "近 12 个月",
@@ -166,6 +168,7 @@ export const S = {
       legendBudget: "预算",
       legendActual: "实际支出",
       legendOver: "超出预算",
+      legendAnnual: "年度开支",
       ariaLabel: "近 12 个月预算与实际支出柱状图",
     },
     table: {
@@ -202,6 +205,40 @@ export const S = {
       body: "流水由您的 AI 助手通过接口提交，无法手动录入。创建访问令牌并交给助手，提交后这里就会出现预算与实际支出的对比。",
       window: "近 12 个月内没有任何流水。",
       windowScoped: "近 12 个月内此预算账户没有任何流水。",
+    },
+    /** A single annual budget account, and annual accounts inside "全部". */
+    annual: {
+      through: (year: number, month: number) => `截至${year}年${month}月`,
+      actual: "年初至今支出",
+      budget: "年度预算",
+      elapsed: (percent: string) => `全年已过 ${percent}`,
+      marker: "时间进度",
+      card: {
+        title: "年度预算",
+        description: (year: number, month: number) =>
+          month === 1 ? `${year}年1月，年初至今` : `${year}年1月至${month}月，年初至今`,
+        open: (name: string) => `查看「${name}」`,
+        noBudget: "未设预算",
+        figures: (actual: string, budget: string) => `${actual} / ${budget}`,
+        progressLabel: (name: string) => `「${name}」年度预算使用进度`,
+      },
+      trend: {
+        title: (year: number) => `${year}年逐月`,
+        description: "柱为每月支出，折线为累计支出",
+        legendMonth: "每月支出",
+        legendCumulative: "累计支出",
+        legendBudget: "年度预算",
+        legendPace: "时间进度",
+        ariaLabel: (year: number) => `${year}年每月支出、累计支出与年度预算图`,
+      },
+      table: {
+        budget: "年度预算",
+        actual: "年初至今",
+      },
+      share: {
+        description: "按一级分类，年初至今",
+        empty: "今年暂无支出",
+      },
     },
   },
   transactions: {
@@ -285,7 +322,12 @@ export const S = {
       title: (month: string) => `从 ${month} 起生效`,
       body: (month: string) =>
         `在这里设置的金额从 ${month} 起生效，并一直沿用到下一次调整；${month} 之前的月份保持原来的预算。清空金额表示从该月起「未设预算」，只统计实际支出；填 0 表示预算为零，任何支出都算超支。`,
+      annual: (year: number) =>
+        `标有「/年」的是年度预算：金额是全年的，在 ${year} 年任何月份保存都作用于 ${year} 全年。`,
     },
+    /** The period suffix after an amount. */
+    per: { month: "/月", year: "/年" },
+    annualHint: (year: number) => `年度预算，作用于 ${year} 全年`,
     listTitle: "各分类预算",
     columns: {
       category: "分类",
@@ -350,6 +392,14 @@ export const S = {
       renameTitle: "重命名预算账户",
       id: (id: number) => `ID ${id}`,
       leafCount: (count: number) => `${count} 个二级分类`,
+      period: "周期",
+      periods: { month: "月度", year: "年度" },
+      periodPrefix: "周期：",
+      periodHints: {
+        month: "每月一个预算，与当月支出比较。",
+        year: "一年一个预算（自然年），与年初至今的支出比较。适合保险、旅行、年费等。",
+      },
+      periodFixed: "创建后不能更改周期。",
     },
     channels: {
       title: "付款渠道",
@@ -373,6 +423,14 @@ export const S = {
       budgetAccount: "预算账户",
       budgetAccountHint: "这个分类的支出和预算计入哪个预算账户。",
       budgetAccountMoveHint: "更改后，这个分类过去和以后的流水与预算都计入新的预算账户。",
+      budgetReset: {
+        warning: (from: string, to: string) =>
+          `新的预算账户是${to}账户，原来是${from}。这个分类原有的全部预算会被清除（金额在新周期下含义不同），过去的月份将不再显示它的预算。流水不受影响。`,
+        label: { month: "新的月度预算", year: "新的年度预算" },
+        hint: { month: "从本月起生效。", year: "作用于今年全年。" },
+        none: "无预算（只统计实际支出）",
+        required: "请输入新的预算，或选择「无预算」",
+      },
       addParent: "添加一级分类",
       addParentTitle: "添加一级分类",
       addChild: (parent: string) => `在「${parent}」下添加二级分类`,

@@ -20,7 +20,7 @@ def list_budget_accounts(principal: SessionPrincipal, db: DbSession):
 def create_budget_account(
     payload: BudgetAccountCreateIn, principal: SessionPrincipal, db: DbSession
 ):
-    return budget_account_service.create_budget_account(db, payload.name)
+    return budget_account_service.create_budget_account(db, payload.name, payload.period)
 
 
 @router.patch("/budget-accounts/{budget_account_id}", response_model=BudgetAccountOut)

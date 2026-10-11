@@ -27,7 +27,9 @@ def update_category(
     category_id: int, payload: CategoryUpdateIn, principal: SessionPrincipal, db: DbSession
 ):
     """Partial update: name, and for level 2 description and budget account. Omitted
-    fields are kept. A new budget account takes the category's history with it."""
+    fields are kept. A new budget account of the same period takes the category's history
+    with it; one of the other period needs `budget_amount` (422 `BUDGET_RESET_REQUIRED`)
+    and replaces the history with that budget."""
     return category_service.update_category(db, category_id, payload.model_dump(exclude_unset=True))
 
 

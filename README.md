@@ -10,7 +10,10 @@ Three concepts: a **payment channel** (付款渠道) is where transactions come 
 a statement) and only scopes duplicate detection; a **category** (分类) is a global
 two-level tree of what money is spent on; a **budget account** (预算账户) is a budget pool,
 and every level-2 category belongs to one, so a transaction counts towards the budget
-account of its category whichever channel paid it. All amounts are in one base currency.
+account of its category whichever channel paid it. A budget account is either monthly
+(budgets per month, compared month by month) or annual (one budget per calendar year,
+compared with the spending from January to date, e.g. insurance or holidays); the period
+is chosen when the account is created. All amounts are in one base currency.
 
 Status: MVP complete: backend, frontend, Docker Compose deployment and the
 [agent integration guide](docs/agent-guide.md).

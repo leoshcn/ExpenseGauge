@@ -61,7 +61,11 @@ def test_unknown_category_rejects_whole_batch_with_valid_categories(client, ledg
     client.patch(f"{API}/categories/{ledger.metro}", json={"description": "含地铁卡充值"})
     tree = client.get(f"{API}/categories").json()["categories"]
     assert tree[1]["children"][0]["description"] == "含地铁卡充值"
-    assert tree[1]["children"][0]["budget_account"] == {"id": ledger.daily, "name": "日常"}
+    assert tree[1]["children"][0]["budget_account"] == {
+        "id": ledger.daily,
+        "name": "日常",
+        "period": "month",
+    }
 
     for bad_category in (99999, 2**31):
         items = [
@@ -91,7 +95,7 @@ def test_level1_category_rejects_whole_batch_with_children(client, ledger):
     assert feedback[0]["code"] == "CATEGORY_NOT_LEAF"
     assert "一级分类" in feedback[0]["message"]
     assert feedback[0]["parent"] == {"id": ledger.food, "name": "餐饮"}
-    daily = {"id": ledger.daily, "name": "日常"}
+    daily = {"id": ledger.daily, "name": "日常", "period": "month"}
     assert feedback[0]["children"] == [
         {"id": ledger.groceries, "name": "买菜", "description": "生鲜", "budget_account": daily},
         {"id": ledger.dining, "name": "外食", "description": None, "budget_account": daily},
@@ -421,6 +425,8 @@ def test_edit_category_and_note_then_delete(client, ledger):
     assert client.delete(url).status_code == 204
     assert ledger.count() == 0
     monthly = client.get(f"{API}/summary/monthly?from=2026-09&to=2026-09").json()
-    assert monthly["months"] == [{"month": "2026-09", "budget": None, "actual": "0.00"}]
+    assert monthly["months"] == [
+        {"month": "2026-09", "budget": None, "actual": "0.00", "annual_actual": "0.00"}
+    ]
     assert_envelope(client.delete(url), 404, "TRANSACTION_NOT_FOUND")
     assert_envelope(client.patch(url, json={"note": "x"}), 404, "TRANSACTION_NOT_FOUND")

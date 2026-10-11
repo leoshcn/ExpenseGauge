@@ -36,6 +36,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
         "month": "2026-09",
         "budget": "1400.00",
         "actual": "828.80",
+        "annual_actual": "0.00",
         "categories": [
             {
                 "category_id": ledger.food,
@@ -93,11 +94,21 @@ def test_monthly_series_uses_the_budget_version_in_force(client, ledger):
         "budget_account_id": None,
         "currency": "CNY",
         "months": [
-            {"month": "2026-06", "budget": None, "actual": "0.00"},  # before any budget
-            {"month": "2026-07", "budget": "1200.00", "actual": "300.00"},
-            {"month": "2026-08", "budget": "1200.00", "actual": "410.10"},
-            {"month": "2026-09", "budget": "1400.00", "actual": "828.80"},
-            {"month": "2026-10", "budget": "1400.00", "actual": "0.00"},  # carried forward
+            {
+                "month": "2026-06",
+                "budget": None,
+                "actual": "0.00",
+                "annual_actual": "0.00",
+            },  # before any budget
+            {"month": "2026-07", "budget": "1200.00", "actual": "300.00", "annual_actual": "0.00"},
+            {"month": "2026-08", "budget": "1200.00", "actual": "410.10", "annual_actual": "0.00"},
+            {"month": "2026-09", "budget": "1400.00", "actual": "828.80", "annual_actual": "0.00"},
+            {
+                "month": "2026-10",
+                "budget": "1400.00",
+                "actual": "0.00",
+                "annual_actual": "0.00",
+            },  # carried forward
         ],
     }
     # Monthly totals agree with the month detail.
@@ -143,11 +154,11 @@ def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, l
 
     monthly = client.get(f"{API}/summary/monthly", params={"from": "2026-07", "to": "2026-11"})
     assert monthly.json()["months"] == [
-        {"month": "2026-07", "budget": "1200.00", "actual": "300.00"},
-        {"month": "2026-08", "budget": "1200.00", "actual": "410.10"},
-        {"month": "2026-09", "budget": "200.00", "actual": "828.80"},
-        {"month": "2026-10", "budget": "200.00", "actual": "0.00"},
-        {"month": "2026-11", "budget": "200.00", "actual": "0.00"},
+        {"month": "2026-07", "budget": "1200.00", "actual": "300.00", "annual_actual": "0.00"},
+        {"month": "2026-08", "budget": "1200.00", "actual": "410.10", "annual_actual": "0.00"},
+        {"month": "2026-09", "budget": "200.00", "actual": "828.80", "annual_actual": "0.00"},
+        {"month": "2026-10", "budget": "200.00", "actual": "0.00", "annual_actual": "0.00"},
+        {"month": "2026-11", "budget": "200.00", "actual": "0.00", "annual_actual": "0.00"},
     ]
 
     # Clearing the last budgeted category leaves the whole month without a budget ...
@@ -305,12 +316,14 @@ def test_spending_counts_in_the_budget_account_of_its_category(client, ledger):
         return client.get(f"{API}/summary/monthly", params=query).json()["months"]
 
     assert monthly({"budget_account_id": fixed}) == [
-        {"month": "2026-09", "budget": "6500.00", "actual": "6500.00"}
+        {"month": "2026-09", "budget": "6500.00", "actual": "6500.00", "annual_actual": "0.00"}
     ]
     assert monthly({"budget_account_id": ledger.daily}) == [
-        {"month": "2026-09", "budget": "500.00", "actual": "300.00"}
+        {"month": "2026-09", "budget": "500.00", "actual": "300.00", "annual_actual": "0.00"}
     ]
-    assert monthly({}) == [{"month": "2026-09", "budget": "7000.00", "actual": "6800.00"}]
+    assert monthly({}) == [
+        {"month": "2026-09", "budget": "7000.00", "actual": "6800.00", "annual_actual": "0.00"}
+    ]
 
 
 def test_moving_a_category_to_another_budget_account_moves_its_history(client, ledger):
@@ -330,9 +343,179 @@ def test_moving_a_category_to_another_budget_account_moves_its_history(client, l
         params={"from": "2026-09", "to": "2026-09", "budget_account_id": fixed},
     )
     assert monthly.json()["months"] == [
-        {"month": "2026-09", "budget": "7000.00", "actual": "6800.00"}
+        {"month": "2026-09", "budget": "7000.00", "actual": "6800.00", "annual_actual": "0.00"}
     ]
     # The transactions themselves report the new budget account.
     listed = client.get(f"{API}/transactions", params={"budget_account_id": fixed}).json()
     assert {t["budget_account_name"] for t in listed["items"]} == {"固定"}
     assert listed["total"] == 2
+
+
+def _annual(ledger: Ledger) -> tuple[int, int, int, int]:
+    """An annual budget account "年度": 保险 under 年度开支 (only annual children) and 旅行
+    under 交通 (next to the monthly 地铁). 2026 budgets 20000 + 10000; 6000 paid in
+    January, 2000 in March. Returns (年度, 年度开支, 保险, 旅行)."""
+    yearly = ledger.budget_account("年度", "year")
+    annual_group = ledger.category("年度开支")
+    insurance = ledger.category("保险", annual_group, yearly)
+    travel = ledger.category("旅行", ledger.transport, yearly)
+    ledger.set_budgets("2026-05", {insurance: "20000", travel: "10000"})
+    paid = [
+        ledger.item(
+            date="2026-01-20", amount="6000", counterparty="保险公司", category_id=insurance
+        ),
+        ledger.item(date="2026-03-02", amount="2000", counterparty="航空公司", category_id=travel),
+    ]
+    assert ledger.submit(paid).status_code == 201
+    return yearly, annual_group, insurance, travel
+
+
+def test_annual_account_year_to_date(client, ledger):
+    """AC5 (R4): through 2026-03 the annual account shows 8000 of 30000, per month and per
+    category; spending past the budget shows as actual > budget."""
+    yearly, annual_group, insurance, travel = _annual(ledger)
+    url = f"{API}/summary/annual/2026-03"
+    body = client.get(url, params={"budget_account_id": yearly}).json()
+    assert body == {
+        "currency": "CNY",
+        "year": 2026,
+        "through": "2026-03",
+        "accounts": [
+            {
+                "budget_account_id": yearly,
+                "name": "年度",
+                "budget": "30000.00",
+                "actual": "8000.00",
+                "months": [
+                    {"month": "2026-01", "actual": "6000.00"},
+                    {"month": "2026-02", "actual": "0.00"},
+                    {"month": "2026-03", "actual": "2000.00"},
+                ],
+                "categories": [
+                    {
+                        "category_id": ledger.transport,
+                        "name": "交通",
+                        "budget": "10000.00",
+                        "actual": "2000.00",
+                        "children": [
+                            {
+                                "category_id": travel,
+                                "name": "旅行",
+                                "budget": "10000.00",
+                                "actual": "2000.00",
+                            }
+                        ],
+                    },
+                    {
+                        "category_id": annual_group,
+                        "name": "年度开支",
+                        "budget": "20000.00",
+                        "actual": "6000.00",
+                        "children": [
+                            {
+                                "category_id": insurance,
+                                "name": "保险",
+                                "budget": "20000.00",
+                                "actual": "6000.00",
+                            }
+                        ],
+                    },
+                ],
+            }
+        ],
+    }
+    # Without an account: every annual account (the same one here).
+    assert client.get(url).json() == body
+    # Through January only January counts; a later month of another year starts over.
+    january = client.get(f"{API}/summary/annual/2026-01").json()["accounts"][0]
+    assert (january["budget"], january["actual"], len(january["months"])) == (
+        "30000.00",
+        "6000.00",
+        1,
+    )
+    next_year = client.get(f"{API}/summary/annual/2027-02").json()["accounts"][0]
+    assert next_year["actual"] == "0.00"
+    assert next_year["budget"] == "30000.00"  # carried forward until 2027 gets its version
+
+    more = ledger.item(
+        date="2026-03-20", amount="23000", counterparty="理赔", category_id=insurance
+    )
+    assert ledger.submit([more]).status_code == 201
+    over = client.get(url, params={"budget_account_id": yearly}).json()["accounts"][0]
+    assert (over["budget"], over["actual"]) == ("30000.00", "31000.00")
+
+    # A monthly account has no annual summary; unknown ids are refused as usual.
+    monthly = client.get(url, params={"budget_account_id": ledger.daily})
+    assert_envelope(monthly, 422, "NOT_ANNUAL_ACCOUNT")
+    unknown = client.get(url, params={"budget_account_id": 999})
+    assert_envelope(unknown, 422, "BUDGET_ACCOUNT_NOT_FOUND")
+    assert_envelope(client.get(f"{API}/summary/annual/2026-13"), 422, "VALIDATION_ERROR")
+
+
+def test_annual_summary_without_annual_accounts_is_empty(client, ledger):
+    body = client.get(f"{API}/summary/annual/2026-09").json()
+    assert body == {"currency": "CNY", "year": 2026, "through": "2026-09", "accounts": []}
+
+
+def test_all_scope_keeps_annual_spending_out_of_the_monthly_comparison(client, ledger):
+    """AC6 (R5): in a month with 5000 monthly and 6000 annual spending, "全部" compares
+    5000 with the monthly budgets and reports the 6000 apart; the tree has no annual
+    categories and drops a level-1 category whose children are all annual."""
+    yearly, annual_group, insurance, travel = _annual(ledger)
+    ledger.set_budgets("2026-01", {ledger.groceries: "4000", ledger.metro: "300"})
+    paid = [
+        ledger.item(date="2026-01-05", amount="4800", counterparty="超市"),
+        ledger.item(date="2026-01-06", amount="200", counterparty="地铁", category_id=ledger.metro),
+    ]
+    assert ledger.submit(paid).status_code == 201
+    empty = ledger.category("居家")  # level 1 without children stays
+
+    detail = client.get(f"{API}/summary/months/2026-01").json()
+    assert (detail["budget"], detail["actual"], detail["annual_actual"]) == (
+        "4300.00",
+        "5000.00",
+        "6000.00",
+    )
+    assert _rows(detail) == {
+        "餐饮": ("4000.00", "4800.00", ["买菜", "外食"]),
+        "交通": ("300.00", "200.00", ["地铁"]),
+        "居家": (None, "0.00", []),
+    }
+    assert empty in [row["category_id"] for row in detail["categories"]]
+
+    monthly = client.get(f"{API}/summary/monthly", params={"from": "2026-01", "to": "2026-03"})
+    assert monthly.json()["months"] == [
+        {"month": "2026-01", "budget": "4300.00", "actual": "5000.00", "annual_actual": "6000.00"},
+        {"month": "2026-02", "budget": "4300.00", "actual": "0.00", "annual_actual": "0.00"},
+        {"month": "2026-03", "budget": "4300.00", "actual": "0.00", "annual_actual": "2000.00"},
+    ]
+
+    # A single monthly account is unchanged; a single annual one has nothing monthly.
+    daily = client.get(
+        f"{API}/summary/months/2026-01", params={"budget_account_id": ledger.daily}
+    ).json()
+    assert (daily["budget"], daily["actual"], daily["annual_actual"]) == (
+        "4300.00",
+        "5000.00",
+        "0.00",
+    )
+    assert _rows(daily) == {
+        "餐饮": ("4000.00", "4800.00", ["买菜", "外食"]),
+        "交通": ("300.00", "200.00", ["地铁"]),
+    }
+    annual_month = client.get(
+        f"{API}/summary/months/2026-01", params={"budget_account_id": yearly}
+    ).json()
+    assert (annual_month["budget"], annual_month["actual"], annual_month["annual_actual"]) == (
+        None,
+        "0.00",
+        "6000.00",
+    )
+    assert annual_month["categories"] == []
+    annual_series = client.get(
+        f"{API}/summary/monthly",
+        params={"from": "2026-01", "to": "2026-01", "budget_account_id": yearly},
+    )
+    assert annual_series.json()["months"] == [
+        {"month": "2026-01", "budget": None, "actual": "0.00", "annual_actual": "6000.00"}
+    ]

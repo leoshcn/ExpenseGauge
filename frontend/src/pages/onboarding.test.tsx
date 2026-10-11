@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
 
-const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常" };
+const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常", period: "month" };
 const usableTree: Schemas["CategoryTree"] = {
   budget_account_id: null,
   categories: [{ id: 10, name: "居住", children: [{ id: 11, name: "房租", description: null, budget_account: daily }] }],
@@ -34,7 +34,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
     categoriesQuery: () => queryOptions({ queryKey: actual.keys.categories(null), queryFn: async () => state.tree }),
     channelsQuery: queryOptions({ queryKey: actual.keys.channels, queryFn: async () => state.channels }),
     updateSettings: vi.fn(async (body: Schemas["SettingsUpdateIn"]) => ({ currency: body.currency })),
-    createBudgetAccount: vi.fn(async (body: Schemas["BudgetAccountCreateIn"]) => ({ id: 1, name: body.name })),
+    createBudgetAccount: vi.fn(async (body: Schemas["BudgetAccountCreateIn"]) => ({ id: 1, name: body.name, period: body.period })),
     createCategory: vi.fn(
       async (body: Schemas["CategoryCreateIn"]): Promise<Schemas["CategoryOut"]> => ({
         id: body.parent_id ? 11 : 10,
@@ -78,13 +78,13 @@ describe("OnboardingPage", () => {
     expect(screen.getByRole("list", { name: "第 1 步，共 3 步" })).toBeInTheDocument();
     await user.type(screen.getByLabelText("预算账户名称"), " 日常 ");
     await user.click(screen.getByRole("button", { name: "继续" }));
-    await waitFor(() => expect(queries.createBudgetAccount).toHaveBeenCalledExactlyOnceWith({ name: "日常" }));
+    await waitFor(() => expect(queries.createBudgetAccount).toHaveBeenCalledExactlyOnceWith({ name: "日常", period: "month" }));
     expect(queries.updateSettings).toHaveBeenCalledExactlyOnceWith({ currency: "CNY" });
   });
 
   it("step 2 creates level-2 categories in the first budget account by default", async () => {
     state.settings = { currency: "CNY" };
-    state.budgetAccounts = [daily, { id: 2, name: "固定" }];
+    state.budgetAccounts = [daily, { id: 2, name: "固定", period: "month" }];
     const user = userEvent.setup();
     renderPage();
     expect(await screen.findByRole("heading", { name: "添加分类" })).toBeInTheDocument();

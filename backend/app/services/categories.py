@@ -7,18 +7,20 @@ children). Only level 2 has a `description` (the user's note for the classifying
 level-1 rows always keep it NULL.
 """
 
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import exists, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db import get_by_id
 from app.errors import conflict, invalid, not_found
-from app.models import Category, Transaction
+from app.models import Budget, BudgetAccount, Category, Transaction
 from app.schemas.budget_account import BudgetAccountOut
 from app.schemas.category import CategoryLeaf, CategoryNode, CategoryTree
-from app.services.budget_accounts import budget_account_names, get_budget_account
+from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 
 
 def load_categories(db: Session, budget_account_id: int | None = None) -> list[Category]:
@@ -31,8 +33,10 @@ def load_categories(db: Session, budget_account_id: int | None = None) -> list[C
     return [c for c in categories if c.budget_account_id == budget_account_id or c.id in parent_ids]
 
 
-def build_nodes(categories: list[Category], budget_accounts: dict[int, str]) -> list[CategoryNode]:
-    """Level-1 nodes with their level-2 children. `budget_accounts` maps id to name."""
+def build_nodes(
+    categories: list[Category], budget_accounts: dict[int, BudgetAccount]
+) -> list[CategoryNode]:
+    """Level-1 nodes with their level-2 children. `budget_accounts` is keyed by id."""
     nodes = {
         c.id: CategoryNode(id=c.id, name=c.name, children=[])
         for c in categories
@@ -44,15 +48,12 @@ def build_nodes(categories: list[Category], budget_accounts: dict[int, str]) -> 
     return list(nodes.values())
 
 
-def to_leaf(category: Category, budget_accounts: dict[int, str]) -> CategoryLeaf:
-    budget_account_id = category.budget_account_id
+def to_leaf(category: Category, budget_accounts: dict[int, BudgetAccount]) -> CategoryLeaf:
     return CategoryLeaf(
         id=category.id,
         name=category.name,
         description=category.description,
-        budget_account=BudgetAccountOut(
-            id=budget_account_id, name=budget_accounts[budget_account_id]
-        ),
+        budget_account=BudgetAccountOut.model_validate(budget_accounts[category.budget_account_id]),
     )
 
 
@@ -61,7 +62,7 @@ def get_tree(db: Session, budget_account_id: int | None = None) -> CategoryTree:
         get_budget_account(db, budget_account_id, status_code=422)
     return CategoryTree(
         budget_account_id=budget_account_id,
-        categories=build_nodes(load_categories(db, budget_account_id), budget_account_names(db)),
+        categories=build_nodes(load_categories(db, budget_account_id), budget_accounts_by_id(db)),
     )
 
 
@@ -141,20 +142,57 @@ def create_category(
 
 
 def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Category:
-    """Applies only the given fields (`name`, `description`, `budget_account_id`); the
-    others keep their value. A new budget account moves the category's whole history."""
+    """Applies only the given fields (`name`, `description`, `budget_account_id`,
+    `budget_amount`); the others keep their value.
+
+    A new budget account of the same period moves the category's whole history. One of
+    the other period (monthly <-> annual) needs `budget_amount` (None = no budget): the
+    old budget versions would mean the wrong thing, so they are all deleted and the new
+    budget starts at the current month (monthly target) or at January of the current
+    year (annual target). All in the same transaction as the move.
+    """
     category = get_category(db, category_id)
+    cross_period = False
+    if "budget_account_id" in fields:
+        _check_budget_account(db, category.parent_id, fields["budget_account_id"])
+        target = get_budget_account(db, fields["budget_account_id"], status_code=422)
+        current = get_budget_account(db, category.budget_account_id)
+        cross_period = target.period != current.period
+        if cross_period and "budget_amount" not in fields:
+            raise invalid(
+                "BUDGET_RESET_REQUIRED",
+                "跨周期移动需要重新设置预算：请填写新预算金额，或明确设为无预算",
+                {"from_period": current.period, "to_period": target.period},
+            )
+    if "budget_amount" in fields and not cross_period:
+        raise invalid(
+            "BUDGET_RESET_NOT_ALLOWED",
+            "只有把分类移动到不同周期的预算账户时才能同时设置预算，请在预算页修改预算",
+        )
     if "description" in fields:
         description = _normalize_description(fields["description"])
         _check_description(category.parent_id, description)
         category.description = description
     if "budget_account_id" in fields:
-        _check_budget_account(db, category.parent_id, fields["budget_account_id"])
         category.budget_account_id = fields["budget_account_id"]
+        if cross_period:
+            _reset_budget(db, category.id, target.period, fields["budget_amount"])
     if "name" in fields:
         category.name = fields["name"]
     _commit_name(db)
     return category
+
+
+def _reset_budget(db: Session, category_id: int, period: str, amount: Decimal | None) -> None:
+    """Replaces every budget version of the category with one starting now (this month,
+    or January of this year for an annual budget account); no version when `amount` is
+    None. Not committed here."""
+    db.execute(delete(Budget).where(Budget.category_id == category_id))
+    if amount is None:
+        return
+    today = date.today()
+    start = date(today.year, 1, 1) if period == "year" else today.replace(day=1)
+    db.add(Budget(category_id=category_id, effective_from=start, amount=amount))
 
 
 def delete_category(db: Session, category_id: int) -> None:

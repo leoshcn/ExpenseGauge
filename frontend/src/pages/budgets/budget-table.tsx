@@ -11,13 +11,46 @@ import { S } from "@/strings.zh";
 import {
   type BudgetDraft,
   type BudgetGroup,
-  effectiveAmount,
   inputText,
   rowState,
-  sumBudgets,
+  sumByPeriod,
 } from "./model";
 
 const T = S.budgets;
+
+type Period = Schemas["BudgetLine"]["period"];
+
+/** "/月" or "/年" after an amount (R2.3). */
+function Per({ period, className }: { period: Period; className?: string }) {
+  return <span className={cn("ml-0.5 text-xs font-normal text-muted-foreground", className)}>{T.per[period]}</span>;
+}
+
+/**
+ * A subtotal or total: as before when every line is monthly; otherwise the monthly and the
+ * annual sums apart, each with its period, since they cannot be added.
+ */
+function PeriodFigure({
+  sums,
+  money,
+}: {
+  sums: { month?: string | null; year?: string | null };
+  money: (value: string) => string;
+}) {
+  const figure = (value: string | null) =>
+    value === null ? <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span> : money(value);
+  if (sums.year === undefined) return figure(sums.month ?? null);
+  const parts = (["month", "year"] as const).filter((period) => sums[period] !== undefined);
+  return (
+    <span className="inline-flex flex-col items-end">
+      {parts.map((period) => (
+        <span key={period} className="whitespace-nowrap">
+          {figure(sums[period] ?? null)}
+          <Per period={period} />
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /** The amount in force for the month, and since when; or "未设预算". */
 function InForce({ line, money }: { line: Schemas["BudgetLine"]; money: (v: string) => string }) {
@@ -25,7 +58,10 @@ function InForce({ line, money }: { line: Schemas["BudgetLine"]; money: (v: stri
   const since = line.effective_from ? formatMonth(line.effective_from) : null;
   return (
     <>
-      <div className="num">{money(line.amount)}</div>
+      <div className="num">
+        <span>{money(line.amount)}</span>
+        <Per period={line.period} />
+      </div>
       {since ? <div className="num text-xs whitespace-nowrap text-muted-foreground">{T.since(since)}</div> : null}
     </>
   );
@@ -73,11 +109,17 @@ function AmountInput({
             aria-invalid={parsed.valid ? undefined : true}
             aria-describedby={note ? `${id}-note` : undefined}
             className={cn(
-              "num bg-card pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
+              "num bg-card pr-8 pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
               currencySymbol(currency).length > 1 && "pl-10 sm:pl-11",
               changed && parsed.valid && "border-primary",
             )}
           />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-muted-foreground"
+          >
+            {T.per[line.period]}
+          </span>
         </div>
         <button
           type="button"
@@ -113,6 +155,7 @@ export function BudgetTable({
   groups,
   draft,
   currency,
+  year,
   showBudgetAccount = false,
   onChange,
   className,
@@ -120,17 +163,18 @@ export function BudgetTable({
   groups: readonly BudgetGroup[];
   draft: BudgetDraft;
   currency: string;
+  /** Year of the chosen month: the year an annual line's amount applies to. */
+  year: number;
   /** Name each row's budget account (the "全部" view, where rows of several are mixed). */
   showBudgetAccount?: boolean;
   onChange: (categoryId: number, text: string) => void;
   className?: string;
 }) {
   const money = (value: string) => formatMoney(value, currency);
-  const sum = (lines: readonly Schemas["BudgetLine"][]) => sumBudgets(lines.map((line) => effectiveAmount(line, draft)));
-  const total = sum(groups.flatMap((group) => group.lines));
+  const total = (
+    <PeriodFigure sums={sumByPeriod(groups.flatMap((group) => group.lines), draft)} money={money} />
+  );
   const heading = "px-3 py-2.5 text-xs font-medium text-muted-foreground";
-  const figure = (value: string | null) =>
-    value === null ? <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span> : money(value);
 
   return (
     <section className={cn("overflow-hidden rounded-xl border bg-card shadow-card", className)}>
@@ -165,7 +209,7 @@ export function BudgetTable({
                 {group.lines.length === 0 ? null : (
                   <>
                     <span className="mr-2 text-xs font-normal text-muted-foreground">{T.subtotal}</span>
-                    {figure(sum(group.lines))}
+                    <PeriodFigure sums={sumByPeriod(group.lines, draft)} money={money} />
                   </>
                 )}
               </td>
@@ -203,6 +247,9 @@ export function BudgetTable({
                             {line.budget_account_name}
                           </div>
                         ) : null}
+                        {line.period === "year" ? (
+                          <div className="mt-0.5 text-xs text-accent-foreground">{T.annualHint(year)}</div>
+                        ) : null}
                         <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
                           {line.amount === null ? (
                             T.noBudget
@@ -238,7 +285,7 @@ export function BudgetTable({
             <th scope="row" className="px-4 py-3 text-left sm:px-5 md:hidden">
               {T.total}
             </th>
-            <td className="num px-4 py-3 text-right sm:pr-[3.75rem]">{figure(total)}</td>
+            <td className="num px-4 py-3 text-right sm:pr-[3.75rem]">{total}</td>
           </tr>
         </tfoot>
       </table>

@@ -5,14 +5,67 @@ import type { Schemas } from "@/api/client";
 import { BudgetMeter } from "@/components/budget-meter";
 import { Button } from "@/components/ui/button";
 import { countByState, usage, usagePercent } from "@/lib/budget";
-import { absolute, formatMoney, formatPercent } from "@/lib/money";
+import { absolute, formatMoney, formatPercent, toCents } from "@/lib/money";
 import { addMonths, monthElapsed, parseMonth } from "@/lib/month";
 import { S } from "@/strings.zh";
 
 
 const T = S.dashboard;
 
-function Figure({
+/** The summary card's title with the "本月" chip and the previous/next month buttons. */
+export function MonthHeader({
+  title,
+  current,
+  month,
+  firstMonth,
+  lastMonth,
+  onMonthChange,
+}: {
+  title: string;
+  current: boolean;
+  month: string;
+  firstMonth: string;
+  lastMonth: string;
+  onMonthChange: (month: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2">
+        <h2 className="num text-base font-semibold" aria-live="polite">
+          {title}
+        </h2>
+        {current ? (
+          <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
+            {T.month.current}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex gap-1">
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={month <= firstMonth}
+          onClick={() => onMonthChange(addMonths(month, -1))}
+          aria-label={T.month.previous}
+        >
+          <ChevronLeftIcon />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          disabled={month >= lastMonth}
+          onClick={() => onMonthChange(addMonths(month, 1))}
+          aria-label={T.month.next}
+        >
+          <ChevronRightIcon />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** A labelled figure under a summary's meter. */
+export function Figure({
   label,
   value,
   tone,
@@ -67,42 +120,25 @@ export function MonthSummary({
       aria-label={T.month.long(year, monthNumber)}
       className={cn("flex flex-col rounded-xl border bg-card p-5 shadow-card", className)}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="num text-base font-semibold" aria-live="polite">
-            {T.month.long(year, monthNumber)}
-          </h2>
-          {elapsed !== null ? (
-            <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-              {T.month.current}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex gap-1">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            disabled={month <= firstMonth}
-            onClick={() => onMonthChange(addMonths(month, -1))}
-            aria-label={T.month.previous}
-          >
-            <ChevronLeftIcon />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            disabled={month >= lastMonth}
-            onClick={() => onMonthChange(addMonths(month, 1))}
-            aria-label={T.month.next}
-          >
-            <ChevronRightIcon />
-          </Button>
-        </div>
-      </div>
+      <MonthHeader
+        title={T.month.long(year, monthNumber)}
+        current={elapsed !== null}
+        month={month}
+        firstMonth={firstMonth}
+        lastMonth={lastMonth}
+        onMonthChange={onMonthChange}
+      />
 
       <div className="mt-5">
         <div className="text-xs text-muted-foreground">{T.summary.actual}</div>
         <div className="num text-display font-semibold">{money(detail.actual)}</div>
+        {/* "全部": annual accounts' spending is left out of the comparison above. */}
+        {toCents(detail.annual_actual) > 0 ? (
+          <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.annualExtraHint}>
+            <span aria-hidden="true" className="size-2 shrink-0 rounded-[2px] bg-chart-annual" />
+            {T.summary.annualExtra(money(detail.annual_actual))}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-4">

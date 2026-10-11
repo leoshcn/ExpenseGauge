@@ -1,10 +1,10 @@
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
 from app.schemas.budget_account import BudgetAccountOut
-from app.schemas.common import Description, Name, RequestSchema, Schema
+from app.schemas.common import Description, Money, Name, RequestSchema, Schema
 
 
 class CategoryCreateIn(RequestSchema):
@@ -21,7 +21,10 @@ class CategoryUpdateIn(RequestSchema):
     """Partial update: fields left out keep their value. `description` null or blank clears it.
 
     `budget_account_id` (level 2 only) moves the category, with its whole history, to
-    another budget account.
+    another budget account of the same period. A move to a budget account of the other
+    period also needs `budget_amount`: the old budget versions are deleted and the new
+    budget starts at the current month (monthly target) or at January of the current
+    year (annual target).
     """
 
     # Optional but never null: `SkipJsonSchema` keeps null out of the OpenAPI/TS type,
@@ -29,6 +32,12 @@ class CategoryUpdateIn(RequestSchema):
     name: Name | SkipJsonSchema[None] = None
     description: Description | None = None
     budget_account_id: int | SkipJsonSchema[None] = None
+    # Absent and null differ: the service sees only the fields that were sent.
+    budget_amount: Annotated[Money, Field(ge=0)] | None = Field(
+        default=None,
+        description="Only with a `budget_account_id` of the other period, and then required:"
+        " the new budget; null means no budget",
+    )
 
     @model_validator(mode="after")
     def _check_fields(self) -> Self:

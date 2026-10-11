@@ -29,8 +29,8 @@ def list_budget_accounts(db: Session) -> list[BudgetAccount]:
     return list(db.scalars(select(BudgetAccount).order_by(BudgetAccount.id)))
 
 
-def budget_account_names(db: Session) -> dict[int, str]:
-    return {row.id: row.name for row in list_budget_accounts(db)}
+def budget_accounts_by_id(db: Session) -> dict[int, BudgetAccount]:
+    return {row.id: row for row in list_budget_accounts(db)}
 
 
 def _commit_name(db: Session) -> None:
@@ -41,8 +41,9 @@ def _commit_name(db: Session) -> None:
         raise conflict("BUDGET_ACCOUNT_NAME_TAKEN", "已存在同名预算账户") from exc
 
 
-def create_budget_account(db: Session, name: str) -> BudgetAccount:
-    budget_account = BudgetAccount(name=name)
+def create_budget_account(db: Session, name: str, period: str = "month") -> BudgetAccount:
+    """`period` (`month` / `year`) is fixed from here on; only the name can change."""
+    budget_account = BudgetAccount(name=name, period=period)
     db.add(budget_account)
     _commit_name(db)
     return budget_account
