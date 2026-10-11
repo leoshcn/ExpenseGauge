@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router";
 
-import { accountsQuery } from "@/api/queries";
+import { budgetAccountsQuery, type BudgetScope } from "@/api/queries";
 
 /**
  * The page's view state in the URL. `update` merges: a key set to `null` is removed,
@@ -27,14 +27,18 @@ export function useSearchState() {
 }
 
 /**
- * The accounts and the one chosen by `?account=<id>`, falling back to the first account
- * when the parameter is missing or unknown (the same rule as the Dashboard).
+ * The budget accounts and the scope chosen by `?scope=<id>`: that budget account, or
+ * `null` ("全部") when the parameter is missing, `all` or not a known budget account.
+ * `scope` is `undefined` until the budget accounts are loaded, so an unknown id never
+ * reaches the API.
  */
-export function useSelectedAccount() {
+export function useBudgetScope() {
   const { params, update } = useSearchState();
-  const accounts = useQuery(accountsQuery);
-  const account =
-    accounts.data?.find((candidate) => String(candidate.id) === params.get("account")) ??
-    accounts.data?.[0];
-  return { accounts, account, params, update };
+  const budgetAccounts = useQuery(budgetAccountsQuery);
+  const requested = params.get("scope");
+  let scope: BudgetScope | undefined;
+  if (budgetAccounts.data) {
+    scope = budgetAccounts.data.find((candidate) => String(candidate.id) === requested)?.id ?? null;
+  }
+  return { budgetAccounts, scope, params, update };
 }

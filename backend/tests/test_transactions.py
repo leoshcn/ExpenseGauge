@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 
 from app.services.transactions import compute_fingerprint, normalize_text
-from tests.conftest import Ledger
 from tests.test_auth import API, assert_envelope
 
 
@@ -34,16 +33,19 @@ def test_valid_batch_is_stored_in_full(client, agent, token, ledger):
     assert first["amount"] == "35.50"
     assert first["category_id"] == ledger.groceries and first["category_name"] == "买菜"
     assert first["parent_category_id"] == ledger.food and first["parent_category_name"] == "餐饮"
+    assert (first["channel_id"], first["channel_name"]) == (ledger.channel, "储蓄卡")
+    assert (first["budget_account_id"], first["budget_account_name"]) == (ledger.daily, "日常")
+    assert "account_id" not in first
     assert first["confirmed_duplicate"] is False
     assert "fingerprint" not in first
 
-    listed = client.get(f"{ledger.base}/transactions").json()
+    listed = client.get(f"{API}/transactions").json()
     assert listed["total"] == 3
     # Newest first.
     assert [t["counterparty"] for t in listed["items"]] == ["上海地铁", "海底捞", "盒马鲜生"]
     assert listed["items"][1]["note"] == "生日"
 
-    detail = client.get(f"{ledger.base}/summary/months/2026-09").json()
+    detail = client.get(f"{API}/summary/months/2026-09").json()
     assert detail["actual"] == "327.50"
 
     from app.db import get_engine
@@ -54,13 +56,14 @@ def test_valid_batch_is_stored_in_full(client, agent, token, ledger):
 
 
 def test_unknown_category_rejects_whole_batch_with_valid_categories(client, ledger):
-    """AC8, unknown category (including one that belongs to another account)."""
-    other = Ledger(client, name="另一个账户")
+    """AC8, unknown category (also an id beyond INTEGER). The valid categories are the
+    whole global tree, budget accounts included."""
     client.patch(f"{API}/categories/{ledger.metro}", json={"description": "含地铁卡充值"})
-    tree = client.get(f"{ledger.base}/categories").json()["categories"]
+    tree = client.get(f"{API}/categories").json()["categories"]
     assert tree[1]["children"][0]["description"] == "含地铁卡充值"
+    assert tree[1]["children"][0]["budget_account"] == {"id": ledger.daily, "name": "日常"}
 
-    for bad_category in (99999, other.groceries):
+    for bad_category in (99999, 2**31):
         items = [
             ledger.item(),
             ledger.item(counterparty="未知", category_id=bad_category),
@@ -88,9 +91,10 @@ def test_level1_category_rejects_whole_batch_with_children(client, ledger):
     assert feedback[0]["code"] == "CATEGORY_NOT_LEAF"
     assert "一级分类" in feedback[0]["message"]
     assert feedback[0]["parent"] == {"id": ledger.food, "name": "餐饮"}
+    daily = {"id": ledger.daily, "name": "日常"}
     assert feedback[0]["children"] == [
-        {"id": ledger.groceries, "name": "买菜", "description": "生鲜"},
-        {"id": ledger.dining, "name": "外食", "description": None},
+        {"id": ledger.groceries, "name": "买菜", "description": "生鲜", "budget_account": daily},
+        {"id": ledger.dining, "name": "外食", "description": None, "budget_account": daily},
     ]
     assert feedback[1] == {"index": 1, "status": "ok"}
     assert ledger.count() == 0
@@ -129,10 +133,24 @@ def test_confirmation_flag_is_ignored_without_a_match(client, ledger):
     assert response.json()["transactions"][0]["confirmed_duplicate"] is False
 
 
-def test_same_content_in_another_account_is_not_a_duplicate(client, ledger):
-    other = Ledger(client, name="另一个账户")
-    assert ledger.submit([ledger.item()]).status_code == 201
-    assert other.submit([other.item()]).status_code == 201
+def test_duplicates_are_checked_within_one_channel_only(client, agent, ledger):
+    """Acceptance (R3): the same date/amount/counterparty/description on two channels is
+    accepted on both; repeated on the same channel it is SUSPECTED_DUPLICATE."""
+    card = ledger.add_channel("信用卡")
+    first = ledger.submit([ledger.item()], client=agent)
+    assert first.status_code == 201
+    second = ledger.submit([ledger.item()], client=agent, channel_id=card)
+    assert second.status_code == 201
+    assert second.json()["transactions"][0]["confirmed_duplicate"] is False
+    assert ledger.count() == 2
+
+    for channel_id, stored in ((ledger.channel, first), (card, second)):
+        feedback = _rejected(ledger.submit([ledger.item()], client=agent, channel_id=channel_id))
+        assert feedback[0]["code"] == "SUSPECTED_DUPLICATE"
+        assert feedback[0]["existing"] == stored.json()["transactions"][0]
+        assert feedback[0]["existing"]["channel_id"] == channel_id
+    assert ledger.count() == 2
+    assert ledger.count(channel_id=card) == 1
 
 
 def test_identical_items_in_one_batch_are_rejected(client, ledger):
@@ -161,7 +179,7 @@ def test_refund_reduces_the_category_actual(client, ledger):
     ]
     assert ledger.submit(items).status_code == 201
 
-    september = client.get(f"{ledger.base}/summary/months/2026-09").json()
+    september = client.get(f"{API}/summary/months/2026-09").json()
     food = september["categories"][0]
     assert food["actual"] == "149.75"
     assert food["children"][0] == {
@@ -171,7 +189,7 @@ def test_refund_reduces_the_category_actual(client, ledger):
         "actual": "149.75",
     }
     # The refund counts in the month of its own date.
-    october = client.get(f"{ledger.base}/summary/months/2026-10").json()
+    october = client.get(f"{API}/summary/months/2026-10").json()
     assert october["categories"][0]["children"][0]["actual"] == "-10.00"
 
 
@@ -263,11 +281,9 @@ def test_batch_size_limits(client, ledger):
     limit = ledger.submit(too_many[:500])
     assert limit.status_code == 201 and ledger.count() == 500
 
-    assert_envelope(
-        client.post(f"{ledger.base}/transactions/batch", json={}), 422, "VALIDATION_ERROR"
-    )
-    missing = client.post(f"{API}/accounts/999/transactions/batch", json={"items": [ledger.item()]})
-    assert_envelope(missing, 404, "ACCOUNT_NOT_FOUND")
+    assert_envelope(client.post(ledger.batch_url(), json={}), 422, "VALIDATION_ERROR")
+    missing = ledger.submit([ledger.item()], channel_id=999)
+    assert_envelope(missing, 404, "CHANNEL_NOT_FOUND")
 
 
 def test_fingerprint_normalisation():
@@ -289,7 +305,7 @@ def test_list_filters_and_pagination(client, ledger):
         ledger.item(counterparty="上海地铁", category_id=ledger.metro, date="2026-08-21"),
     ]
     assert ledger.submit(items).status_code == 201
-    url = f"{ledger.base}/transactions"
+    url = f"{API}/transactions"
 
     assert client.get(url, params={"month": "2026-09"}).json()["total"] == 5
     assert client.get(url, params={"month": "2026-08"}).json()["total"] == 2
@@ -307,9 +323,58 @@ def test_list_filters_and_pagination(client, ledger):
     assert_envelope(client.get(url, params={"page_size": 1000}), 422, "VALIDATION_ERROR")
 
 
+def test_list_filters_by_channel_and_budget_account(client, ledger):
+    """The list is global; channel, budget account, category and month filters combine."""
+    fixed = ledger.budget_account("固定")
+    housing = ledger.category("居住")
+    rent = ledger.category("房租", housing, fixed)
+    card = ledger.add_channel("信用卡")
+    assert (
+        ledger.submit(
+            [
+                ledger.item(counterparty="自如寓", amount="6500", category_id=rent),
+                ledger.item(counterparty="盒马", date="2026-08-02"),
+            ]
+        ).status_code
+        == 201
+    )
+    assert (
+        ledger.submit(
+            [
+                ledger.item(
+                    counterparty="自如寓", amount="6500", category_id=rent, date="2026-08-01"
+                ),
+                ledger.item(counterparty="地铁", category_id=ledger.metro),
+            ],
+            channel_id=card,
+        ).status_code
+        == 201
+    )
+
+    def names(**filters) -> list[str]:
+        body = client.get(f"{API}/transactions", params=filters).json()
+        assert body["total"] == len(body["items"])
+        return [(t["channel_name"], t["counterparty"]) for t in body["items"]]
+
+    assert len(names()) == 4
+    assert names(channel_id=card) == [("信用卡", "地铁"), ("信用卡", "自如寓")]
+    assert names(budget_account_id=fixed) == [("储蓄卡", "自如寓"), ("信用卡", "自如寓")]
+    assert names(budget_account_id=fixed, channel_id=card) == [("信用卡", "自如寓")]
+    assert names(budget_account_id=ledger.daily, month="2026-09") == [("信用卡", "地铁")]
+    assert names(category_id=housing, month="2026-08") == [("信用卡", "自如寓")]
+    assert names(budget_account_id=fixed, category_id=ledger.food) == []
+
+    url = f"{API}/transactions"
+    assert_envelope(client.get(url, params={"channel_id": 999}), 422, "CHANNEL_NOT_FOUND")
+    unknown = client.get(url, params={"budget_account_id": 999})
+    assert_envelope(unknown, 422, "BUDGET_ACCOUNT_NOT_FOUND")
+
+
 def test_edit_category_and_note_then_delete(client, ledger):
     """AC14 backend: the change shows up in the list and in the summaries."""
-    other = Ledger(client, name="另一个账户")
+    fixed = ledger.budget_account("固定")
+    housing = ledger.category("居住")
+    rent = ledger.category("房租", housing, fixed)
     stored = ledger.submit([ledger.item(amount="100")]).json()["transactions"][0]
     url = f"{API}/transactions/{stored['id']}"
 
@@ -325,9 +390,9 @@ def test_edit_category_and_note_then_delete(client, ledger):
     }
     rows = {
         row["name"]: row["actual"]
-        for row in client.get(f"{ledger.base}/summary/months/2026-09").json()["categories"]
+        for row in client.get(f"{API}/summary/months/2026-09").json()["categories"]
     }
-    assert rows == {"餐饮": "0.00", "交通": "100.00"}
+    assert rows == {"餐饮": "0.00", "交通": "100.00", "居住": "0.00"}
 
     # Omitted fields are untouched; an explicit null clears the note.
     assert client.patch(url, json={}).json()["note"] == "其实是车费"
@@ -335,8 +400,19 @@ def test_edit_category_and_note_then_delete(client, ledger):
     assert client.patch(url, json={"note": "x"}).json()["category_id"] == ledger.metro
 
     assert_envelope(client.patch(url, json={"category_id": ledger.food}), 422, "CATEGORY_NOT_LEAF")
-    cross_account = client.patch(url, json={"category_id": other.metro})
-    assert_envelope(cross_account, 422, "CATEGORY_NOT_FOUND")
+    assert_envelope(client.patch(url, json={"category_id": 9999}), 422, "CATEGORY_NOT_FOUND")
+    # Any level-2 category is allowed; the budget account follows the category.
+    other_account = client.patch(url, json={"category_id": rent})
+    assert other_account.status_code == 200
+    assert (other_account.json()["budget_account_id"], other_account.json()["channel_id"]) == (
+        fixed,
+        ledger.channel,
+    )
+    fixed_detail = client.get(
+        f"{API}/summary/months/2026-09", params={"budget_account_id": fixed}
+    ).json()
+    assert fixed_detail["actual"] == "100.00"
+    assert client.patch(url, json={"category_id": ledger.metro}).status_code == 200
     assert_envelope(client.patch(url, json={"category_id": None}), 422, "CATEGORY_NOT_FOUND")
     # Amount, date and counterparty are not editable.
     for field, value in {"amount": "1", "date": "2026-01-01", "counterparty": "x"}.items():
@@ -344,7 +420,7 @@ def test_edit_category_and_note_then_delete(client, ledger):
 
     assert client.delete(url).status_code == 204
     assert ledger.count() == 0
-    monthly = client.get(f"{ledger.base}/summary/monthly?from=2026-09&to=2026-09").json()
+    monthly = client.get(f"{API}/summary/monthly?from=2026-09&to=2026-09").json()
     assert monthly["months"] == [{"month": "2026-09", "budget": None, "actual": "0.00"}]
     assert_envelope(client.delete(url), 404, "TRANSACTION_NOT_FOUND")
     assert_envelope(client.patch(url, json={"note": "x"}), 404, "TRANSACTION_NOT_FOUND")

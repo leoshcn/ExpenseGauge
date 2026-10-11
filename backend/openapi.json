@@ -1,67 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AccountCreateIn": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "pattern": "^[A-Za-z]{3}$",
-            "title": "Currency",
-            "type": "string"
-          },
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "currency"
-        ],
-        "title": "AccountCreateIn",
-        "type": "object"
-      },
-      "AccountOut": {
-        "properties": {
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "currency"
-        ],
-        "title": "AccountOut",
-        "type": "object"
-      },
-      "AccountUpdateIn": {
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "AccountUpdateIn",
-        "type": "object"
-      },
       "BatchAcceptedOut": {
         "properties": {
           "accepted": {
@@ -105,7 +44,7 @@
                   "title": "Amount"
                 },
                 "category_id": {
-                  "description": "A level-2 category of the account",
+                  "description": "A level-2 category (any budget account)",
                   "title": "Category Id",
                   "type": "integer"
                 },
@@ -164,6 +103,56 @@
         "title": "BatchSubmitIn",
         "type": "object"
       },
+      "BudgetAccountCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BudgetAccountCreateIn",
+        "type": "object"
+      },
+      "BudgetAccountOut": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BudgetAccountOut",
+        "type": "object"
+      },
+      "BudgetAccountUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BudgetAccountUpdateIn",
+        "type": "object"
+      },
       "BudgetItemIn": {
         "additionalProperties": false,
         "properties": {
@@ -209,6 +198,14 @@
             "description": "Budget in force for the month; null means no budget (never set, or cleared)",
             "title": "Amount"
           },
+          "budget_account_id": {
+            "title": "Budget Account Id",
+            "type": "integer"
+          },
+          "budget_account_name": {
+            "title": "Budget Account Name",
+            "type": "string"
+          },
           "category_id": {
             "title": "Category Id",
             "type": "integer"
@@ -244,6 +241,8 @@
           "category_name",
           "parent_id",
           "parent_name",
+          "budget_account_id",
+          "budget_account_name",
           "amount",
           "effective_from"
         ],
@@ -252,9 +251,17 @@
       },
       "BudgetsOut": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The budget account the lines were filtered by; null for all",
+            "title": "Budget Account Id"
           },
           "budgets": {
             "items": {
@@ -274,7 +281,7 @@
           }
         },
         "required": [
-          "account_id",
+          "budget_account_id",
           "currency",
           "month",
           "budgets"
@@ -310,6 +317,18 @@
       "CategoryCreateIn": {
         "additionalProperties": false,
         "properties": {
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for a level-2 category; refused on level 1",
+            "title": "Budget Account Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -347,8 +366,11 @@
         "type": "object"
       },
       "CategoryLeaf": {
-        "description": "A level-2 category. `description` is the user's note on what belongs here.",
+        "description": "A level-2 category. `description` is the user's note on what belongs here;\n`budget_account` is the budget pool it counts towards (for reference only).",
         "properties": {
+          "budget_account": {
+            "$ref": "#/components/schemas/BudgetAccountOut"
+          },
           "description": {
             "anyOf": [
               {
@@ -372,7 +394,8 @@
         "required": [
           "id",
           "name",
-          "description"
+          "description",
+          "budget_account"
         ],
         "title": "CategoryLeaf",
         "type": "object"
@@ -406,9 +429,17 @@
       },
       "CategoryOut": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set on level 2, null on level 1",
+            "title": "Budget Account Id"
           },
           "description": {
             "anyOf": [
@@ -443,19 +474,27 @@
         },
         "required": [
           "id",
-          "account_id",
           "parent_id",
           "name",
-          "description"
+          "description",
+          "budget_account_id"
         ],
         "title": "CategoryOut",
         "type": "object"
       },
       "CategoryTree": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The budget account the tree was filtered by; null for the whole tree",
+            "title": "Budget Account Id"
           },
           "categories": {
             "items": {
@@ -466,7 +505,7 @@
           }
         },
         "required": [
-          "account_id",
+          "budget_account_id",
           "categories"
         ],
         "title": "CategoryTree",
@@ -474,8 +513,12 @@
       },
       "CategoryUpdateIn": {
         "additionalProperties": false,
-        "description": "Partial update: fields left out keep their value. `description` null or blank clears it.",
+        "description": "Partial update: fields left out keep their value. `description` null or blank clears it.\n\n`budget_account_id` (level 2 only) moves the category, with its whole history, to\nanother budget account.",
         "properties": {
+          "budget_account_id": {
+            "title": "Budget Account Id",
+            "type": "integer"
+          },
           "description": {
             "anyOf": [
               {
@@ -496,6 +539,57 @@
           }
         },
         "title": "CategoryUpdateIn",
+        "type": "object"
+      },
+      "ChannelCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ChannelCreateIn",
+        "type": "object"
+      },
+      "ChannelOut": {
+        "description": "A payment channel: where transactions come from. Agents submit per channel.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ChannelOut",
+        "type": "object"
+      },
+      "ChannelUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ChannelUpdateIn",
         "type": "object"
       },
       "CredentialsIn": {
@@ -648,10 +742,6 @@
       },
       "MonthDetailOut": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
-          },
           "actual": {
             "title": "Actual",
             "type": "string"
@@ -666,6 +756,18 @@
               }
             ],
             "title": "Budget"
+          },
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The budget account the figures are for; null for all of them",
+            "title": "Budget Account Id"
           },
           "categories": {
             "items": {
@@ -685,7 +787,7 @@
           }
         },
         "required": [
-          "account_id",
+          "budget_account_id",
           "currency",
           "month",
           "budget",
@@ -729,9 +831,17 @@
       },
       "MonthlySummaryOut": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The budget account the figures are for; null for all of them",
+            "title": "Budget Account Id"
           },
           "currency": {
             "title": "Currency",
@@ -746,11 +856,48 @@
           }
         },
         "required": [
-          "account_id",
+          "budget_account_id",
           "currency",
           "months"
         ],
         "title": "MonthlySummaryOut",
+        "type": "object"
+      },
+      "SettingsOut": {
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base currency (ISO 4217) of every amount; null until onboarding sets it",
+            "title": "Currency"
+          }
+        },
+        "required": [
+          "currency"
+        ],
+        "title": "SettingsOut",
+        "type": "object"
+      },
+      "SettingsUpdateIn": {
+        "additionalProperties": false,
+        "description": "Changing the currency only relabels amounts; nothing is converted.",
+        "properties": {
+          "currency": {
+            "pattern": "^[A-Za-z]{3}$",
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency"
+        ],
+        "title": "SettingsUpdateIn",
         "type": "object"
       },
       "SetupStatus": {
@@ -890,12 +1037,17 @@
       },
       "TransactionOut": {
         "properties": {
-          "account_id": {
-            "title": "Account Id",
-            "type": "integer"
-          },
           "amount": {
             "title": "Amount",
+            "type": "string"
+          },
+          "budget_account_id": {
+            "description": "Follows from the category; not stored",
+            "title": "Budget Account Id",
+            "type": "integer"
+          },
+          "budget_account_name": {
+            "title": "Budget Account Name",
             "type": "string"
           },
           "category_id": {
@@ -904,6 +1056,14 @@
           },
           "category_name": {
             "title": "Category Name",
+            "type": "string"
+          },
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "integer"
+          },
+          "channel_name": {
+            "title": "Channel Name",
             "type": "string"
           },
           "confirmed_duplicate": {
@@ -954,11 +1114,14 @@
         },
         "required": [
           "id",
-          "account_id",
+          "channel_id",
+          "channel_name",
           "category_id",
           "category_name",
           "parent_category_id",
           "parent_category_name",
+          "budget_account_id",
+          "budget_account_name",
           "date",
           "amount",
           "counterparty",
@@ -1064,737 +1227,6 @@
   },
   "openapi": "3.1.0",
   "paths": {
-    "/api/v1/accounts": {
-      "get": {
-        "operationId": "list_accounts_api_v1_accounts_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AccountOut"
-                  },
-                  "title": "Response List Accounts Api V1 Accounts Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "List Accounts",
-        "tags": [
-          "accounts"
-        ]
-      },
-      "post": {
-        "operationId": "create_account_api_v1_accounts_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AccountCreateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Create Account",
-        "tags": [
-          "accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}": {
-      "patch": {
-        "operationId": "rename_account_api_v1_accounts__account_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AccountUpdateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Rename Account",
-        "tags": [
-          "accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/budgets": {
-      "get": {
-        "description": "Budget in force per level-2 category for `month` (default: current month).\nOpen to agent tokens.",
-        "operationId": "get_budgets_api_v1_accounts__account_id__budgets_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "month",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Month"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BudgetsOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Get Budgets",
-        "tags": [
-          "budgets"
-        ]
-      },
-      "put": {
-        "description": "Sets amounts effective from a month; earlier months keep their version.\nAn `amount` of null clears that category's budget from the month on.",
-        "operationId": "set_budgets_api_v1_accounts__account_id__budgets_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BudgetsPutIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BudgetsOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Set Budgets",
-        "tags": [
-          "budgets"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/categories": {
-      "get": {
-        "description": "The account's full two-level tree. Open to agent tokens.",
-        "operationId": "get_category_tree_api_v1_accounts__account_id__categories_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryTree"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Get Category Tree",
-        "tags": [
-          "categories"
-        ]
-      },
-      "post": {
-        "operationId": "create_category_api_v1_accounts__account_id__categories_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CategoryCreateIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Create Category",
-        "tags": [
-          "categories"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/summary/monthly": {
-      "get": {
-        "description": "Per month: total budget and total actual. Defaults to the 12 months ending at `to`.",
-        "operationId": "monthly_summary_api_v1_accounts__account_id__summary_monthly_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "from",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "From"
-            }
-          },
-          {
-            "in": "query",
-            "name": "to",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "To"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonthlySummaryOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Monthly Summary",
-        "tags": [
-          "summary"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/summary/months/{month}": {
-      "get": {
-        "description": "Level-1 rows with nested level-2 rows: budget and actual.",
-        "operationId": "month_detail_api_v1_accounts__account_id__summary_months__month__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "path",
-            "name": "month",
-            "required": true,
-            "schema": {
-              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-              "title": "Month",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MonthDetailOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Month Detail",
-        "tags": [
-          "summary"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/transactions": {
-      "get": {
-        "operationId": "list_transactions_api_v1_accounts__account_id__transactions_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "month",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Month"
-            }
-          },
-          {
-            "in": "query",
-            "name": "category_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category Id"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TransactionPage"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "List Transactions",
-        "tags": [
-          "transactions"
-        ]
-      }
-    },
-    "/api/v1/accounts/{account_id}/transactions/batch": {
-      "post": {
-        "description": "All-or-nothing submission. Open to agent tokens.",
-        "operationId": "submit_batch_api_v1_accounts__account_id__transactions_batch_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "account_id",
-            "required": true,
-            "schema": {
-              "title": "Account Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BatchSubmitIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BatchAcceptedOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "BATCH_REJECTED: nothing written; details.items has one entry per item"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Any non-2xx response"
-          }
-        },
-        "summary": "Submit Batch",
-        "tags": [
-          "transactions"
-        ]
-      }
-    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -1921,6 +1353,399 @@
         ]
       }
     },
+    "/api/v1/budget-accounts": {
+      "get": {
+        "operationId": "list_budget_accounts_api_v1_budget_accounts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BudgetAccountOut"
+                  },
+                  "title": "Response List Budget Accounts Api V1 Budget Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Budget Accounts",
+        "tags": [
+          "budget-accounts"
+        ]
+      },
+      "post": {
+        "operationId": "create_budget_account_api_v1_budget_accounts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetAccountCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetAccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Budget Account",
+        "tags": [
+          "budget-accounts"
+        ]
+      }
+    },
+    "/api/v1/budget-accounts/{budget_account_id}": {
+      "patch": {
+        "operationId": "rename_budget_account_api_v1_budget_accounts__budget_account_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "budget_account_id",
+            "required": true,
+            "schema": {
+              "title": "Budget Account Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetAccountUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetAccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Rename Budget Account",
+        "tags": [
+          "budget-accounts"
+        ]
+      }
+    },
+    "/api/v1/budgets": {
+      "get": {
+        "description": "Budget in force per level-2 category for `month` (default: current month), for all\nlevel-2 categories or one budget account's. Open to agent tokens.",
+        "operationId": "get_budgets_api_v1_budgets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Budgets",
+        "tags": [
+          "budgets"
+        ]
+      },
+      "put": {
+        "description": "Sets amounts effective from a month; earlier months keep their version.\nAn `amount` of null clears that category's budget from the month on.",
+        "operationId": "set_budgets_api_v1_budgets_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetsPutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BudgetsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Set Budgets",
+        "tags": [
+          "budgets"
+        ]
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "description": "The global two-level tree, or only one budget account's level-2 categories and\ntheir level-1 parents. Open to agent tokens.",
+        "operationId": "get_category_tree_api_v1_categories_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Category Tree",
+        "tags": [
+          "categories"
+        ]
+      },
+      "post": {
+        "description": "A level-2 category (with `parent_id`) needs `budget_account_id`; level 1 refuses it.",
+        "operationId": "create_category_api_v1_categories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Category",
+        "tags": [
+          "categories"
+        ]
+      }
+    },
     "/api/v1/categories/{category_id}": {
       "delete": {
         "operationId": "delete_category_api_v1_categories__category_id__delete",
@@ -1966,7 +1791,7 @@
         ]
       },
       "patch": {
-        "description": "Partial update: name and/or description (level 2 only). Omitted fields are kept.",
+        "description": "Partial update: name, and for level 2 description and budget account. Omitted\nfields are kept. A new budget account takes the category's history with it.",
         "operationId": "update_category_api_v1_categories__category_id__patch",
         "parameters": [
           {
@@ -2027,6 +1852,236 @@
         ]
       }
     },
+    "/api/v1/channels": {
+      "get": {
+        "description": "Payment channels; agents submit transactions per channel. Open to agent tokens.",
+        "operationId": "list_channels_api_v1_channels_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelOut"
+                  },
+                  "title": "Response List Channels Api V1 Channels Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Channels",
+        "tags": [
+          "channels"
+        ]
+      },
+      "post": {
+        "operationId": "create_channel_api_v1_channels_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Channel",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/channels/{channel_id}": {
+      "patch": {
+        "operationId": "rename_channel_api_v1_channels__channel_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Rename Channel",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/v1/channels/{channel_id}/transactions/batch": {
+      "post": {
+        "description": "All-or-nothing submission of one payment channel's transactions. Open to agent tokens.",
+        "operationId": "submit_batch_api_v1_channels__channel_id__transactions_batch_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "title": "Channel Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchSubmitIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchAcceptedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "BATCH_REJECTED: nothing written; details.items has one entry per item"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Submit Batch",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
     "/api/v1/health": {
       "get": {
         "operationId": "health_api_v1_health_get",
@@ -2069,6 +2124,98 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "description": "Ledger settings. `currency` is null until onboarding sets it.",
+        "operationId": "get_settings_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Sets the base currency. Only the label changes; amounts are not converted.",
+        "operationId": "update_settings_api_v1_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Update Settings",
+        "tags": [
+          "settings"
         ]
       }
     },
@@ -2162,6 +2309,170 @@
         "summary": "Setup Status",
         "tags": [
           "setup"
+        ]
+      }
+    },
+    "/api/v1/summary/monthly": {
+      "get": {
+        "description": "Per month: total budget and total actual, for everything or one budget account.\nDefaults to the 12 months ending at `to`.",
+        "operationId": "monthly_summary_api_v1_summary_monthly_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthlySummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Monthly Summary",
+        "tags": [
+          "summary"
+        ]
+      }
+    },
+    "/api/v1/summary/months/{month}": {
+      "get": {
+        "description": "Level-1 rows with nested level-2 rows: budget and actual.",
+        "operationId": "month_detail_api_v1_summary_months__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Month Detail",
+        "tags": [
+          "summary"
         ]
       }
     },
@@ -2302,6 +2613,137 @@
         "summary": "Revoke Token",
         "tags": [
           "tokens"
+        ]
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "operationId": "list_transactions_api_v1_transactions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channel Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Transactions",
+        "tags": [
+          "transactions"
         ]
       }
     },

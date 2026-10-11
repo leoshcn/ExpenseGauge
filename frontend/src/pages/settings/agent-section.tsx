@@ -40,8 +40,8 @@ function Code({ children, className }: { children: React.ReactNode; className?: 
   );
 }
 
-/** What an agent needs to connect: the MCP endpoint, the header, the account IDs. */
-function ConnectionCard({ accounts }: { accounts: readonly Schemas["AccountOut"][] }) {
+/** What an agent needs to connect: the MCP endpoint, the header, the channel IDs. */
+function ConnectionCard({ channels }: { channels: readonly Schemas["ChannelOut"][] }) {
   const endpoint = mcpEndpoint(globalThis.location?.origin ?? "");
   const config = hermesConfig(endpoint, C.tokenPlaceholder);
   const label = "text-xs font-medium text-muted-foreground";
@@ -60,19 +60,26 @@ function ConnectionCard({ accounts }: { accounts: readonly Schemas["AccountOut"]
           <Code>{C.authValue}</Code>
         </dd>
 
-        <dt className={cn(label, "md:pt-2")}>{C.accounts}</dt>
+        <dt className={cn(label, "md:pt-2")}>{C.channels}</dt>
         <dd className="-mt-3 space-y-2 md:mt-0">
-          <ul className="divide-y rounded-lg border">
-            {accounts.map((account) => (
-              <li key={account.id} className="flex items-center gap-3 py-1.5 pr-1.5 pl-3">
-                <span className="min-w-0 flex-1 truncate">{account.name}</span>
-                <span className="num text-xs text-muted-foreground">{account.currency}</span>
-                <Code className="num px-1.5 py-0.5">{account.id}</Code>
-                <CopyButton value={String(account.id)} label={C.accountIdLabel(account.name)} variant="ghost" />
-              </li>
-            ))}
-          </ul>
-          <p className="text-xs text-muted-foreground">{C.accountsHint}</p>
+          {channels.length > 0 ? (
+            <ul className="divide-y rounded-lg border">
+              {channels.map((channel) => (
+                <li key={channel.id} className="flex items-center gap-3 py-1.5 pr-1.5 pl-3">
+                  <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+                  <Code className="num px-1.5 py-0.5">{channel.id}</Code>
+                  <CopyButton
+                    value={String(channel.id)}
+                    label={S.settings.channels.idLabel(channel.name)}
+                    variant="ghost"
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">{C.noChannels}</p>
+          )}
+          <p className="text-xs text-muted-foreground">{C.channelsHint}</p>
         </dd>
 
         <dt className={cn(label, "md:pt-2")}>{C.config}</dt>
@@ -312,12 +319,12 @@ function TokensCard() {
   );
 }
 
-/** Everything an agent needs: where to connect, which accounts, and its token. */
-export function AgentSection({ accounts }: { accounts: readonly Schemas["AccountOut"][] }) {
+/** Everything an agent needs: where to connect, which channels, and its token. */
+export function AgentSection({ channels }: { channels: readonly Schemas["ChannelOut"][] }) {
   return (
     <div className="space-y-5">
       <TokensCard />
-      <ConnectionCard accounts={accounts} />
+      <ConnectionCard channels={channels} />
     </div>
   );
 }

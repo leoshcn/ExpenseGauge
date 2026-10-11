@@ -19,9 +19,13 @@ const line = (category_id: number, amount: string | null, parent_id = 1): Schema
   category_name: `c${category_id}`,
   parent_id,
   parent_name: `p${parent_id}`,
+  budget_account_id: 1,
+  budget_account_name: "日常",
   amount,
   effective_from: amount === null ? null : "2026-07",
 });
+
+const daily = { id: 1, name: "日常" };
 
 describe("parseBudgetInput", () => {
   it("reads an empty input as no budget, not zero", () => {
@@ -135,10 +139,17 @@ describe("sumBudgets and effectiveAmount", () => {
 describe("groupLines", () => {
   it("follows the tree's order and keeps level-1 categories without children", () => {
     const tree: Schemas["CategoryTree"] = {
-      account_id: 1,
+      budget_account_id: null,
       categories: [
-        { id: 2, name: "交通", children: [{ id: 21, name: "地铁", description: null }] },
-        { id: 1, name: "餐饮", children: [{ id: 12, name: "外卖", description: null }, { id: 11, name: "买菜", description: null }] },
+        { id: 2, name: "交通", children: [{ id: 21, name: "地铁", description: null, budget_account: daily }] },
+        {
+          id: 1,
+          name: "餐饮",
+          children: [
+            { id: 12, name: "外卖", description: null, budget_account: daily },
+            { id: 11, name: "买菜", description: null, budget_account: daily },
+          ],
+        },
         { id: 3, name: "空的", children: [] },
       ],
     };

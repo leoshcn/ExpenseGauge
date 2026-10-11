@@ -5,7 +5,8 @@ components vendored into `src/components/ui`, Recharts through the shadcn/ui cha
 wrapper. The UI is Simplified Chinese; all copy is in `src/strings.zh.ts`.
 
 Pages: setup, login, onboarding, Dashboard (概览), transactions (流水), budgets (预算) and
-settings (设置: accounts, categories, AI agent tokens and connection details). The design
+settings (设置: base currency, budget accounts and payment channels; the global category
+tree; AI agent tokens and connection details). The design
 spec is [`DESIGN.md`](./DESIGN.md).
 
 This project uses **npm** (not pnpm; the parent plan's `pnpm ...` commands map one to one).
@@ -40,9 +41,13 @@ Open <http://localhost:5173> and sign in as `demo` / `expense-gauge-demo`.
   `backend/.venv/Lib/site-packages/pgserver/pginstall/bin/pg_ctl stop -D backend/.pgdata/dev`.
 - To walk through first-run setup and onboarding instead, start with `--reset` and skip
   step 2.
-- The demo has three accounts: `日常账户` (nine months, over-budget and unbudgeted
-  categories, refunds; three months back a refund makes one category negative),
-  `美元信用卡` (USD) and `旅行基金` (no transactions: the empty state).
+- The demo ledger (base currency CNY) has three budget accounts, `日常` and `固定` (nine
+  months, over-budget and unbudgeted categories, refunds; three months back a refund
+  makes one category negative) and `旅行基金` (budgets but no transactions: the
+  Dashboard's empty state with `?scope=<id>`), and four payment channels (`储蓄卡`,
+  `招行信用卡`, `支付宝`, `美元信用卡`; the last one's spending is stored converted to CNY
+  with the USD amount in the note). Fixed bills are paid from several channels and still
+  count towards `固定`.
 - The dev server proxies `/api` and `/mcp` to `http://127.0.0.1:8000`, so the browser sees
   one origin and the HttpOnly session cookie works, and the MCP address shown under
   设置 → AI 助手 (`http://localhost:5173/mcp`) works in development too. Another backend address:

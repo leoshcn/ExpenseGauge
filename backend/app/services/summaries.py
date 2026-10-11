@@ -1,4 +1,8 @@
-"""Dashboard figures: budget vs. actual per month and per category."""
+"""Dashboard figures: budget vs. actual per month and per category.
+
+Scope is either everything (`budget_account_id` None) or one budget account. A
+transaction counts where its category belongs, whichever payment channel it came from.
+"""
 
 from datetime import date
 from decimal import Decimal
@@ -7,12 +11,13 @@ from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.errors import invalid
-from app.models import Transaction
+from app.models import Category, Transaction
 from app.months import add_months, format_month, months_between, parse_month
 from app.schemas.summary import Level1Row, Level2Row, MonthDetailOut, MonthlySummaryOut, MonthTotal
-from app.services.accounts import get_account
-from app.services.budgets import load_history
+from app.services.budget_accounts import get_budget_account
+from app.services.budgets import BudgetHistory, load_history
 from app.services.categories import load_categories
+from app.services.settings import require_currency
 
 DEFAULT_MONTHS = 12
 MAX_MONTHS = 60
@@ -25,11 +30,21 @@ def _sum_or_none(amounts: list[Decimal | None]) -> Decimal | None:
     return sum(known, ZERO) if known else None
 
 
+def _scope(db: Session, budget_account_id: int | None) -> tuple[str, list[Category], BudgetHistory]:
+    """Currency, the categories in scope (level 2 plus their level 1) and their budgets."""
+    if budget_account_id is not None:
+        get_budget_account(db, budget_account_id, status_code=422)
+    currency = require_currency(db)
+    return currency, load_categories(db, budget_account_id), load_history(db, budget_account_id)
+
+
 def get_monthly_summary(
-    db: Session, account_id: int, from_month: str | None, to_month: str | None
+    db: Session,
+    from_month: str | None,
+    to_month: str | None,
+    budget_account_id: int | None = None,
 ) -> MonthlySummaryOut:
     """Total budget and total actual per month, inclusive; defaults to the last 12 months."""
-    account = get_account(db, account_id)
     end = parse_month(to_month) if to_month else date.today().replace(day=1)
     start = parse_month(from_month) if from_month else add_months(end, -(DEFAULT_MONTHS - 1))
     months = months_between(start, end)
@@ -40,15 +55,15 @@ def get_monthly_summary(
             {"from": format_month(start), "to": format_month(end)},
         )
 
-    leaf_ids = [c.id for c in load_categories(db, account_id) if c.parent_id is not None]
-    history = load_history(db, account_id)
+    currency, categories, history = _scope(db, budget_account_id)
+    leaf_ids = [c.id for c in categories if c.parent_id is not None]
     month_column = cast(func.date_trunc("month", Transaction.date), Date)
     actuals = {
         row[0]: row[1]
         for row in db.execute(
             select(month_column, func.sum(Transaction.amount))
             .where(
-                Transaction.account_id == account_id,
+                Transaction.category_id.in_(leaf_ids),
                 Transaction.date >= start,
                 Transaction.date < add_months(end, 1),
             )
@@ -56,8 +71,8 @@ def get_monthly_summary(
         )
     }
     return MonthlySummaryOut(
-        account_id=account_id,
-        currency=account.currency,
+        budget_account_id=budget_account_id,
+        currency=currency,
         months=[
             MonthTotal(
                 month=format_month(month),
@@ -69,17 +84,22 @@ def get_monthly_summary(
     )
 
 
-def get_month_detail(db: Session, account_id: int, month: str) -> MonthDetailOut:
-    """Level-1 rows with nested level-2 rows for one month. Refunds reduce actuals."""
-    account = get_account(db, account_id)
+def get_month_detail(
+    db: Session, month: str, budget_account_id: int | None = None
+) -> MonthDetailOut:
+    """Level-1 rows with nested level-2 rows for one month. Refunds reduce actuals.
+
+    For one budget account only its level-2 categories appear, under their level-1
+    parents; for everything, every level-1 category does (also one without children).
+    """
     start = parse_month(month)
-    categories = load_categories(db, account_id)
-    history = load_history(db, account_id)
+    currency, categories, history = _scope(db, budget_account_id)
+    leaf_ids = [c.id for c in categories if c.parent_id is not None]
     actuals = dict(
         db.execute(
             select(Transaction.category_id, func.sum(Transaction.amount))
             .where(
-                Transaction.account_id == account_id,
+                Transaction.category_id.in_(leaf_ids),
                 Transaction.date >= start,
                 Transaction.date < add_months(start, 1),
             )
@@ -108,8 +128,8 @@ def get_month_detail(db: Session, account_id: int, month: str) -> MonthDetailOut
 
     level1 = list(rows.values())
     return MonthDetailOut(
-        account_id=account_id,
-        currency=account.currency,
+        budget_account_id=budget_account_id,
+        currency=currency,
         month=format_month(start),
         budget=_sum_or_none([row.budget for row in level1]),
         actual=sum((row.actual for row in level1), ZERO),

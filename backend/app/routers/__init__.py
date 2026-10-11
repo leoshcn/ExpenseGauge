@@ -4,7 +4,16 @@ from fastapi import APIRouter, Depends
 
 from app.deps import require_json_body
 from app.errors import ErrorEnvelope
-from app.routers import accounts, auth, budgets, categories, summaries, transactions
+from app.routers import (
+    auth,
+    budget_accounts,
+    budgets,
+    categories,
+    channels,
+    settings,
+    summaries,
+    transactions,
+)
 
 api_router = APIRouter(
     prefix="/api/v1",
@@ -21,5 +30,14 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-for module in (auth, accounts, categories, budgets, transactions, summaries):
+for module in (
+    auth,
+    settings,
+    budget_accounts,
+    channels,
+    categories,
+    budgets,
+    transactions,
+    summaries,
+):
     api_router.include_router(module.router)

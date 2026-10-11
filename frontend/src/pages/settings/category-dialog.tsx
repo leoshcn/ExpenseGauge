@@ -1,7 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
-import { errorMessage } from "@/api/client";
+import { errorMessage, type Schemas } from "@/api/client";
+import { BudgetAccountPicker } from "@/components/budget-account-select";
 import { FormError, FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,13 +28,15 @@ const T = S.settings.categories;
 const NAME_MAX = 100;
 
 /**
- * Adds or edits a level-2 category: its name and the optional description the agent reads
- * when classifying. Mounted only while open. Editing submits only the changed fields
- * (`changes`), and closes without a request when nothing changed; adding gets all fields.
+ * Adds or edits a level-2 category: its name, the budget account it counts towards, and
+ * the optional description the agent reads when classifying. Mounted only while open.
+ * Editing submits only the changed fields (`changes`), and closes without a request when
+ * nothing changed; adding gets all fields (the budget account defaults to the first).
  */
 export function CategoryDialog({
   title,
   initial,
+  budgetAccounts,
   placeholder,
   submitLabel,
   pendingLabel,
@@ -43,35 +46,41 @@ export function CategoryDialog({
   title: string;
   /** The category being edited; absent when adding. */
   initial?: CategoryFields;
+  budgetAccounts: readonly Schemas["BudgetAccountOut"][];
   placeholder?: string;
   submitLabel: string;
   pendingLabel: string;
-  onSubmit: (fields: CategoryFields, changes: Partial<CategoryFields>) => Promise<unknown>;
+  onSubmit: (fields: CategoryFields, changes: Schemas["CategoryUpdateIn"]) => Promise<unknown>;
   onClose: () => void;
 }) {
   useRestoreFocus();
   const descriptionId = useId();
+  const budgetAccountId = useId();
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
+  // The settings page renders categories only once a budget account exists.
+  const [account, setAccount] = useState(initial?.budgetAccountId ?? budgetAccounts[0]?.id ?? 0);
   const [error, setError] = useState<string>();
   const submit = useMutation({
-    mutationFn: ({ fields, changes }: { fields: CategoryFields; changes: Partial<CategoryFields> }) =>
+    mutationFn: ({ fields, changes }: { fields: CategoryFields; changes: Schemas["CategoryUpdateIn"] }) =>
       onSubmit(fields, changes),
     onSuccess: onClose,
   });
 
   function handle(event: React.FormEvent) {
     event.preventDefault();
-    const fields = categoryFields(name, description);
+    const fields = categoryFields(name, description, account);
     if (!fields.name) {
       setError(S.common.nameRequired);
       return;
     }
     setError(undefined);
-    const changes = initial ? categoryChanges(initial, fields) : fields;
+    const changes = initial ? categoryChanges(initial, fields) : {};
     if (changes === null) onClose();
     else submit.mutate({ fields, changes });
   }
+
+  const moved = initial !== undefined && account !== initial.budgetAccountId;
 
   return (
     <Dialog open onOpenChange={(open) => (!open && !submit.isPending ? onClose() : undefined)}>
@@ -89,6 +98,22 @@ export function CategoryDialog({
             maxLength={NAME_MAX}
             autoFocus
           />
+          <div className="space-y-1.5">
+            <Label htmlFor={budgetAccountId}>{T.budgetAccount}</Label>
+            <BudgetAccountPicker
+              id={budgetAccountId}
+              budgetAccounts={budgetAccounts}
+              value={account}
+              onChange={setAccount}
+              describedBy={`${budgetAccountId}-note`}
+            />
+            <p
+              id={`${budgetAccountId}-note`}
+              className={moved ? "text-xs text-warning-foreground" : "text-xs text-muted-foreground"}
+            >
+              {moved ? T.budgetAccountMoveHint : T.budgetAccountHint}
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor={descriptionId}>{T.descriptionLabel}</Label>
             <Textarea

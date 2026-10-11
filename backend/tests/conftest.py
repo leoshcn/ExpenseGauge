@@ -21,8 +21,12 @@ from alembic import command
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 TEST_DB_NAME = "expense_gauge_test"
 PASSWORD = "correct-horse-battery"
+API = "/api/v1"
 
-TABLES = "transactions, budgets, categories, accounts, api_tokens, sessions, users"
+TABLES = (
+    "transactions, budgets, categories, payment_channels, budget_accounts, app_settings,"
+    " api_tokens, sessions, users"
+)
 
 
 def _normalize(url: str) -> str:
@@ -148,24 +152,40 @@ def agent(app, token: dict) -> TestClient:
 
 
 class Ledger:
-    """One account with a small two-level category tree."""
+    """A set-up ledger: base currency, one budget account ("日常"), one payment channel
+    ("储蓄卡") and a small global two-level category tree whose level-2 categories all
+    belong to "日常"."""
 
-    def __init__(self, client: TestClient, name: str = "日常账户", currency: str = "CNY") -> None:
+    def __init__(self, client: TestClient, currency: str = "CNY") -> None:
         self.client = client
-        account = client.post("/api/v1/accounts", json={"name": name, "currency": currency})
-        assert account.status_code == 201, account.text
-        self.account_id: int = account.json()["id"]
-        self.base = f"/api/v1/accounts/{self.account_id}"
+        settings = client.put(f"{API}/settings", json={"currency": currency})
+        assert settings.status_code == 200, settings.text
+        self.daily = self.budget_account("日常")
+        self.channel = self.add_channel("储蓄卡")
         self.food = self.category("餐饮")
         self.groceries = self.category("买菜", self.food)
         self.dining = self.category("外食", self.food)
         self.transport = self.category("交通")
         self.metro = self.category("地铁", self.transport)
 
-    def category(self, name: str, parent_id: int | None = None) -> int:
-        response = self.client.post(
-            f"{self.base}/categories", json={"name": name, "parent_id": parent_id}
-        )
+    def budget_account(self, name: str) -> int:
+        response = self.client.post(f"{API}/budget-accounts", json={"name": name})
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    def add_channel(self, name: str) -> int:
+        response = self.client.post(f"{API}/channels", json={"name": name})
+        assert response.status_code == 201, response.text
+        return response.json()["id"]
+
+    def category(
+        self, name: str, parent_id: int | None = None, budget_account_id: int | None = None
+    ) -> int:
+        """Level 1 without `parent_id`; level 2 defaults to the "日常" budget account."""
+        body: dict = {"name": name, "parent_id": parent_id}
+        if parent_id is not None:
+            body["budget_account_id"] = budget_account_id or self.daily
+        response = self.client.post(f"{API}/categories", json=body)
         assert response.status_code == 201, response.text
         return response.json()["id"]
 
@@ -180,15 +200,21 @@ class Ledger:
         item.update(overrides)
         return item
 
-    def submit(self, items: list[dict], client: TestClient | None = None):
-        return (client or self.client).post(
-            f"{self.base}/transactions/batch", json={"items": items}
-        )
+    def batch_url(self, channel_id: int | None = None) -> str:
+        return f"{API}/channels/{channel_id or self.channel}/transactions/batch"
+
+    def submit(
+        self,
+        items: list[dict],
+        client: TestClient | None = None,
+        channel_id: int | None = None,
+    ):
+        return (client or self.client).post(self.batch_url(channel_id), json={"items": items})
 
     def set_budgets(self, effective_from: str, amounts: dict[int, str | None]):
         """Sets budgets from a month; an amount of None clears the budget from that month."""
         response = self.client.put(
-            f"{self.base}/budgets",
+            f"{API}/budgets",
             json={
                 "effective_from": effective_from,
                 "items": [{"category_id": k, "amount": v} for k, v in amounts.items()],
@@ -197,8 +223,8 @@ class Ledger:
         assert response.status_code == 200, response.text
         return response.json()
 
-    def count(self) -> int:
-        return self.client.get(f"{self.base}/transactions").json()["total"]
+    def count(self, **filters) -> int:
+        return self.client.get(f"{API}/transactions", params=filters).json()["total"]
 
 
 @pytest.fixture

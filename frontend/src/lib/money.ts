@@ -36,7 +36,7 @@ function formatter(currency: string, compact: boolean): Intl.NumberFormat {
   let cached = formatters.get(key);
   if (!cached) {
     // `symbol` rather than `narrowSymbol`: in zh-CN it gives ¥ for CNY but JP¥, US$ and
-    // HK$ for the others, so two accounts never show the same sign for different money.
+    // HK$ for the others, so a JPY base currency never shows the yuan's sign.
     cached = new Intl.NumberFormat(LOCALE, {
       style: "currency",
       currency,

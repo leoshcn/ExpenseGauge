@@ -36,7 +36,7 @@ describe("unwrap", () => {
     const api = apiReturning(() =>
       json(409, { code: "CATEGORY_IN_USE", message: "该分类下已有流水，无法删除", details: { count: 3 } }),
     );
-    const error = await failure(unwrap(api.GET("/api/v1/accounts")));
+    const error = await failure(unwrap(api.GET("/api/v1/channels")));
     expect(error).toMatchObject({
       status: 409,
       code: "CATEGORY_IN_USE",
@@ -50,19 +50,19 @@ describe("unwrap", () => {
 
   it("reports a proxy error page as an unreachable server", async () => {
     const api = apiReturning(() => new Response("<html>Bad Gateway</html>", { status: 502 }));
-    const error = await failure(unwrap(api.GET("/api/v1/accounts")));
+    const error = await failure(unwrap(api.GET("/api/v1/channels")));
     expect(error).toMatchObject({ status: 502, code: "NETWORK_ERROR", message: S.errors.network });
   });
 
   it("reports any other non-envelope failure as unexpected", async () => {
     const api = apiReturning(() => json(500, { detail: "boom" }));
-    const error = await failure(unwrap(api.GET("/api/v1/accounts")));
+    const error = await failure(unwrap(api.GET("/api/v1/channels")));
     expect(error).toMatchObject({ status: 500, code: "UNEXPECTED_RESPONSE", message: S.errors.unexpected });
   });
 
   it("reports a failed connection", async () => {
     const api = apiReturning(() => Promise.reject(new TypeError("fetch failed")));
-    const error = await failure(unwrap(api.GET("/api/v1/accounts")));
+    const error = await failure(unwrap(api.GET("/api/v1/channels")));
     expect(error).toMatchObject({ status: 0, code: "NETWORK_ERROR", message: S.errors.network });
   });
 

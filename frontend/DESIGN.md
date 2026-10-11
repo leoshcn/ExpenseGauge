@@ -9,7 +9,7 @@ for and why. Change both together. Screenshots of the current state are in
 1. **The question on screen is "am I within budget?"** Colour is reserved for the answer.
    Neutral surfaces, one brand hue, and three state hues that mean the same thing everywhere.
 2. **Numbers are the content.** Amounts are set in tabular figures, right-aligned, at full
-   precision, in the account's currency. Nothing is abbreviated except chart axis ticks.
+   precision, in the ledger's base currency. Nothing is abbreviated except chart axis ticks.
 3. **Over budget must be found without reading.** It is never signalled by colour alone:
    an over-budget row has a vermilion edge, a "超支" badge, the overspend amount in words,
    and a meter drawn differently from every other state.
@@ -118,13 +118,17 @@ Line heights are taller than Latin defaults because Chinese glyphs fill the em b
 - **Below `md` (768 px)** the table folds: budget, remaining and meter move under the
   category name, the amount stays right-aligned with the percentage under it. Nothing
   scrolls sideways at 360 px.
-- **Every page has the same header**: the page title (`text-lg`) on the left, the account
-  selector (or, on settings, the tabs) on the right. Content is cards
+- **Every page has the same header**: the page title (`text-lg`) on the left, the budget
+  account selector ("全部" or one budget account; Dashboard and budgets) or, on settings,
+  the tabs on the right. The transactions page has no header control: its filters (month,
+  channel, budget account, category) sit above the table. Content is cards
   (`rounded-xl border bg-card shadow-card`) separated by 20 px, as on the Dashboard.
-- **Other tables fold the same way.** Transactions: below `md` the date and category move
-  under the counterparty and only the amount and an edit button stay in columns; the note
-  has its own column only from `lg` and otherwise sits under the counterparty with a
-  note icon. Budgets: below `md` the amount in force moves under the category name.
+- **Other tables fold the same way.** Transactions: below `md` the date, category and
+  channel move under the counterparty and only the amount and an edit button stay in
+  columns; the note has its own column only from `lg` and otherwise sits under the counterparty with a
+  note icon. Budgets: below `md` the amount in force moves under the category name; in
+  the "全部" view each level-2 row names its budget account in muted text under its name.
+  Settings → 分类 shows a level-2 category's budget account as a small outlined chip.
 
 ## Charts
 
@@ -149,7 +153,7 @@ most seven slices: the rest are merged into "其他" (`--chart-8`, a neutral).
 Categorical palette (`--chart-1` to `--chart-7`): teal, magenta, green, indigo, sand, sky,
 violet, at similar chroma, alternating in lightness so neighbours differ even without
 colour vision. **It contains no amber and no red**, because those two hues mean "near" and
-"over" everywhere else. A category's colour comes from its position in the account's
+"over" everywhere else. A category's colour comes from its position in the shown
 category order, not from its rank this month, so it keeps its colour from month to month.
 (With more than seven level-1 categories, colours repeat.)
 
@@ -159,7 +163,7 @@ category order, not from its rank this month, so it keeps its colour from month 
   (`zh-CN`, `style: "currency"`) directly from the string; arithmetic is done in integer
   cents (`src/lib/money.ts`). No amount is ever converted to a float for display.
 - `currencyDisplay: "symbol"`: in `zh-CN` this gives `¥` for CNY but `US$`, `JP¥`, `HK$`
-  for the others, so two accounts never show the same sign for different money.
+  for the others, so a non-CNY base currency is never shown with the yuan's sign.
 - Negative amounts (a month where refunds outweigh spending) are shown as `-¥185.00`.
 - Percentages are whole numbers in tables and meters and one decimal in the share list.
 - Months are written `2026年10月`; chart ticks use `10月` (just `10` on phones) with the

@@ -5,31 +5,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { S } from "@/strings.zh";
+import { currencyName, CURRENCIES } from "@/lib/currency";
 
-export type CurrencyCode = keyof typeof S.currencies;
-const CURRENCIES = Object.keys(S.currencies) as CurrencyCode[];
-
-/** The currencies offered when an account is created (onboarding and settings). */
+/**
+ * The base currency picker (onboarding and settings). A code that is not in the offered
+ * list (set through the API) is still shown, so the select never appears empty.
+ */
 export function CurrencySelect({
   id,
   value,
   onChange,
+  className,
 }: {
   id: string;
-  value: CurrencyCode;
-  onChange: (value: CurrencyCode) => void;
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
 }) {
+  const codes: readonly string[] = CURRENCIES.includes(value) ? CURRENCIES : [value, ...CURRENCIES];
   return (
-    <Select value={value} onValueChange={(next) => onChange(next as CurrencyCode)}>
-      <SelectTrigger id={id} className="w-full">
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id={id} className={className ?? "w-full"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {CURRENCIES.map((code) => (
+        {codes.map((code) => (
           <SelectItem key={code} value={code}>
             <span className="num w-9 text-muted-foreground">{code}</span>
-            {S.currencies[code]}
+            {currencyName(code)}
           </SelectItem>
         ))}
       </SelectContent>

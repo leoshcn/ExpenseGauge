@@ -7,16 +7,26 @@ from pathlib import Path
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 import app.models  # noqa: F401
 from alembic import command
 from app.db import Base, get_engine
-from tests.conftest import alembic_config
+from tests.conftest import Ledger, alembic_config
 from tests.test_auth import API
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+BUSINESS_TABLES = (
+    "transactions",
+    "budgets",
+    "categories",
+    "payment_channels",
+    "budget_accounts",
+    "app_settings",
+)
 
 
 def test_migrations_match_models():
@@ -39,17 +49,24 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
     assert types == {"budgets.amount": "numeric(14,2)", "transactions.amount": "numeric(14,2)"}
 
     budget = "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
+    category = "INSERT INTO categories (parent_id, name, budget_account_id, description) VALUES"
     statements = [
         # amount must not be zero
-        "INSERT INTO transactions (account_id, category_id, date, amount, counterparty,"
-        f" description, fingerprint) VALUES ({ledger.account_id}, {ledger.metro},"
+        "INSERT INTO transactions (channel_id, category_id, date, amount, counterparty,"
+        f" description, fingerprint) VALUES ({ledger.channel}, {ledger.metro},"
         " '2026-01-01', 0, 'x', '', 'f')",
         # budgets are non-negative and start on the first of a month
         f"{budget} ({ledger.metro}, '2026-01-01', -1)",
         f"{budget} ({ledger.metro}, '2026-01-15', 1)",
-        # level-1 names are unique per account although parent_id is NULL
-        "INSERT INTO categories (account_id, parent_id, name)"
-        f" VALUES ({ledger.account_id}, NULL, '餐饮')",
+        # level-1 names are unique globally although parent_id is NULL
+        f"{category} (NULL, '餐饮', NULL, NULL)",
+        # level 1 has neither a budget account nor a description
+        f"{category} (NULL, '居住', {ledger.daily}, NULL)",
+        f"{category} (NULL, '居住', NULL, '说明')",
+        # level 2 always has a budget account
+        f"{category} ({ledger.food}, '零食', NULL, NULL)",
+        # one settings row only
+        "INSERT INTO app_settings (id, currency) VALUES (2, 'USD')",
     ]
     for statement in statements:
         with pytest.raises(IntegrityError), get_engine().begin() as connection:
@@ -58,9 +75,24 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
     with get_engine().begin() as connection:
         connection.execute(text(f"{budget} ({ledger.metro}, '2026-01-01', NULL)"))
         connection.execute(text(f"{budget} ({ledger.metro}, '2026-02-01', 0)"))
+        connection.execute(text(f"{category} ({ledger.food}, '零食', {ledger.daily}, '说明')"))
 
 
-def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
+def _insert_0001_ledger(connection) -> None:
+    """An account with a small category tree, as the 0001-0003 schema stores it."""
+    connection.execute(
+        text("INSERT INTO accounts (id, name, currency) VALUES (1, '日常账户', 'CNY')")
+    )
+    connection.execute(
+        text(
+            "INSERT INTO categories (id, account_id, parent_id, name) VALUES"
+            " (1, 1, NULL, '餐饮'), (2, 1, 1, '买菜'), (3, 1, 1, '外食'),"
+            " (4, 1, NULL, '交通'), (5, 1, 4, '地铁')"
+        )
+    )
+
+
+def test_0002_applies_to_a_database_that_already_has_budgets(client):
     """Upgrading 0001 -> 0002 keeps the existing budget rows and then allows clearing.
     The downgrade works too, dropping the clearing rows the old schema cannot hold."""
     insert = "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
@@ -84,10 +116,11 @@ def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
                 )
             )
 
+    groceries, dining, metro = 2, 3, 5
     existing = [
-        (ledger.groceries, "2026-01-01", "1000.00"),
-        (ledger.groceries, "2026-06-01", "1200.50"),
-        (ledger.metro, "2026-01-01", "0.00"),
+        (groceries, "2026-01-01", "1000.00"),
+        (groceries, "2026-06-01", "1200.50"),
+        (metro, "2026-01-01", "0.00"),
     ]
     config = alembic_config()
     get_engine().dispose()  # no pooled connection may sit in the way of ALTER TABLE
@@ -95,24 +128,18 @@ def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
         command.downgrade(config, "0001")
         assert amount_is_nullable() is False
         with get_engine().begin() as connection:
+            _insert_0001_ledger(connection)
             for category_id, month, amount in existing:
                 connection.execute(text(f"{insert} ({category_id}, '{month}', {amount})"))
         with pytest.raises(IntegrityError), get_engine().begin() as connection:
-            connection.execute(text(f"{insert} ({ledger.dining}, '2026-01-01', NULL)"))
+            connection.execute(text(f"{insert} ({dining}, '2026-01-01', NULL)"))
 
         command.upgrade(config, "0002")
         assert amount_is_nullable() is True
         assert stored() == existing
-        command.upgrade(config, "head")  # the models need the later revisions too
-
-        # The application works on the upgraded rows: read, then clear from a month.
-        budgets = f"{ledger.base}/budgets"
-        before = client.get(budgets, params={"month": "2026-07"}).json()["budgets"]
-        assert [line["amount"] for line in before] == ["1200.50", None, "0.00"]
-        ledger.set_budgets("2026-07", {ledger.groceries: None})
-        after = client.get(budgets, params={"month": "2026-07"}).json()["budgets"]
-        assert [line["amount"] for line in after] == [None, None, "0.00"]
-        assert stored() == [*existing[:2], (ledger.groceries, "2026-07-01", None), existing[2]]
+        with get_engine().begin() as connection:  # a clearing version
+            connection.execute(text(f"{insert} ({groceries}, '2026-07-01', NULL)"))
+        assert stored() == [*existing[:2], (groceries, "2026-07-01", None), existing[2]]
 
         get_engine().dispose()
         command.downgrade(config, "0001")
@@ -124,9 +151,9 @@ def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
     assert amount_is_nullable() is True
 
 
-def test_0003_adds_category_description_to_existing_categories(client, ledger):
+def test_0003_adds_category_description_to_existing_categories(client):
     """Upgrading 0002 -> 0003 gives existing categories a NULL description; the downgrade
-    drops the column (and its text) and leaves the categories working."""
+    drops the column (and its text) and leaves the categories in place."""
 
     def has_description_column() -> bool:
         with get_engine().connect() as connection:
@@ -140,24 +167,25 @@ def test_0003_adds_category_description_to_existing_categories(client, ledger):
             )
 
     config = alembic_config()
-    tree_url = f"{ledger.base}/categories"
     get_engine().dispose()
     try:
         command.downgrade(config, "0002")
         assert has_description_column() is False
+        with get_engine().begin() as connection:
+            _insert_0001_ledger(connection)
 
         command.upgrade(config, "0003")
         assert has_description_column() is True
-        children = [
-            c for node in client.get(tree_url).json()["categories"] for c in node["children"]
-        ]
-        assert [(c["name"], c["description"]) for c in children] == [
-            ("买菜", None),
-            ("外食", None),
-            ("地铁", None),
-        ]
-        described = client.patch(f"{API}/categories/{ledger.metro}", json={"description": "通勤"})
-        assert described.json()["description"] == "通勤"
+        with get_engine().begin() as connection:
+            rows = connection.execute(text("SELECT name, description FROM categories ORDER BY id"))
+            assert [tuple(row) for row in rows] == [
+                ("餐饮", None),
+                ("买菜", None),
+                ("外食", None),
+                ("交通", None),
+                ("地铁", None),
+            ]
+            connection.execute(text("UPDATE categories SET description = '通勤' WHERE id = 5"))
 
         get_engine().dispose()
         command.downgrade(config, "0002")
@@ -169,7 +197,76 @@ def test_0003_adds_category_description_to_existing_categories(client, ledger):
         get_engine().dispose()
         command.upgrade(config, "head")
     assert has_description_column() is True
-    assert client.get(tree_url).json()["categories"][1]["children"][0]["description"] is None
+
+
+def _count(table: str) -> int:
+    with get_engine().connect() as connection:
+        return connection.scalar(text(f"SELECT count(*) FROM {table}"))
+
+
+def _table_exists(name: str) -> bool:
+    with get_engine().connect() as connection:
+        return connection.scalar(text("SELECT to_regclass(:name) IS NOT NULL"), {"name": name})
+
+
+def test_0004_rebuilds_business_tables_and_keeps_users_and_tokens(app, client, token):
+    """Acceptance (R1, D8): on a database holding 0003 data `upgrade head` succeeds, the
+    business tables are empty and the user, the session and the agent token still work.
+    The (lossy) downgrade works on a populated 0004 database too."""
+    config = alembic_config()
+    get_engine().dispose()
+    try:
+        command.downgrade(config, "0003")
+        assert _table_exists("accounts") and not _table_exists("payment_channels")
+        with get_engine().begin() as connection:
+            _insert_0001_ledger(connection)
+            connection.execute(text("UPDATE categories SET description = '通勤' WHERE id = 5"))
+            connection.execute(
+                text(
+                    "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
+                    " (2, '2026-01-01', 1000), (2, '2026-06-01', NULL)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO transactions (account_id, category_id, date, amount,"
+                    " counterparty, description, fingerprint, api_token_id) VALUES"
+                    " (1, 2, '2026-09-15', 35.50, '盒马', '', 'f', :token_id)"
+                ),
+                {"token_id": token["id"]},
+            )
+
+        command.upgrade(config, "head")
+        assert not _table_exists("accounts")
+        assert {table: _count(table) for table in BUSINESS_TABLES} == dict.fromkeys(
+            BUSINESS_TABLES, 0
+        )
+        assert (_count("users"), _count("sessions"), _count("api_tokens")) == (1, 1, 1)
+
+        # The session cookie and the agent token survive the upgrade.
+        assert client.get(f"{API}/auth/me").json()["username"] == "owner"
+        agent = TestClient(app, headers={"Authorization": f"Bearer {token['token']}"})
+        assert agent.get(f"{API}/channels").json() == []
+        assert agent.get(f"{API}/categories").json() == {
+            "budget_account_id": None,
+            "categories": [],
+        }
+        assert client.get(f"{API}/settings").json() == {"currency": None}
+
+        # The new schema is usable straight away, by the user and by the agent.
+        ledger = Ledger(client)
+        assert ledger.submit([ledger.item()], client=agent).status_code == 201
+        assert ledger.count() == 1
+
+        get_engine().dispose()
+        command.downgrade(config, "0003")
+        assert _table_exists("accounts") and not _table_exists("payment_channels")
+        assert (_count("transactions"), _count("categories"), _count("accounts")) == (0, 0, 0)
+        assert (_count("users"), _count("api_tokens")) == (1, 1)
+    finally:
+        get_engine().dispose()
+        command.upgrade(config, "head")
+    assert _table_exists("payment_channels")
 
 
 def test_exported_openapi_document_is_current(app):

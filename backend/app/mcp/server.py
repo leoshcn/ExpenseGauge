@@ -1,4 +1,4 @@
-"""MCP server: three tools over the same service functions the REST routers call.
+"""MCP server: four tools over the same service functions the REST routers call.
 
 No rule lives here. A tool opens a database session, calls one service function and
 returns the REST payload. Authentication is the ASGI middleware below, which uses the
@@ -20,18 +20,22 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from app.db import get_sessionmaker
 from app.deps import bearer_value
 from app.errors import AppError
+from app.schemas.channel import ChannelOut
 from app.schemas.transaction import RawTransactionItem
 from app.services import auth as auth_service
 from app.services import budgets as budget_service
 from app.services import categories as category_service
+from app.services import channels as channel_service
 from app.services import transactions as transaction_service
 
 INSTRUCTIONS = (
-    "ExpenseGauge: read an account's categories and budgets, then submit confirmed "
-    "expense/refund transactions. Batches are all-or-nothing; read the per-item feedback "
-    "in a rejected result. confirm_duplicate is single-use. A level-2 category may carry "
-    "a `description` written by the user (what belongs / does not belong there); follow it "
-    "when classifying."
+    "ExpenseGauge: list the payment channels and the global category tree, then submit "
+    "confirmed expense/refund transactions of one channel per batch. Any level-2 category "
+    "can be used; its budget account is shown for reference only. Amounts are in the base "
+    "currency (convert foreign-currency spending at that day's rate before submitting). "
+    "Batches are all-or-nothing; read the per-item feedback in a rejected result. "
+    "confirm_duplicate is single-use. A level-2 category may carry a `description` written "
+    "by the user (what belongs / does not belong there); follow it when classifying."
 )
 
 
@@ -64,40 +68,65 @@ def create_mcp_server() -> MCPServer:
     server = MCPServer("expensegauge", instructions=INSTRUCTIONS)
 
     @server.tool()
-    async def list_categories(account_id: int) -> dict[str, Any]:
-        """Return the account's full two-level category tree.
+    async def list_channels() -> dict[str, Any]:
+        """Return the payment channels: `{"channels": [{"id", "name"}, ...]}`.
 
-        Transactions may only use level-2 categories (the `children`). A level-2 category
-        may carry a `description` written by the user (what belongs / does not belong
-        there); follow it when classifying. `description` is null when none was written.
+        A channel is where transactions come from (a card, a statement). Submit each
+        channel's transactions with its `id`; duplicates are checked within one channel.
         """
         try:
-            tree = await _run(lambda db: category_service.get_tree(db, account_id))
+            channels = await _run(channel_service.list_channels)
+        except AppError as error:
+            return _error_result(error)
+        return {
+            "channels": [ChannelOut.model_validate(c).model_dump(mode="json") for c in channels]
+        }
+
+    @server.tool()
+    async def list_categories() -> dict[str, Any]:
+        """Return the global two-level category tree.
+
+        Transactions may only use level-2 categories (the `children`), any of them. Each
+        level-2 category shows its `budget_account` `{id, name}` for reference only; it
+        does not restrict which channel may use it. A level-2 category may carry a
+        `description` written by the user (what belongs / does not belong there); follow
+        it when classifying. `description` is null when none was written.
+        """
+        try:
+            tree = await _run(category_service.get_tree)
         except AppError as error:
             return _error_result(error)
         return tree.model_dump(mode="json")
 
     @server.tool()
-    async def get_budgets(account_id: int, month: str | None = None) -> dict[str, Any]:
+    async def get_budgets(
+        month: str | None = None, budget_account_id: int | None = None
+    ) -> dict[str, Any]:
         """Return the budget in force per level-2 category for a month.
 
-        `month` is `YYYY-MM` and defaults to the current month. `amount: null` means the
-        category has no budget that month (never set, or cleared); `"0.00"` is a real budget.
+        `month` is `YYYY-MM` and defaults to the current month. `budget_account_id`
+        narrows the list to one budget account; omitted, every level-2 category is listed.
+        `amount: null` means the category has no budget that month (never set, or
+        cleared); `"0.00"` is a real budget.
         """
         try:
-            budgets = await _run(lambda db: budget_service.get_budgets(db, account_id, month))
+            budgets = await _run(
+                lambda db: budget_service.get_budgets(db, month, budget_account_id)
+            )
         except AppError as error:
             return _error_result(error)
         return budgets.model_dump(mode="json")
 
     @server.tool()
     async def submit_transactions(
-        account_id: int, items: list[RawTransactionItem], ctx: Context
+        channel_id: int, items: list[RawTransactionItem], ctx: Context
     ) -> dict[str, Any]:
-        """Submit a batch of expenses (amount > 0) and refunds (amount < 0). All or nothing.
+        """Submit one payment channel's expenses (amount > 0) and refunds (amount < 0).
+        All or nothing.
 
-        Each item: date (YYYY-MM-DD), amount, counterparty, description, category_id
-        (level 2), optional note, optional confirm_duplicate.
+        `channel_id` comes from list_channels. Each item: date (YYYY-MM-DD), amount (in
+        the base currency), counterparty, description, category_id (any level-2
+        category), optional note, optional confirm_duplicate.
 
         On success: `{"accepted": true, "transactions": [...]}`. If any item is rejected
         nothing is stored and the result is `{"accepted": false, "code": "BATCH_REJECTED",
@@ -109,7 +138,7 @@ def create_mcp_server() -> MCPServer:
         try:
             accepted = await _run(
                 lambda db: transaction_service.submit_batch(
-                    db, account_id, items, api_token_id=token_id
+                    db, channel_id, items, api_token_id=token_id
                 )
             )
         except AppError as error:

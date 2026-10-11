@@ -9,7 +9,7 @@ from tests.test_auth import API, assert_envelope
 
 
 def _amounts(http, ledger, month: str) -> dict[int, str | None]:
-    response = http.get(f"{ledger.base}/budgets", params={"month": month})
+    response = http.get(f"{API}/budgets", params={"month": month})
     assert response.status_code == 200, response.text
     return {line["category_id"]: line["amount"] for line in response.json()["budgets"]}
 
@@ -18,9 +18,9 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
     """AC6"""
     ledger.set_budgets("2026-03", {ledger.groceries: "1500.00", ledger.metro: "0"})
 
-    body = agent.get(f"{ledger.base}/budgets", params={"month": "2026-05"}).json()
-    assert body == client.get(f"{ledger.base}/budgets", params={"month": "2026-05"}).json()
-    assert body["account_id"] == ledger.account_id
+    body = agent.get(f"{API}/budgets", params={"month": "2026-05"}).json()
+    assert body == client.get(f"{API}/budgets", params={"month": "2026-05"}).json()
+    assert body["budget_account_id"] is None
     assert body["currency"] == "CNY"
     assert body["month"] == "2026-05"
     assert body["budgets"] == [
@@ -29,6 +29,8 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "category_name": "买菜",
             "parent_id": ledger.food,
             "parent_name": "餐饮",
+            "budget_account_id": ledger.daily,
+            "budget_account_name": "日常",
             "amount": "1500.00",
             "effective_from": "2026-03",
         },
@@ -37,6 +39,8 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "category_name": "外食",
             "parent_id": ledger.food,
             "parent_name": "餐饮",
+            "budget_account_id": ledger.daily,
+            "budget_account_name": "日常",
             "amount": None,  # no budget
             "effective_from": None,
         },
@@ -45,12 +49,14 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "category_name": "地铁",
             "parent_id": ledger.transport,
             "parent_name": "交通",
+            "budget_account_id": ledger.daily,
+            "budget_account_name": "日常",
             "amount": "0.00",  # zero is a real budget, not "no budget"
             "effective_from": "2026-03",
         },
     ]
     # Month defaults to the current month.
-    default = client.get(f"{ledger.base}/budgets").json()
+    default = client.get(f"{API}/budgets").json()
     assert default["month"] == date.today().strftime("%Y-%m")
 
 
@@ -79,9 +85,7 @@ def test_budget_effective_from_changes_later_months_only(client, ledger):
 
 def test_budget_validation(client, ledger):
     def put(effective_from, items):
-        return client.put(
-            f"{ledger.base}/budgets", json={"effective_from": effective_from, "items": items}
-        )
+        return client.put(f"{API}/budgets", json={"effective_from": effective_from, "items": items})
 
     # A level-1 budget cannot be entered directly.
     level1 = put("2026-01", [{"category_id": ledger.food, "amount": "10"}])
@@ -112,12 +116,13 @@ def test_budget_validation(client, ledger):
     assert_envelope(mixed, 422, "CATEGORY_NOT_LEAF")
     assert _amounts(client, ledger, "2026-01")[ledger.metro] is None
 
-    assert_envelope(client.get(f"{ledger.base}/budgets?month=2026-1"), 422, "VALIDATION_ERROR")
-    assert_envelope(client.get(f"{API}/accounts/999/budgets"), 404, "ACCOUNT_NOT_FOUND")
+    assert_envelope(client.get(f"{API}/budgets?month=2026-1"), 422, "VALIDATION_ERROR")
+    unknown_account = client.get(f"{API}/budgets", params={"budget_account_id": 999})
+    assert_envelope(unknown_account, 422, "BUDGET_ACCOUNT_NOT_FOUND")
 
 
 def _lines(http, ledger, month: str) -> dict[int, dict]:
-    response = http.get(f"{ledger.base}/budgets", params={"month": month})
+    response = http.get(f"{API}/budgets", params={"month": month})
     assert response.status_code == 200, response.text
     return {line["category_id"]: line for line in response.json()["budgets"]}
 
@@ -141,12 +146,14 @@ def test_clearing_a_budget_applies_from_the_chosen_month(client, agent, ledger):
     cleared = ledger.set_budgets("2026-06", {ledger.groceries: None})
 
     # The response is the budget view of the effective month, like any other PUT.
-    assert cleared == client.get(f"{ledger.base}/budgets", params={"month": "2026-06"}).json()
+    assert cleared == client.get(f"{API}/budgets", params={"month": "2026-06"}).json()
     no_budget = {
         "category_id": ledger.groceries,
         "category_name": "买菜",
         "parent_id": ledger.food,
         "parent_name": "餐饮",
+        "budget_account_id": ledger.daily,
+        "budget_account_name": "日常",
         "amount": None,
         "effective_from": None,
     }
@@ -299,8 +306,53 @@ def test_agent_token_cannot_clear_a_budget(client, agent, ledger):
     """AC7/AC12: clearing is a budget edit, so it needs the user's session."""
     ledger.set_budgets("2026-01", {ledger.groceries: "1000"})
     items = [{"category_id": ledger.groceries, "amount": None}]
-    refused = agent.put(
-        f"{ledger.base}/budgets", json={"effective_from": "2026-01", "items": items}
-    )
+    refused = agent.put(f"{API}/budgets", json={"effective_from": "2026-01", "items": items})
     assert_envelope(refused, 403, "TOKEN_SCOPE_FORBIDDEN")
     assert _amounts(client, ledger, "2026-01")[ledger.groceries] == "1000.00"
+
+
+def test_budgets_per_budget_account_and_set_across_accounts(client, agent, ledger):
+    """R4: GET /budgets filters by budget account (all when omitted); PUT /budgets takes
+    level-2 categories of any budget account in one request. A category moved to another
+    budget account takes its budget history along (D4)."""
+    fixed = ledger.budget_account("固定")
+    housing = ledger.category("居住")
+    rent = ledger.category("房租", housing, fixed)
+    repair = ledger.category("维修", housing, ledger.daily)
+    stored = ledger.set_budgets("2026-01", {rent: "6500", repair: "200", ledger.groceries: "1000"})
+    # The PUT response covers every level-2 category.
+    assert [line["category_id"] for line in stored["budgets"]] == [
+        ledger.groceries,
+        ledger.dining,
+        ledger.metro,
+        rent,
+        repair,
+    ]
+
+    def lines(budget_account_id: int | None) -> dict[int, tuple[str, str | None]]:
+        params = {"month": "2026-03"}
+        if budget_account_id is not None:
+            params["budget_account_id"] = budget_account_id
+        body = agent.get(f"{API}/budgets", params=params).json()
+        assert body["budget_account_id"] == budget_account_id
+        return {
+            line["category_id"]: (line["budget_account_name"], line["amount"])
+            for line in body["budgets"]
+        }
+
+    assert lines(fixed) == {rent: ("固定", "6500.00")}
+    assert lines(ledger.daily) == {
+        ledger.groceries: ("日常", "1000.00"),
+        ledger.dining: ("日常", None),
+        ledger.metro: ("日常", None),
+        repair: ("日常", "200.00"),
+    }
+    assert len(lines(None)) == 5
+
+    moved = client.patch(f"{API}/categories/{repair}", json={"budget_account_id": fixed})
+    assert moved.status_code == 200
+    assert lines(fixed) == {rent: ("固定", "6500.00"), repair: ("固定", "200.00")}
+    assert repair not in lines(ledger.daily)
+    # An empty budget account has no lines.
+    empty = ledger.budget_account("储蓄")
+    assert lines(empty) == {}

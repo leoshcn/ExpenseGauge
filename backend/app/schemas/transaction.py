@@ -20,7 +20,7 @@ class TransactionItemIn(RequestSchema):
     description: Annotated[
         str, StringConstraints(strip_whitespace=True, max_length=1000), NoNul
     ] = ""
-    category_id: int = Field(description="A level-2 category of the account")
+    category_id: int = Field(description="A level-2 category (any budget account)")
     note: Annotated[str, StringConstraints(max_length=1000), NoNul] | None = None
     confirm_duplicate: bool = Field(
         default=False,
@@ -47,11 +47,14 @@ class BatchSubmitIn(RequestSchema):
 
 class TransactionOut(Schema):
     id: int
-    account_id: int
+    channel_id: int
+    channel_name: str
     category_id: int
     category_name: str
     parent_category_id: int
     parent_category_name: str
+    budget_account_id: int = Field(description="Follows from the category; not stored")
+    budget_account_name: str
     date: date
     amount: Money
     counterparty: str

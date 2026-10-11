@@ -18,7 +18,8 @@ import { S } from "@/strings.zh";
 const NAME_MAX = 100;
 
 /**
- * Asks for one name: adding a category, renaming an account or a category. Mounted only
+ * Asks for one name: adding or renaming a budget account, a channel or a level-1
+ * category (settings and onboarding). Mounted only
  * while open, so it always starts from `initial`. Closes on success; the backend's message
  * (for example `CATEGORY_NAME_TAKEN`) is shown in place on failure.
  */

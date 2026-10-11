@@ -5,13 +5,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { errorMessage, type Schemas } from "@/api/client";
-import { budgetsQuery, categoriesQuery, keys, putBudgets } from "@/api/queries";
-import { AccountSelect } from "@/components/account-select";
+import { type BudgetScope, budgetsQuery, categoriesQuery, keys, putBudgets } from "@/api/queries";
+import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useSelectedAccount } from "@/hooks/use-search-state";
+import { useBudgetScope } from "@/hooks/use-search-state";
 import { formatMonth } from "@/lib/date";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
 import { S } from "@/strings.zh";
@@ -152,20 +152,20 @@ function SaveBar({
 }
 
 function BudgetsBody({
-  account,
+  scope,
   month,
   current,
   onMonthChange,
 }: {
-  account: Schemas["AccountOut"];
+  scope: BudgetScope;
   month: string;
   current: string;
   onMonthChange: (month: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const tree = useQuery(categoriesQuery(account.id));
-  // Keyed by account, so a kept-over result is always this account's (same currency).
-  const budgets = useQuery({ ...budgetsQuery(account.id, month), placeholderData: keepPreviousData });
+  const tree = useQuery(categoriesQuery(scope));
+  // Keyed by scope, so a kept-over result is always this scope's lines.
+  const budgets = useQuery({ ...budgetsQuery(scope, month), placeholderData: keepPreviousData });
   // Edits survive a change of month: they are re-compared with the new month's amounts
   // and saved from whichever month is chosen when the user presses save.
   const [draft, setDraft] = useState<BudgetDraft>({});
@@ -179,17 +179,17 @@ function BudgetsBody({
 
   const save = useMutation({
     // `sent` is the draft the body was built from, to tell later typing apart from it.
-    mutationFn: ({ body }: { body: Schemas["BudgetsPutIn"]; sent: BudgetDraft }) =>
-      putBudgets(account.id, body),
+    mutationFn: ({ body }: { body: Schemas["BudgetsPutIn"]; sent: BudgetDraft }) => putBudgets(body),
     onSuccess: async (result, { body, sent }) => {
-      queryClient.setQueryData(keys.budgetsAt(account.id, body.effective_from), result);
+      // The response holds every budget account's lines: it is that month's "全部" view.
+      queryClient.setQueryData(keys.budgetsAt(null, body.effective_from), result);
       setDraft((current) => draftAfterSave(current, sent));
       setSaved(body.effective_from);
       await Promise.all([
-        // Other months may show the new amounts too (all months from this one on).
-        queryClient.invalidateQueries({ queryKey: keys.budgets(account.id) }),
+        // Other months and scopes may show the new amounts too (all months from this one on).
+        queryClient.invalidateQueries({ queryKey: keys.budgets }),
         // Also the Dashboard queries not on screen, so going back never shows stale figures.
-        queryClient.invalidateQueries({ queryKey: keys.summaries(account.id), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: keys.summaries, refetchType: "all" }),
       ]);
     },
   });
@@ -226,7 +226,7 @@ function BudgetsBody({
         body={T.noCategories.body}
         action={
           <Button asChild variant="outline" size="sm">
-            <Link to={`/settings?tab=categories&account=${account.id}`}>{T.noCategories.action}</Link>
+            <Link to="/settings?tab=categories">{T.noCategories.action}</Link>
           </Button>
         }
       />
@@ -242,6 +242,8 @@ function BudgetsBody({
         groups={groupLines(tree.data, lines)}
         draft={draft}
         currency={budgets.data.currency}
+        // In "全部" each row says which budget account it counts towards.
+        showBudgetAccount={scope === null}
         onChange={(id, text) => {
           setSaved(null);
           // Resetting a running save would re-enable "save" and allow a second request.
@@ -271,12 +273,13 @@ function BudgetsBody({
 }
 
 /**
- * Budgets of one account per level-2 category, set from a chosen month onward
- * (parent PRD R6). The account and month live in the URL, like on the Dashboard.
+ * Budgets per level-2 category, set from a chosen month onward (parent PRD R6), for all
+ * budget accounts ("全部", the default) or one of them: the same selector as the
+ * Dashboard. The scope and month live in the URL (`?scope=<id>&month=YYYY-MM`).
  */
 export function BudgetsPage() {
   const [now] = useState(() => new Date());
-  const { accounts, account, params, update } = useSelectedAccount();
+  const { budgetAccounts, scope, params, update } = useBudgetScope();
   const current = monthOf(now);
   const requested = params.get("month");
   const month = isMonth(requested) ? requested : current;
@@ -285,20 +288,25 @@ export function BudgetsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight">{T.title}</h1>
-        {accounts.data && account ? (
-          <AccountSelect accounts={accounts.data} value={account.id} onChange={(id) => update({ account: id })} />
+        {budgetAccounts.data && scope !== undefined ? (
+          <BudgetAccountSelect
+            budgetAccounts={budgetAccounts.data}
+            value={scope}
+            onChange={(next) => update({ scope: next })}
+          />
         ) : null}
       </div>
-      {accounts.isLoadingError ? (
+      {budgetAccounts.isLoadingError ? (
         <ErrorState
           title={S.errors.loadFailedTitle}
-          error={accounts.error}
-          onRetry={() => void accounts.refetch()}
+          error={budgetAccounts.error}
+          onRetry={() => void budgetAccounts.refetch()}
         />
-      ) : account ? (
+      ) : scope !== undefined ? (
         <BudgetsBody
-          key={account.id}
-          account={account}
+          // The draft starts over in another scope, as it holds that scope's rows.
+          key={scope ?? "all"}
+          scope={scope}
           month={month}
           current={current}
           onMonthChange={(next) => update({ month: next === current ? null : next })}

@@ -7,7 +7,7 @@ import type { Schemas } from "@/api/client";
 import { CategoryTable } from "./category-table";
 
 const detail: Schemas["MonthDetailOut"] = {
-  account_id: 1,
+  budget_account_id: null,
   currency: "CNY",
   month: "2026-10",
   budget: "1500.00",

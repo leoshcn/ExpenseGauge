@@ -34,7 +34,7 @@ describe("AgentSection", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <AgentSection accounts={[{ id: 1, name: "日常账户", currency: "CNY" }]} />
+        <AgentSection channels={[{ id: 1, name: "招商储蓄卡" }]} />
       </QueryClientProvider>,
     );
 

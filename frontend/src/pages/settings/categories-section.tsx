@@ -7,20 +7,21 @@ import { categoriesQuery, createCategory, deleteCategory, keys, updateCategory }
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
+import { NameDialog } from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { S } from "@/strings.zh";
 
 import { CategoryDialog } from "./category-dialog";
-import { NameDialog } from "./name-dialog";
+import { categoryCreateBody } from "./model";
 import { SectionCard } from "./section-card";
 
 const T = S.settings.categories;
 
-/** Level 1 has a name only; level 2 also has a description. */
+/** Level 1 has a name only; level 2 also has a description and a budget account. */
 type Target =
   | { id: number; name: string; level: 1 }
-  | { id: number; name: string; level: 2; description: string | null };
+  | { id: number; name: string; level: 2; description: string | null; budgetAccountId: number };
 type Dialog =
   | { kind: "add-parent" }
   | { kind: "add-child"; parent: Target }
@@ -74,21 +75,13 @@ function RowActions({
   );
 }
 
-function DeleteCategoryDialog({
-  target,
-  accountId,
-  onClose,
-}: {
-  target: Target;
-  accountId: number;
-  onClose: () => void;
-}) {
+function DeleteCategoryDialog({ target, onClose }: { target: Target; onClose: () => void }) {
   const queryClient = useQueryClient();
   const remove = useMutation({
     mutationFn: () => deleteCategory(target.id),
     onSuccess: async () => {
-      // Its budgets go with it; every figure of the account may change.
-      await queryClient.invalidateQueries({ queryKey: keys.account(accountId) });
+      // Its budgets go with it; figures of every scope may change.
+      await queryClient.invalidateQueries({ queryKey: keys.ledger });
       onClose();
     },
   });
@@ -109,20 +102,21 @@ function DeleteCategoryDialog({
   );
 }
 
-/** One account's two-level category tree: add, rename or edit (level 2: name and description), delete (refused while in use). */
+/**
+ * The global two-level category tree: add, rename or edit (level 2: name, budget account
+ * and description), delete (refused while in use). Each level-2 row shows its budget account.
+ */
 export function CategoriesSection({
-  account,
-  accountPicker,
+  budgetAccounts,
 }: {
-  account: Schemas["AccountOut"];
-  accountPicker: React.ReactNode;
+  budgetAccounts: readonly Schemas["BudgetAccountOut"][];
 }) {
   const queryClient = useQueryClient();
-  const tree = useQuery(categoriesQuery(account.id));
+  const tree = useQuery(categoriesQuery());
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const close = () => setDialog(null);
-  // Names appear in summaries, transactions and budgets too.
-  const refresh = () => queryClient.invalidateQueries({ queryKey: keys.account(account.id) });
+  // Names and budget accounts appear in summaries, transactions and budgets too.
+  const refresh = () => queryClient.invalidateQueries({ queryKey: keys.ledger });
 
   let body: React.ReactNode;
   if (tree.isLoadingError) {
@@ -176,7 +170,13 @@ export function CategoriesSection({
                       className="flex items-center gap-3 border-t py-1.5 pr-2 pl-9 sm:pr-3 sm:pl-12"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="break-words">{child.name}</p>
+                        <p className="flex flex-wrap items-center gap-x-2 break-words">
+                          {child.name}
+                          <span className="rounded-full border px-1.5 text-[11px] leading-[1.125rem] text-muted-foreground">
+                            <span className="sr-only">{T.budgetAccount}：</span>
+                            {child.budget_account.name}
+                          </span>
+                        </p>
                         {child.description ? (
                           <p className="line-clamp-2 text-xs break-words whitespace-pre-line text-muted-foreground">
                             {child.description}
@@ -184,7 +184,13 @@ export function CategoriesSection({
                         ) : null}
                       </div>
                       <RowActions
-                        target={{ id: child.id, name: child.name, level: 2, description: child.description }}
+                        target={{
+                          id: child.id,
+                          name: child.name,
+                          level: 2,
+                          description: child.description,
+                          budgetAccountId: child.budget_account.id,
+                        }}
                         onDialog={setDialog}
                       />
                     </li>
@@ -200,16 +206,13 @@ export function CategoriesSection({
 
   return (
     <SectionCard
-      title={T.title(account.name)}
+      title={T.title}
       description={T.description}
       action={
-        <div className="flex flex-wrap items-center gap-2">
-          {accountPicker}
-          <Button size="sm" onClick={() => setDialog({ kind: "add-parent" })} disabled={!tree.data}>
-            <PlusIcon />
-            {T.addParent}
-          </Button>
-        </div>
+        <Button size="sm" onClick={() => setDialog({ kind: "add-parent" })} disabled={!tree.data}>
+          <PlusIcon />
+          {T.addParent}
+        </Button>
       }
     >
       {body}
@@ -221,7 +224,7 @@ export function CategoriesSection({
           submitLabel={T.create}
           pendingLabel={T.creating}
           onSubmit={async (name) => {
-            await createCategory(account.id, { name });
+            await createCategory({ name });
             await refresh();
           }}
           onClose={close}
@@ -230,11 +233,12 @@ export function CategoriesSection({
       {dialog?.kind === "add-child" ? (
         <CategoryDialog
           title={T.addChild(dialog.parent.name)}
+          budgetAccounts={budgetAccounts}
           placeholder={T.childPlaceholder}
           submitLabel={T.create}
           pendingLabel={T.creating}
           onSubmit={async (fields) => {
-            await createCategory(account.id, { ...fields, parent_id: dialog.parent.id });
+            await createCategory(categoryCreateBody(dialog.parent.id, fields));
             await refresh();
           }}
           onClose={close}
@@ -257,7 +261,12 @@ export function CategoriesSection({
       {dialog?.kind === "edit-child" ? (
         <CategoryDialog
           title={T.editTitle}
-          initial={{ name: dialog.target.name, description: dialog.target.description }}
+          initial={{
+            name: dialog.target.name,
+            description: dialog.target.description,
+            budgetAccountId: dialog.target.budgetAccountId,
+          }}
+          budgetAccounts={budgetAccounts}
           submitLabel={S.common.save}
           pendingLabel={S.common.saving}
           onSubmit={async (_fields, changes) => {
@@ -267,9 +276,7 @@ export function CategoriesSection({
           onClose={close}
         />
       ) : null}
-      {dialog?.kind === "delete" ? (
-        <DeleteCategoryDialog target={dialog.target} accountId={account.id} onClose={close} />
-      ) : null}
+      {dialog?.kind === "delete" ? <DeleteCategoryDialog target={dialog.target} onClose={close} /> : null}
     </SectionCard>
   );
 }

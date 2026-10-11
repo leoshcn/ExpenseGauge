@@ -51,7 +51,7 @@ export function niceTicks(points: readonly TrendPoint[], intervals = 4): number[
   return Array.from({ length: count + 1 }, (_, index) => index * step);
 }
 
-/** True when the whole window holds no spending at all: the account has no transactions yet. */
+/** True when the whole window holds no spending at all: the scope has no transactions yet. */
 export function isWindowEmpty(months: readonly Schemas["MonthTotal"][]): boolean {
   return months.every((entry) => toCents(entry.actual) === 0);
 }

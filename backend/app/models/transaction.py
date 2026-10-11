@@ -19,18 +19,21 @@ from app.db import Base
 
 
 class Transaction(Base):
-    """An expense (amount > 0) or a refund (amount < 0)."""
+    """An expense (amount > 0) or a refund (amount < 0), from one payment channel.
+
+    Its budget account is not stored: it is the budget account of its category.
+    """
 
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint("amount <> 0", name="ck_transactions_amount_non_zero"),
         # Not unique: user-confirmed duplicates are legitimate rows.
-        Index("ix_transactions_account_fingerprint", "account_id", "fingerprint"),
-        Index("ix_transactions_account_date", "account_id", "date"),
+        Index("ix_transactions_channel_fingerprint", "channel_id", "fingerprint"),
+        Index("ix_transactions_date", "date"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="RESTRICT"))
+    channel_id: Mapped[int] = mapped_column(ForeignKey("payment_channels.id", ondelete="RESTRICT"))
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id", ondelete="RESTRICT"), index=True
     )

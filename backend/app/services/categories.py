@@ -1,7 +1,10 @@
-"""Two-level categories. Level 1 groups; only level 2 takes transactions and budgets.
+"""One global two-level category tree. Level 1 groups; only level 2 takes transactions
+and budgets.
 
-Only level 2 has a `description` (the user's note for the classifying agent); level-1
-rows always keep it NULL.
+Each level-2 category belongs to exactly one budget account, which decides where its
+transactions and budgets count; level 1 belongs to none (its figures are the sum of its
+children). Only level 2 has a `description` (the user's note for the classifying agent);
+level-1 rows always keep it NULL.
 """
 
 from typing import Any
@@ -13,17 +16,23 @@ from sqlalchemy.orm import Session
 from app.db import get_by_id
 from app.errors import conflict, invalid, not_found
 from app.models import Category, Transaction
+from app.schemas.budget_account import BudgetAccountOut
 from app.schemas.category import CategoryLeaf, CategoryNode, CategoryTree
-from app.services.accounts import get_account
+from app.services.budget_accounts import budget_account_names, get_budget_account
 
 
-def load_categories(db: Session, account_id: int) -> list[Category]:
-    return list(
-        db.scalars(select(Category).where(Category.account_id == account_id).order_by(Category.id))
-    )
+def load_categories(db: Session, budget_account_id: int | None = None) -> list[Category]:
+    """The whole tree, or only the level-2 categories of one budget account and their
+    level-1 parents. Ordered by id."""
+    categories = list(db.scalars(select(Category).order_by(Category.id)))
+    if budget_account_id is None:
+        return categories
+    parent_ids = {c.parent_id for c in categories if c.budget_account_id == budget_account_id}
+    return [c for c in categories if c.budget_account_id == budget_account_id or c.id in parent_ids]
 
 
-def build_nodes(categories: list[Category]) -> list[CategoryNode]:
+def build_nodes(categories: list[Category], budget_accounts: dict[int, str]) -> list[CategoryNode]:
+    """Level-1 nodes with their level-2 children. `budget_accounts` maps id to name."""
     nodes = {
         c.id: CategoryNode(id=c.id, name=c.name, children=[])
         for c in categories
@@ -31,16 +40,28 @@ def build_nodes(categories: list[Category]) -> list[CategoryNode]:
     }
     for c in categories:
         if c.parent_id is not None:
-            nodes[c.parent_id].children.append(
-                CategoryLeaf(id=c.id, name=c.name, description=c.description)
-            )
+            nodes[c.parent_id].children.append(to_leaf(c, budget_accounts))
     return list(nodes.values())
 
 
-def get_tree(db: Session, account_id: int) -> CategoryTree:
-    get_account(db, account_id)
+def to_leaf(category: Category, budget_accounts: dict[int, str]) -> CategoryLeaf:
+    budget_account_id = category.budget_account_id
+    return CategoryLeaf(
+        id=category.id,
+        name=category.name,
+        description=category.description,
+        budget_account=BudgetAccountOut(
+            id=budget_account_id, name=budget_accounts[budget_account_id]
+        ),
+    )
+
+
+def get_tree(db: Session, budget_account_id: int | None = None) -> CategoryTree:
+    if budget_account_id is not None:
+        get_budget_account(db, budget_account_id, status_code=422)
     return CategoryTree(
-        account_id=account_id, categories=build_nodes(load_categories(db, account_id))
+        budget_account_id=budget_account_id,
+        categories=build_nodes(load_categories(db, budget_account_id), budget_account_names(db)),
     )
 
 
@@ -69,21 +90,37 @@ def _check_description(parent_id: int | None, description: str | None) -> None:
         raise invalid("DESCRIPTION_NOT_ALLOWED", "一级分类不支持填写说明")
 
 
+def _check_budget_account(db: Session, parent_id: int | None, budget_account_id: int | None):
+    """Level 2 needs an existing budget account; level 1 must not have one."""
+    if parent_id is None:
+        if budget_account_id is not None:
+            raise invalid(
+                "BUDGET_ACCOUNT_NOT_ALLOWED",
+                "一级分类不归属预算账户，只有二级分类需要选择预算账户",
+                {"budget_account_id": budget_account_id},
+            )
+        return
+    if budget_account_id is None:
+        raise invalid(
+            "VALIDATION_ERROR",
+            "二级分类必须选择所属预算账户",
+            {"errors": [{"field": "body.budget_account_id", "reason": "required for level 2"}]},
+        )
+    get_budget_account(db, budget_account_id, status_code=422)
+
+
 def create_category(
     db: Session,
-    account_id: int,
     name: str,
     parent_id: int | None,
     description: str | None = None,
+    budget_account_id: int | None = None,
 ) -> Category:
-    get_account(db, account_id)
     description = _normalize_description(description)
     if parent_id is not None:
         parent = get_by_id(db, Category, parent_id)
-        if parent is None or parent.account_id != account_id:
-            raise invalid(
-                "INVALID_PARENT", "上级分类不存在或不属于该账户", {"parent_id": parent_id}
-            )
+        if parent is None:
+            raise invalid("INVALID_PARENT", "上级分类不存在", {"parent_id": parent_id})
         if parent.parent_id is not None:
             raise invalid(
                 "INVALID_PARENT",
@@ -91,8 +128,12 @@ def create_category(
                 {"parent_id": parent_id},
             )
     _check_description(parent_id, description)
+    _check_budget_account(db, parent_id, budget_account_id)
     category = Category(
-        account_id=account_id, parent_id=parent_id, name=name, description=description
+        parent_id=parent_id,
+        name=name,
+        description=description,
+        budget_account_id=budget_account_id,
     )
     db.add(category)
     _commit_name(db)
@@ -100,12 +141,16 @@ def create_category(
 
 
 def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Category:
-    """Applies only the given fields (`name`, `description`); the others keep their value."""
+    """Applies only the given fields (`name`, `description`, `budget_account_id`); the
+    others keep their value. A new budget account moves the category's whole history."""
     category = get_category(db, category_id)
     if "description" in fields:
         description = _normalize_description(fields["description"])
         _check_description(category.parent_id, description)
         category.description = description
+    if "budget_account_id" in fields:
+        _check_budget_account(db, category.parent_id, fields["budget_account_id"])
+        category.budget_account_id = fields["budget_account_id"]
     if "name" in fields:
         category.name = fields["name"]
     _commit_name(db)

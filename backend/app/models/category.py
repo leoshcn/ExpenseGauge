@@ -1,21 +1,22 @@
-from sqlalchemy import ForeignKey, Index, String, text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
 
 
 class Category(Base):
-    """Two levels per account: `parent_id IS NULL` is level 1, otherwise level 2.
+    """One global two-level tree: `parent_id IS NULL` is level 1, otherwise level 2.
 
-    Name uniqueness is two partial unique indexes because PostgreSQL treats NULLs
-    as distinct in a plain unique(account_id, parent_id, name).
+    Each level-2 category belongs to exactly one budget account; level 1 belongs to none
+    and has no description. Name uniqueness is two partial unique indexes: level-1 names
+    are unique globally, level-2 names per parent (a plain unique(parent_id, name) would
+    allow duplicate level-1 names because PostgreSQL treats NULLs as distinct).
     """
 
     __tablename__ = "categories"
     __table_args__ = (
         Index(
             "uq_categories_level1_name",
-            "account_id",
             "name",
             unique=True,
             postgresql_where=text("parent_id IS NULL"),
@@ -27,14 +28,23 @@ class Category(Base):
             unique=True,
             postgresql_where=text("parent_id IS NOT NULL"),
         ),
+        CheckConstraint(
+            "parent_id IS NOT NULL OR (budget_account_id IS NULL AND description IS NULL)",
+            name="ck_categories_level1_plain",
+        ),
+        CheckConstraint(
+            "parent_id IS NULL OR budget_account_id IS NOT NULL",
+            name="ck_categories_level2_budget_account",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    account_id: Mapped[int] = mapped_column(
-        ForeignKey("accounts.id", ondelete="RESTRICT"), index=True
-    )
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"))
     name: Mapped[str] = mapped_column(String(100))
     # What belongs (or does not) in a level-2 category, for the agent that classifies
-    # transactions. Level-1 rows always have NULL here; the service enforces it.
+    # transactions. Level-1 rows always have NULL here.
     description: Mapped[str | None] = mapped_column(String(500))
+    # Level 2 only. Changing it moves the category's whole history (no versioning).
+    budget_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("budget_accounts.id", ondelete="RESTRICT"), index=True
+    )

@@ -18,7 +18,7 @@ router = APIRouter(tags=["transactions"])
 
 
 @router.post(
-    "/accounts/{account_id}/transactions/batch",
+    "/channels/{channel_id}/transactions/batch",
     response_model=BatchAcceptedOut,
     status_code=201,
     responses={
@@ -28,25 +28,32 @@ router = APIRouter(tags=["transactions"])
         }
     },
 )
-def submit_batch(account_id: int, payload: BatchSubmitIn, principal: AnyPrincipal, db: DbSession):
-    """All-or-nothing submission. Open to agent tokens."""
+def submit_batch(channel_id: int, payload: BatchSubmitIn, principal: AnyPrincipal, db: DbSession):
+    """All-or-nothing submission of one payment channel's transactions. Open to agent tokens."""
     return transaction_service.submit_batch(
-        db, account_id, payload.items, api_token_id=principal.api_token_id
+        db, channel_id, payload.items, api_token_id=principal.api_token_id
     )
 
 
-@router.get("/accounts/{account_id}/transactions", response_model=TransactionPage)
+@router.get("/transactions", response_model=TransactionPage)
 def list_transactions(
-    account_id: int,
     principal: SessionPrincipal,
     db: DbSession,
     month: Month | None = None,
+    channel_id: int | None = None,
+    budget_account_id: int | None = None,
     category_id: int | None = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ):
     return transaction_service.list_transactions(
-        db, account_id, month=month, category_id=category_id, page=page, page_size=page_size
+        db,
+        month=month,
+        channel_id=channel_id,
+        budget_account_id=budget_account_id,
+        category_id=category_id,
+        page=page,
+        page_size=page_size,
     )
 
 
