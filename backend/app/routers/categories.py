@@ -17,14 +17,17 @@ def get_category_tree(account_id: int, principal: AnyPrincipal, db: DbSession):
 def create_category(
     account_id: int, payload: CategoryCreateIn, principal: SessionPrincipal, db: DbSession
 ):
-    return category_service.create_category(db, account_id, payload.name, payload.parent_id)
+    return category_service.create_category(
+        db, account_id, payload.name, payload.parent_id, payload.description
+    )
 
 
 @router.patch("/categories/{category_id}", response_model=CategoryOut)
-def rename_category(
+def update_category(
     category_id: int, payload: CategoryUpdateIn, principal: SessionPrincipal, db: DbSession
 ):
-    return category_service.rename_category(db, category_id, payload.name)
+    """Partial update: name and/or description (level 2 only). Omitted fields are kept."""
+    return category_service.update_category(db, category_id, payload.model_dump(exclude_unset=True))
 
 
 @router.delete("/categories/{category_id}", status_code=204)

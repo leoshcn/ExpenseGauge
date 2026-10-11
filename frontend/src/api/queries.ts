@@ -150,7 +150,8 @@ export const createCategory = (accountId: number, body: Schemas["CategoryCreateI
 export const renameAccount = (accountId: number, body: Schemas["AccountUpdateIn"]) =>
   unwrap(api.PATCH("/api/v1/accounts/{account_id}", { params: { path: { account_id: accountId } }, body }));
 
-export const renameCategory = (categoryId: number, body: Schemas["CategoryUpdateIn"]) =>
+/** Only the fields present in `body` change; `description: null` removes the description. */
+export const updateCategory = (categoryId: number, body: Schemas["CategoryUpdateIn"]) =>
   unwrap(api.PATCH("/api/v1/categories/{category_id}", { params: { path: { category_id: categoryId } }, body }));
 
 export const deleteCategory = (categoryId: number) =>

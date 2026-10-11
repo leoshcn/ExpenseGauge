@@ -78,11 +78,14 @@ def test_exactly_three_tools(server_url, token):
 @pytest.mark.parametrize("path", ["/mcp", "/mcp/"])
 def test_read_tools_return_the_rest_payloads(server_url, client, token, ledger, path):
     ledger.set_budgets("2026-09", {ledger.groceries: "1200", ledger.metro: "0"})
+    client.patch(f"{API}/categories/{ledger.groceries}", json={"description": "线下商超\n不含外卖"})
     url = server_url + path
 
     categories = call(url, token["token"], "list_categories", {"account_id": ledger.account_id})
     assert categories.is_error is False
     assert categories.structured_content == client.get(f"{ledger.base}/categories").json()
+    children = [c for node in categories.structured_content["categories"] for c in node["children"]]
+    assert [c["description"] for c in children] == ["线下商超\n不含外卖", None, None]
     assert json.loads(categories.content[0].text) == categories.structured_content
 
     budgets = call(

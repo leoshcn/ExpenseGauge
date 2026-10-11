@@ -11,8 +11,8 @@ import { type BudgetDraft, budgetChanges, groupLines } from "./model";
 const tree: Schemas["CategoryTree"] = {
   account_id: 1,
   categories: [
-    { id: 1, name: "餐饮", children: [{ id: 11, name: "买菜" }, { id: 12, name: "外卖" }] },
-    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品" }] },
+    { id: 1, name: "餐饮", children: [{ id: 11, name: "买菜", description: null }, { id: 12, name: "外卖", description: null }] },
+    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品", description: null }] },
     { id: 3, name: "空的", children: [] },
   ],
 };

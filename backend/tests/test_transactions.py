@@ -56,7 +56,9 @@ def test_valid_batch_is_stored_in_full(client, agent, token, ledger):
 def test_unknown_category_rejects_whole_batch_with_valid_categories(client, ledger):
     """AC8, unknown category (including one that belongs to another account)."""
     other = Ledger(client, name="另一个账户")
+    client.patch(f"{API}/categories/{ledger.metro}", json={"description": "含地铁卡充值"})
     tree = client.get(f"{ledger.base}/categories").json()["categories"]
+    assert tree[1]["children"][0]["description"] == "含地铁卡充值"
 
     for bad_category in (99999, other.groceries):
         items = [
@@ -78,15 +80,17 @@ def test_unknown_category_rejects_whole_batch_with_valid_categories(client, ledg
 
 
 def test_level1_category_rejects_whole_batch_with_children(client, ledger):
-    """AC8, level-1 category."""
+    """AC8, level-1 category. The children carry their description for the agent."""
+    described = client.patch(f"{API}/categories/{ledger.groceries}", json={"description": "生鲜"})
+    assert described.status_code == 200
     response = ledger.submit([ledger.item(category_id=ledger.food), ledger.item(counterparty="b")])
     feedback = _rejected(response)
     assert feedback[0]["code"] == "CATEGORY_NOT_LEAF"
     assert "一级分类" in feedback[0]["message"]
     assert feedback[0]["parent"] == {"id": ledger.food, "name": "餐饮"}
     assert feedback[0]["children"] == [
-        {"id": ledger.groceries, "name": "买菜"},
-        {"id": ledger.dining, "name": "外食"},
+        {"id": ledger.groceries, "name": "买菜", "description": "生鲜"},
+        {"id": ledger.dining, "name": "外食", "description": None},
     ]
     assert feedback[1] == {"index": 1, "status": "ok"}
     assert ledger.count() == 0

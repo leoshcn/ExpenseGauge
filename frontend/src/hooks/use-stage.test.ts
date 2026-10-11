@@ -28,7 +28,7 @@ const tree = (accountId: number, children: number): Schemas["CategoryTree"] => (
     {
       id: accountId * 10,
       name: "餐饮",
-      children: Array.from({ length: children }, (_, index) => ({ id: index + 1, name: "买菜" })),
+      children: Array.from({ length: children }, (_, index) => ({ id: index + 1, name: "买菜", description: null })),
     },
   ],
 });

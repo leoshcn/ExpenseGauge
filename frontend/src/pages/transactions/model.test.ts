@@ -15,7 +15,7 @@ import {
 const tree: Schemas["CategoryTree"] = {
   account_id: 1,
   categories: [
-    { id: 1, name: "餐饮", children: [{ id: 11, name: "买菜" }, { id: 12, name: "外卖" }] },
+    { id: 1, name: "餐饮", children: [{ id: 11, name: "买菜", description: null }, { id: 12, name: "外卖", description: null }] },
     { id: 2, name: "交通", children: [] },
   ],
 };

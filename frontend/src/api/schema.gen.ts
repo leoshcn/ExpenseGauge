@@ -225,8 +225,11 @@ export interface paths {
         delete: operations["delete_category_api_v1_categories__category_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Category */
-        patch: operations["rename_category_api_v1_categories__category_id__patch"];
+        /**
+         * Update Category
+         * @description Partial update: name and/or description (level 2 only). Omitted fields are kept.
+         */
+        patch: operations["update_category_api_v1_categories__category_id__patch"];
         trace?: never;
     };
     "/api/v1/health": {
@@ -464,13 +467,20 @@ export interface components {
         };
         /** CategoryCreateIn */
         CategoryCreateIn: {
+            /** Description */
+            description?: string | null;
             /** Name */
             name: string;
             /** Parent Id */
             parent_id?: number | null;
         };
-        /** CategoryLeaf */
+        /**
+         * CategoryLeaf
+         * @description A level-2 category. `description` is the user's note on what belongs here.
+         */
         CategoryLeaf: {
+            /** Description */
+            description: string | null;
             /** Id */
             id: number;
             /** Name */
@@ -492,6 +502,8 @@ export interface components {
         CategoryOut: {
             /** Account Id */
             account_id: number;
+            /** Description */
+            description: string | null;
             /** Id */
             id: number;
             /** Name */
@@ -506,10 +518,15 @@ export interface components {
             /** Categories */
             categories: components["schemas"]["CategoryNode"][];
         };
-        /** CategoryUpdateIn */
+        /**
+         * CategoryUpdateIn
+         * @description Partial update: fields left out keep their value. `description` null or blank clears it.
+         */
         CategoryUpdateIn: {
+            /** Description */
+            description?: string | null;
             /** Name */
-            name: string;
+            name?: string;
         };
         /** CredentialsIn */
         CredentialsIn: {
@@ -1365,7 +1382,7 @@ export interface operations {
             };
         };
     };
-    rename_category_api_v1_categories__category_id__patch: {
+    update_category_api_v1_categories__category_id__patch: {
         parameters: {
             query?: never;
             header?: never;

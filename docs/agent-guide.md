@@ -14,7 +14,8 @@ transactions. The agent is the bookkeeper in front of it:
    between the user's own accounts and credit-card repayments.
 3. **Read the categories** of the target account (`list_categories`). Classify every
    remaining transaction into one **level-2** category (a `children` entry). Level-1
-   categories only group.
+   categories only group. A level-2 category may carry a `description` written by the
+   user (what belongs there and what does not); follow it when choosing.
 4. **Ask the user** about anything uncertain (category, whether it is a real expense),
    and only then submit.
 5. **Submit** the confirmed batch (`submit_transactions`). Expense = positive amount,
@@ -102,15 +103,22 @@ The account's full two-level category tree.
   "account_id": 1,
   "categories": [
     { "id": 10, "name": "餐饮", "children": [
-        { "id": 11, "name": "超市" },
-        { "id": 12, "name": "外卖" } ] },
-    { "id": 20, "name": "交通", "children": [ { "id": 21, "name": "地铁" } ] }
+        { "id": 11, "name": "超市", "description": "线下商超、便利店；不含外卖" },
+        { "id": 12, "name": "外卖", "description": null } ] },
+    { "id": 20, "name": "交通", "children": [
+        { "id": 21, "name": "地铁", "description": null } ] }
   ]
 }
 ```
 
 Use only `children[].id` as `category_id`. A level-1 category with no children cannot be
 used yet.
+
+`description` (level 2 only, up to 500 characters, may contain line breaks) is the user's
+own note on what belongs in that category, for example which merchants or which kinds of
+spending, and what does not. When it is present, follow it when classifying; when a
+transaction still fits more than one category, ask the user. It is `null` when the user
+wrote none. Only the user can edit it (web UI, 设置 → 分类); the agent cannot.
 
 ### `get_budgets(account_id: int, month: str | None = None)`
 
@@ -188,7 +196,7 @@ Rejected (**nothing stored**, one entry per item, in item order):
 | `SUSPECTED_DUPLICATE` | `existing` (the stored record), `hint` | An identical transaction is already stored. Show the user both (date, amount, counterparty, description). If it is the same transaction, **drop the item**. If the user says it is a genuine second transaction (e.g. two identical coffees on one day), set `confirm_duplicate: true` on that item only and resubmit. |
 | `DUPLICATE_IN_BATCH` | `duplicate_of_index`, `hint` | The item is identical to an earlier item of the same batch. Ask the user: if it is the same transaction listed twice, drop one; if both are real, set `confirm_duplicate: true` on the later one(s) and resubmit. |
 | `CATEGORY_NOT_FOUND` | `valid_categories` (full tree, same shape as `list_categories`) | The `category_id` does not exist or belongs to another account. Re-classify with a level-2 id from `valid_categories` (ask the user if unsure). Your cached category list is probably stale. |
-| `CATEGORY_NOT_LEAF` | `parent` `{id, name}`, `children` `[{id, name}]` | A level-1 category was used. Pick one of `children` (ask the user if unsure). If `children` is empty, the user must first add a level-2 category in the web UI. |
+| `CATEGORY_NOT_LEAF` | `parent` `{id, name}`, `children` `[{id, name, description}]` | A level-1 category was used. Pick one of `children` (ask the user if unsure). If `children` is empty, the user must first add a level-2 category in the web UI. |
 | `INVALID_FIELD` | `errors` `[{field, reason}]` | A field is missing, malformed or not allowed (e.g. amount 0, more than 2 decimals, bad date, empty counterparty, unknown field). Fix the item from the source data; do not invent values. |
 
 Duplicate detection: two transactions are "the same" when account, date, amount (to the

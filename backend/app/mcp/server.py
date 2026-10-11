@@ -29,7 +29,9 @@ from app.services import transactions as transaction_service
 INSTRUCTIONS = (
     "ExpenseGauge: read an account's categories and budgets, then submit confirmed "
     "expense/refund transactions. Batches are all-or-nothing; read the per-item feedback "
-    "in a rejected result. confirm_duplicate is single-use."
+    "in a rejected result. confirm_duplicate is single-use. A level-2 category may carry "
+    "a `description` written by the user (what belongs / does not belong there); follow it "
+    "when classifying."
 )
 
 
@@ -65,7 +67,9 @@ def create_mcp_server() -> MCPServer:
     async def list_categories(account_id: int) -> dict[str, Any]:
         """Return the account's full two-level category tree.
 
-        Transactions may only use level-2 categories (the `children`).
+        Transactions may only use level-2 categories (the `children`). A level-2 category
+        may carry a `description` written by the user (what belongs / does not belong
+        there); follow it when classifying. `description` is null when none was written.
         """
         try:
             tree = await _run(lambda db: category_service.get_tree(db, account_id))

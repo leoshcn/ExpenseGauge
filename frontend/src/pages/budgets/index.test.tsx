@@ -9,7 +9,7 @@ import type * as Queries from "@/api/queries";
 
 const tree: Schemas["CategoryTree"] = {
   account_id: 1,
-  categories: [{ id: 1, name: "餐饮", children: [{ id: 11, name: "买菜" }] }],
+  categories: [{ id: 1, name: "餐饮", children: [{ id: 11, name: "买菜", description: null }] }],
 };
 
 const budgets = (month: string, amount: string | null): Schemas["BudgetsOut"] => ({

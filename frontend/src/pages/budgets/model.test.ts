@@ -137,8 +137,8 @@ describe("groupLines", () => {
     const tree: Schemas["CategoryTree"] = {
       account_id: 1,
       categories: [
-        { id: 2, name: "交通", children: [{ id: 21, name: "地铁" }] },
-        { id: 1, name: "餐饮", children: [{ id: 12, name: "外卖" }, { id: 11, name: "买菜" }] },
+        { id: 2, name: "交通", children: [{ id: 21, name: "地铁", description: null }] },
+        { id: 1, name: "餐饮", children: [{ id: 12, name: "外卖", description: null }, { id: 11, name: "买菜", description: null }] },
         { id: 3, name: "空的", children: [] },
       ],
     };

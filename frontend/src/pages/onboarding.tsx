@@ -247,6 +247,9 @@ function CategoryStep({ account }: { account: Schemas["AccountOut"] }) {
               {S.onboarding.categories.finish}
             </Button>
             <p className="text-center text-xs text-muted-foreground">{S.onboarding.categories.finishHint}</p>
+            <p className="text-center text-xs text-muted-foreground">
+              {S.onboarding.categories.descriptionHint}
+            </p>
           </div>
         </>
       )}

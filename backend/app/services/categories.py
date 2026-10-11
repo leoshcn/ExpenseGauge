@@ -1,4 +1,10 @@
-"""Two-level categories. Level 1 groups; only level 2 takes transactions and budgets."""
+"""Two-level categories. Level 1 groups; only level 2 takes transactions and budgets.
+
+Only level 2 has a `description` (the user's note for the classifying agent); level-1
+rows always keep it NULL.
+"""
+
+from typing import Any
 
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
@@ -25,7 +31,9 @@ def build_nodes(categories: list[Category]) -> list[CategoryNode]:
     }
     for c in categories:
         if c.parent_id is not None:
-            nodes[c.parent_id].children.append(CategoryLeaf(id=c.id, name=c.name))
+            nodes[c.parent_id].children.append(
+                CategoryLeaf(id=c.id, name=c.name, description=c.description)
+            )
     return list(nodes.values())
 
 
@@ -51,8 +59,25 @@ def _commit_name(db: Session) -> None:
         raise conflict("CATEGORY_NAME_TAKEN", "同一层级下已存在同名分类") from exc
 
 
-def create_category(db: Session, account_id: int, name: str, parent_id: int | None) -> Category:
+def _normalize_description(description: str | None) -> str | None:
+    """Blank (already stripped by the schema) means no description."""
+    return description or None
+
+
+def _check_description(parent_id: int | None, description: str | None) -> None:
+    if parent_id is None and description is not None:
+        raise invalid("DESCRIPTION_NOT_ALLOWED", "一级分类不支持填写说明")
+
+
+def create_category(
+    db: Session,
+    account_id: int,
+    name: str,
+    parent_id: int | None,
+    description: str | None = None,
+) -> Category:
     get_account(db, account_id)
+    description = _normalize_description(description)
     if parent_id is not None:
         parent = get_by_id(db, Category, parent_id)
         if parent is None or parent.account_id != account_id:
@@ -65,15 +90,24 @@ def create_category(db: Session, account_id: int, name: str, parent_id: int | No
                 "分类只支持两级，上级分类必须是一级分类",
                 {"parent_id": parent_id},
             )
-    category = Category(account_id=account_id, parent_id=parent_id, name=name)
+    _check_description(parent_id, description)
+    category = Category(
+        account_id=account_id, parent_id=parent_id, name=name, description=description
+    )
     db.add(category)
     _commit_name(db)
     return category
 
 
-def rename_category(db: Session, category_id: int, name: str) -> Category:
+def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Category:
+    """Applies only the given fields (`name`, `description`); the others keep their value."""
     category = get_category(db, category_id)
-    category.name = name
+    if "description" in fields:
+        description = _normalize_description(fields["description"])
+        _check_description(category.parent_id, description)
+        category.description = description
+    if "name" in fields:
+        category.name = fields["name"]
     _commit_name(db)
     return category
 

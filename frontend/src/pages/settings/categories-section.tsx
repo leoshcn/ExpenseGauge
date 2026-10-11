@@ -3,7 +3,7 @@ import { FolderTreeIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 
 import { errorMessage, type Schemas } from "@/api/client";
-import { categoriesQuery, createCategory, deleteCategory, keys, renameCategory } from "@/api/queries";
+import { categoriesQuery, createCategory, deleteCategory, keys, updateCategory } from "@/api/queries";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
@@ -11,16 +11,21 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { S } from "@/strings.zh";
 
+import { CategoryDialog } from "./category-dialog";
 import { NameDialog } from "./name-dialog";
 import { SectionCard } from "./section-card";
 
 const T = S.settings.categories;
 
-type Target = { id: number; name: string; level: 1 | 2 };
+/** Level 1 has a name only; level 2 also has a description. */
+type Target =
+  | { id: number; name: string; level: 1 }
+  | { id: number; name: string; level: 2; description: string | null };
 type Dialog =
   | { kind: "add-parent" }
   | { kind: "add-child"; parent: Target }
   | { kind: "rename"; target: Target }
+  | { kind: "edit-child"; target: Extract<Target, { level: 2 }> }
   | { kind: "delete"; target: Target };
 
 function RowActions({
@@ -49,9 +54,9 @@ function RowActions({
         variant="ghost"
         size="icon-sm"
         className="text-muted-foreground"
-        onClick={() => onDialog({ kind: "rename", target })}
-        aria-label={T.rename(target.name)}
-        title={T.rename(target.name)}
+        onClick={() => onDialog(target.level === 1 ? { kind: "rename", target } : { kind: "edit-child", target })}
+        aria-label={target.level === 1 ? T.rename(target.name) : T.edit(target.name)}
+        title={target.level === 1 ? T.rename(target.name) : T.edit(target.name)}
       >
         <PencilIcon />
       </Button>
@@ -104,7 +109,7 @@ function DeleteCategoryDialog({
   );
 }
 
-/** One account's two-level category tree: add, rename, delete (refused while in use). */
+/** One account's two-level category tree: add, rename or edit (level 2: name and description), delete (refused while in use). */
 export function CategoriesSection({
   account,
   accountPicker,
@@ -170,8 +175,18 @@ export function CategoriesSection({
                       key={child.id}
                       className="flex items-center gap-3 border-t py-1.5 pr-2 pl-9 sm:pr-3 sm:pl-12"
                     >
-                      <span className="min-w-0 flex-1 break-words">{child.name}</span>
-                      <RowActions target={{ id: child.id, name: child.name, level: 2 }} onDialog={setDialog} />
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words">{child.name}</p>
+                        {child.description ? (
+                          <p className="line-clamp-2 text-xs break-words whitespace-pre-line text-muted-foreground">
+                            {child.description}
+                          </p>
+                        ) : null}
+                      </div>
+                      <RowActions
+                        target={{ id: child.id, name: child.name, level: 2, description: child.description }}
+                        onDialog={setDialog}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -213,14 +228,13 @@ export function CategoriesSection({
         />
       ) : null}
       {dialog?.kind === "add-child" ? (
-        <NameDialog
+        <CategoryDialog
           title={T.addChild(dialog.parent.name)}
-          label={T.name}
           placeholder={T.childPlaceholder}
           submitLabel={T.create}
           pendingLabel={T.creating}
-          onSubmit={async (name) => {
-            await createCategory(account.id, { name, parent_id: dialog.parent.id });
+          onSubmit={async (fields) => {
+            await createCategory(account.id, { ...fields, parent_id: dialog.parent.id });
             await refresh();
           }}
           onClose={close}
@@ -234,7 +248,20 @@ export function CategoriesSection({
           submitLabel={S.common.save}
           pendingLabel={S.common.saving}
           onSubmit={async (name) => {
-            await renameCategory(dialog.target.id, { name });
+            await updateCategory(dialog.target.id, { name });
+            await refresh();
+          }}
+          onClose={close}
+        />
+      ) : null}
+      {dialog?.kind === "edit-child" ? (
+        <CategoryDialog
+          title={T.editTitle}
+          initial={{ name: dialog.target.name, description: dialog.target.description }}
+          submitLabel={S.common.save}
+          pendingLabel={S.common.saving}
+          onSubmit={async (_fields, changes) => {
+            await updateCategory(dialog.target.id, changes);
             await refresh();
           }}
           onClose={close}

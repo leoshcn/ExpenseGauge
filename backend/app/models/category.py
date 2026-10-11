@@ -35,3 +35,6 @@ class Category(Base):
     )
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"))
     name: Mapped[str] = mapped_column(String(100))
+    # What belongs (or does not) in a level-2 category, for the agent that classifies
+    # transactions. Level-1 rows always have NULL here; the service enforces it.
+    description: Mapped[str | None] = mapped_column(String(500))

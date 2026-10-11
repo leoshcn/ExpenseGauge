@@ -310,6 +310,18 @@
       "CategoryCreateIn": {
         "additionalProperties": false,
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "name": {
             "maxLength": 100,
             "minLength": 1,
@@ -335,7 +347,19 @@
         "type": "object"
       },
       "CategoryLeaf": {
+        "description": "A level-2 category. `description` is the user's note on what belongs here.",
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -347,7 +371,8 @@
         },
         "required": [
           "id",
-          "name"
+          "name",
+          "description"
         ],
         "title": "CategoryLeaf",
         "type": "object"
@@ -385,6 +410,17 @@
             "title": "Account Id",
             "type": "integer"
           },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -409,7 +445,8 @@
           "id",
           "account_id",
           "parent_id",
-          "name"
+          "name",
+          "description"
         ],
         "title": "CategoryOut",
         "type": "object"
@@ -437,7 +474,20 @@
       },
       "CategoryUpdateIn": {
         "additionalProperties": false,
+        "description": "Partial update: fields left out keep their value. `description` null or blank clears it.",
         "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
           "name": {
             "maxLength": 100,
             "minLength": 1,
@@ -445,9 +495,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "name"
-        ],
         "title": "CategoryUpdateIn",
         "type": "object"
       },
@@ -1919,7 +1966,8 @@
         ]
       },
       "patch": {
-        "operationId": "rename_category_api_v1_categories__category_id__patch",
+        "description": "Partial update: name and/or description (level 2 only). Omitted fields are kept.",
+        "operationId": "update_category_api_v1_categories__category_id__patch",
         "parameters": [
           {
             "in": "path",
@@ -1973,7 +2021,7 @@
             "description": "Any non-2xx response"
           }
         },
-        "summary": "Rename Category",
+        "summary": "Update Category",
         "tags": [
           "categories"
         ]

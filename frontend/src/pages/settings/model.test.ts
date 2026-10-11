@@ -2,7 +2,25 @@ import { describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/api/client";
 
-import { activeFirst, hermesConfig, mcpEndpoint } from "./model";
+import { activeFirst, categoryChanges, categoryFields, hermesConfig, mcpEndpoint } from "./model";
+
+describe("categoryFields / categoryChanges", () => {
+  it("trims, keeps inner newlines and stores a blank description as null", () => {
+    expect(categoryFields(" 超市 ", "  线下商超\n不含外卖 ")).toEqual({
+      name: "超市",
+      description: "线下商超\n不含外卖",
+    });
+    expect(categoryFields("超市", "   ")).toEqual({ name: "超市", description: null });
+  });
+
+  it("returns only what changed, or null", () => {
+    const initial = { name: "超市", description: "线下商超" };
+    expect(categoryChanges(initial, { name: "超市", description: "线下商超" })).toBeNull();
+    expect(categoryChanges(initial, { name: "商超", description: "线下商超" })).toEqual({ name: "商超" });
+    expect(categoryChanges(initial, { name: "超市", description: null })).toEqual({ description: null });
+    expect(categoryChanges({ name: "超市", description: null }, categoryFields("超市", " "))).toBeNull();
+  });
+});
 
 const token = (id: number, revoked_at: string | null = null): Schemas["TokenOut"] => ({
   id,

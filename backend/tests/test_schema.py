@@ -14,6 +14,7 @@ import app.models  # noqa: F401
 from alembic import command
 from app.db import Base, get_engine
 from tests.conftest import alembic_config
+from tests.test_auth import API
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
@@ -102,6 +103,7 @@ def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
         command.upgrade(config, "0002")
         assert amount_is_nullable() is True
         assert stored() == existing
+        command.upgrade(config, "head")  # the models need the later revisions too
 
         # The application works on the upgraded rows: read, then clear from a month.
         budgets = f"{ledger.base}/budgets"
@@ -120,6 +122,54 @@ def test_0002_applies_to_a_database_that_already_has_budgets(client, ledger):
         get_engine().dispose()
         command.upgrade(config, "head")
     assert amount_is_nullable() is True
+
+
+def test_0003_adds_category_description_to_existing_categories(client, ledger):
+    """Upgrading 0002 -> 0003 gives existing categories a NULL description; the downgrade
+    drops the column (and its text) and leaves the categories working."""
+
+    def has_description_column() -> bool:
+        with get_engine().connect() as connection:
+            return bool(
+                connection.scalar(
+                    text(
+                        "SELECT count(*) FROM information_schema.columns"
+                        " WHERE table_name = 'categories' AND column_name = 'description'"
+                    )
+                )
+            )
+
+    config = alembic_config()
+    tree_url = f"{ledger.base}/categories"
+    get_engine().dispose()
+    try:
+        command.downgrade(config, "0002")
+        assert has_description_column() is False
+
+        command.upgrade(config, "0003")
+        assert has_description_column() is True
+        children = [
+            c for node in client.get(tree_url).json()["categories"] for c in node["children"]
+        ]
+        assert [(c["name"], c["description"]) for c in children] == [
+            ("买菜", None),
+            ("外食", None),
+            ("地铁", None),
+        ]
+        described = client.patch(f"{API}/categories/{ledger.metro}", json={"description": "通勤"})
+        assert described.json()["description"] == "通勤"
+
+        get_engine().dispose()
+        command.downgrade(config, "0002")
+        assert has_description_column() is False
+        with get_engine().connect() as connection:
+            names = connection.scalars(text("SELECT name FROM categories ORDER BY id")).all()
+        assert names == ["餐饮", "买菜", "外食", "交通", "地铁"]
+    finally:
+        get_engine().dispose()
+        command.upgrade(config, "head")
+    assert has_description_column() is True
+    assert client.get(tree_url).json()["categories"][1]["children"][0]["description"] is None
 
 
 def test_exported_openapi_document_is_current(app):
