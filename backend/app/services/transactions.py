@@ -1,8 +1,13 @@
-"""Transactions: all-or-nothing batch submission with per-item feedback, list, edit, delete."""
+"""Transactions: all-or-nothing batch submission with per-item feedback, list, edit, delete.
+
+A batch comes from one payment channel. Categories are the global tree; a transaction's
+budget account is its category's, never stored on the transaction.
+"""
 
 import hashlib
 import re
 import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -24,9 +29,10 @@ from app.schemas.transaction import (
     TransactionPage,
     TransactionUpdateIn,
 )
-from app.services.accounts import get_account
+from app.services.budget_accounts import budget_account_names, get_budget_account
 from app.services.categories import build_nodes, load_categories
-from app.services.locks import lock_account_transactions
+from app.services.channels import channel_names, get_channel
+from app.services.locks import lock_channel_transactions
 
 _WHITESPACE = re.compile(r"\s+")
 CENT = Decimal("0.01")
@@ -40,10 +46,12 @@ def normalize_text(value: str) -> str:
 
 
 def compute_fingerprint(
-    account_id: int, day: date, amount: Decimal, counterparty: str, description: str
+    channel_id: int, day: date, amount: Decimal, counterparty: str, description: str
 ) -> str:
+    """Duplicates are looked for within one payment channel only: the same purchase seen
+    on two channels (e.g. a card and the wallet that charged it) is two records."""
     parts = [
-        str(account_id),
+        str(channel_id),
         day.isoformat(),
         f"{amount:.2f}",
         normalize_text(counterparty),
@@ -52,16 +60,36 @@ def compute_fingerprint(
     return hashlib.sha256("|".join(parts).encode()).hexdigest()
 
 
-def to_out(transaction: Transaction, categories: dict[int, Category]) -> TransactionOut:
-    category = categories[transaction.category_id]
-    parent = categories[category.parent_id]
+@dataclass(frozen=True)
+class _Names:
+    """What a `TransactionOut` needs besides the row: categories and display names."""
+
+    categories: dict[int, Category]
+    channels: dict[int, str]
+    budget_accounts: dict[int, str]
+
+
+def _load_names(db: Session) -> _Names:
+    return _Names(
+        categories={c.id: c for c in load_categories(db)},
+        channels=channel_names(db),
+        budget_accounts=budget_account_names(db),
+    )
+
+
+def to_out(transaction: Transaction, names: _Names) -> TransactionOut:
+    category = names.categories[transaction.category_id]
+    parent = names.categories[category.parent_id]
     return TransactionOut(
         id=transaction.id,
-        account_id=transaction.account_id,
+        channel_id=transaction.channel_id,
+        channel_name=names.channels[transaction.channel_id],
         category_id=category.id,
         category_name=category.name,
         parent_category_id=parent.id,
         parent_category_name=parent.name,
+        budget_account_id=category.budget_account_id,
+        budget_account_name=names.budget_accounts[category.budget_account_id],
         date=transaction.date,
         amount=transaction.amount,
         counterparty=transaction.counterparty,
@@ -84,15 +112,15 @@ def _field_errors(exc: ValidationError) -> list[dict[str, str]]:
 
 
 def submit_batch(
-    db: Session, account_id: int, raw_items: list[Any], api_token_id: int | None = None
+    db: Session, channel_id: int, raw_items: list[Any], api_token_id: int | None = None
 ) -> BatchAcceptedOut:
     """Stores every item or none.
 
     Raises `BATCH_REJECTED` (409) carrying one feedback entry per item when any item is
     rejected. Validation and insert share one database transaction that holds the
-    account's advisory lock, so concurrent batches cannot both pass the duplicate check.
+    channel's advisory lock, so concurrent batches cannot both pass the duplicate check.
     """
-    get_account(db, account_id)
+    get_channel(db, channel_id)
     if not isinstance(raw_items, list) or not 1 <= len(raw_items) <= MAX_BATCH_ITEMS:
         raise invalid(
             "INVALID_BATCH_SIZE",
@@ -100,11 +128,11 @@ def submit_batch(
             {"max_items": MAX_BATCH_ITEMS},
         )
 
-    lock_account_transactions(db, account_id)
+    lock_channel_transactions(db, channel_id)
 
-    category_rows = load_categories(db, account_id)
-    categories = {c.id: c for c in category_rows}
-    nodes = build_nodes(category_rows)
+    names = _load_names(db)
+    categories = names.categories
+    nodes = build_nodes(list(categories.values()), names.budget_accounts)
     valid_categories = [node.model_dump(mode="json") for node in nodes]
     children_of = {node.id: node.children for node in nodes}
 
@@ -126,8 +154,7 @@ def submit_batch(
             feedback[index] = _rejected(
                 index,
                 "CATEGORY_NOT_FOUND",
-                f"分类 {item.category_id} 不存在或不属于该账户，"
-                "请从 valid_categories 的二级分类中选择",
+                f"分类 {item.category_id} 不存在，请从 valid_categories 的二级分类中选择",
                 valid_categories=valid_categories,
             )
             continue
@@ -142,7 +169,7 @@ def submit_batch(
             )
             continue
         fingerprint = compute_fingerprint(
-            account_id, item.date, item.amount, item.counterparty, item.description
+            channel_id, item.date, item.amount, item.counterparty, item.description
         )
         parsed[index] = (item, fingerprint)
 
@@ -151,7 +178,7 @@ def submit_batch(
     if fingerprints:
         rows = db.scalars(
             select(Transaction)
-            .where(Transaction.account_id == account_id, Transaction.fingerprint.in_(fingerprints))
+            .where(Transaction.channel_id == channel_id, Transaction.fingerprint.in_(fingerprints))
             .order_by(Transaction.id.desc())
         )
         for row in rows:  # descending, so the earliest stored match wins
@@ -170,9 +197,9 @@ def submit_batch(
                 feedback[index] = _rejected(
                     index,
                     "SUSPECTED_DUPLICATE",
-                    f"疑似重复：系统中已有一条 {existing.date.isoformat()} "
+                    f"疑似重复：该渠道已有一条 {existing.date.isoformat()} "
                     f"{existing.counterparty} {existing.amount:.2f} 的流水",
-                    existing=to_out(existing, categories).model_dump(mode="json"),
+                    existing=to_out(existing, names).model_dump(mode="json"),
                     hint=DUPLICATE_HINT,
                 )
             else:
@@ -187,7 +214,7 @@ def submit_batch(
         feedback[index] = {"index": index, "status": "ok"}
         to_insert.append(
             Transaction(
-                account_id=account_id,
+                channel_id=channel_id,
                 category_id=item.category_id,
                 date=item.date,
                 amount=item.amount.quantize(CENT),  # as NUMERIC(14,2) stores it
@@ -213,32 +240,39 @@ def submit_batch(
 
     db.add_all(to_insert)
     db.flush()
-    result = BatchAcceptedOut(transactions=[to_out(row, categories) for row in to_insert])
+    result = BatchAcceptedOut(transactions=[to_out(row, names) for row in to_insert])
     db.commit()
     return result
 
 
 def list_transactions(
     db: Session,
-    account_id: int,
     month: str | None = None,
+    channel_id: int | None = None,
+    budget_account_id: int | None = None,
     category_id: int | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> TransactionPage:
-    """Newest first. A level-1 `category_id` matches all of its level-2 children."""
-    get_account(db, account_id)
-    categories = {c.id: c for c in load_categories(db, account_id)}
-    conditions = [Transaction.account_id == account_id]
+    """Every channel, newest first. Filters combine; a level-1 `category_id` matches all of
+    its level-2 children, and `budget_account_id` the categories that belong to it now."""
+    names = _load_names(db)
+    categories = names.categories
+    conditions = []
     if month:
         start = parse_month(month)
         conditions += [Transaction.date >= start, Transaction.date < add_months(start, 1)]
+    if channel_id is not None:
+        get_channel(db, channel_id, status_code=422)
+        conditions.append(Transaction.channel_id == channel_id)
+    if budget_account_id is not None:
+        get_budget_account(db, budget_account_id, status_code=422)
+        ids = [c.id for c in categories.values() if c.budget_account_id == budget_account_id]
+        conditions.append(Transaction.category_id.in_(ids))
     if category_id is not None:
         category = categories.get(category_id)
         if category is None:
-            raise invalid(
-                "CATEGORY_NOT_FOUND", "分类不存在或不属于该账户", {"category_id": category_id}
-            )
+            raise invalid("CATEGORY_NOT_FOUND", "分类不存在", {"category_id": category_id})
         if category.parent_id is None:
             ids = [c.id for c in categories.values() if c.parent_id == category_id]
             conditions.append(Transaction.category_id.in_(ids))
@@ -253,7 +287,7 @@ def list_transactions(
         .offset((page - 1) * page_size)
     )
     return TransactionPage(
-        items=[to_out(row, categories) for row in rows],
+        items=[to_out(row, names) for row in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -270,21 +304,22 @@ def _get_transaction(db: Session, transaction_id: int) -> Transaction:
 def update_transaction(
     db: Session, transaction_id: int, changes: TransactionUpdateIn
 ) -> TransactionOut:
-    """Only `category_id` and `note` change; fields absent from the request are untouched."""
+    """Only `category_id` and `note` change; fields absent from the request are untouched.
+    The channel is fixed. Any level-2 category may be chosen."""
     transaction = _get_transaction(db, transaction_id)
-    categories = {c.id: c for c in load_categories(db, transaction.account_id)}
+    names = _load_names(db)
     if "category_id" in changes.model_fields_set:
         details = {"category_id": changes.category_id}
-        category = categories.get(changes.category_id)
+        category = names.categories.get(changes.category_id)
         if category is None:
-            raise invalid("CATEGORY_NOT_FOUND", "分类不存在或不属于该流水所在账户", details)
+            raise invalid("CATEGORY_NOT_FOUND", "分类不存在", details)
         if category.parent_id is None:
             raise invalid("CATEGORY_NOT_LEAF", "流水只能归入二级分类", details)
         transaction.category_id = category.id
     if "note" in changes.model_fields_set:
         transaction.note = changes.note
     db.commit()
-    return to_out(transaction, categories)
+    return to_out(transaction, names)
 
 
 def delete_transaction(db: Session, transaction_id: int) -> None:

@@ -2,32 +2,44 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api, ApiError, type Schemas, unwrap } from "./client";
 
+/** A budget-account scope: one budget account's id, or `null` for all of them. */
+export type BudgetScope = number | null;
+
+/** How a scope appears in a query key ("all" rather than `null`, so keys stay readable). */
+const scopeKey = (scope: BudgetScope) => (scope === null ? "all" : scope);
+
 /** Query keys in one place, so invalidation never guesses at a key's shape. */
 export const keys = {
   setupStatus: ["setup-status"] as const,
   me: ["me"] as const,
-  /** Also the prefix of everything below: invalidating it refreshes every account's data. */
-  accounts: ["accounts"] as const,
-  /** Prefix of all data of one account (categories, summaries, transactions, budgets). */
-  account: (accountId: number) => ["accounts", accountId] as const,
-  categories: (accountId: number) => ["accounts", accountId, "categories"] as const,
-  /** Prefix of both Dashboard queries; invalidated by every change that moves a figure. */
-  summaries: (accountId: number) => ["accounts", accountId, "summary"] as const,
-  monthlySummary: (accountId: number, from: string, to: string) =>
-    ["accounts", accountId, "summary", "monthly", from, to] as const,
-  monthDetail: (accountId: number, month: string) =>
-    ["accounts", accountId, "summary", "month", month] as const,
-  transactions: (accountId: number) => ["accounts", accountId, "transactions"] as const,
-  transactionPage: (accountId: number, filter: TransactionFilter) =>
-    ["accounts", accountId, "transactions", filter] as const,
-  budgets: (accountId: number) => ["accounts", accountId, "budgets"] as const,
-  budgetsAt: (accountId: number, month: string) => ["accounts", accountId, "budgets", month] as const,
+  /** The base currency. */
+  settings: ["settings"] as const,
+  budgetAccounts: ["budget-accounts"] as const,
+  channels: ["channels"] as const,
+  /**
+   * Prefix of everything computed from the ledger (categories, summaries, transactions,
+   * budgets): invalidating it refreshes every view of every scope.
+   */
+  ledger: ["ledger"] as const,
+  categories: (scope: BudgetScope) => ["ledger", "categories", scopeKey(scope)] as const,
+  /** Prefix of all Dashboard queries; invalidated by every change that moves a figure. */
+  summaries: ["ledger", "summary"] as const,
+  monthlySummary: (scope: BudgetScope, from: string, to: string) =>
+    ["ledger", "summary", "monthly", scopeKey(scope), from, to] as const,
+  monthDetail: (scope: BudgetScope, month: string) =>
+    ["ledger", "summary", "month", scopeKey(scope), month] as const,
+  transactions: ["ledger", "transactions"] as const,
+  transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
+  budgets: ["ledger", "budgets"] as const,
+  budgetsAt: (scope: BudgetScope, month: string) => ["ledger", "budgets", scopeKey(scope), month] as const,
   tokens: ["tokens"] as const,
 };
 
 /** The transaction list's query parameters; `null` means "not filtered". */
 export type TransactionFilter = {
   month: string | null;
+  channelId: number | null;
+  budgetAccountId: number | null;
   categoryId: number | null;
   page: number;
   pageSize: number;
@@ -53,54 +65,63 @@ export const meQuery = queryOptions({
   staleTime: Infinity,
 });
 
-export const accountsQuery = queryOptions({
-  queryKey: keys.accounts,
-  queryFn: () => unwrap(api.GET("/api/v1/accounts")),
+/** The base currency; `currency` is null until onboarding sets it. */
+export const settingsQuery = queryOptions({
+  queryKey: keys.settings,
+  queryFn: () => unwrap(api.GET("/api/v1/settings")),
 });
 
-export const categoriesQuery = (accountId: number) =>
+export const budgetAccountsQuery = queryOptions({
+  queryKey: keys.budgetAccounts,
+  queryFn: () => unwrap(api.GET("/api/v1/budget-accounts")),
+});
+
+export const channelsQuery = queryOptions({
+  queryKey: keys.channels,
+  queryFn: () => unwrap(api.GET("/api/v1/channels")),
+});
+
+/** The global tree, or only one budget account's level-2 categories and their parents. */
+export const categoriesQuery = (scope: BudgetScope = null) =>
   queryOptions({
-    queryKey: keys.categories(accountId),
+    queryKey: keys.categories(scope),
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/categories", { params: { query: { budget_account_id: scope } } })),
+  });
+
+export const monthlySummaryQuery = (scope: BudgetScope, from: string, to: string) =>
+  queryOptions({
+    queryKey: keys.monthlySummary(scope, from, to),
     queryFn: () =>
       unwrap(
-        api.GET("/api/v1/accounts/{account_id}/categories", {
-          params: { path: { account_id: accountId } },
+        api.GET("/api/v1/summary/monthly", {
+          params: { query: { from, to, budget_account_id: scope } },
         }),
       ),
   });
 
-export const monthlySummaryQuery = (accountId: number, from: string, to: string) =>
+export const monthDetailQuery = (scope: BudgetScope, month: string) =>
   queryOptions({
-    queryKey: keys.monthlySummary(accountId, from, to),
+    queryKey: keys.monthDetail(scope, month),
     queryFn: () =>
       unwrap(
-        api.GET("/api/v1/accounts/{account_id}/summary/monthly", {
-          params: { path: { account_id: accountId }, query: { from, to } },
+        api.GET("/api/v1/summary/months/{month}", {
+          params: { path: { month }, query: { budget_account_id: scope } },
         }),
       ),
   });
 
-export const monthDetailQuery = (accountId: number, month: string) =>
+export const transactionPageQuery = (filter: TransactionFilter) =>
   queryOptions({
-    queryKey: keys.monthDetail(accountId, month),
+    queryKey: keys.transactionPage(filter),
     queryFn: () =>
       unwrap(
-        api.GET("/api/v1/accounts/{account_id}/summary/months/{month}", {
-          params: { path: { account_id: accountId, month } },
-        }),
-      ),
-  });
-
-export const transactionPageQuery = (accountId: number, filter: TransactionFilter) =>
-  queryOptions({
-    queryKey: keys.transactionPage(accountId, filter),
-    queryFn: () =>
-      unwrap(
-        api.GET("/api/v1/accounts/{account_id}/transactions", {
+        api.GET("/api/v1/transactions", {
           params: {
-            path: { account_id: accountId },
             query: {
               month: filter.month,
+              channel_id: filter.channelId,
+              budget_account_id: filter.budgetAccountId,
               category_id: filter.categoryId,
               page: filter.page,
               page_size: filter.pageSize,
@@ -110,16 +131,12 @@ export const transactionPageQuery = (accountId: number, filter: TransactionFilte
       ),
   });
 
-/** The budget in force for each level-2 category in `month`. */
-export const budgetsQuery = (accountId: number, month: string) =>
+/** The budget in force for each level-2 category (of the scope) in `month`. */
+export const budgetsQuery = (scope: BudgetScope, month: string) =>
   queryOptions({
-    queryKey: keys.budgetsAt(accountId, month),
+    queryKey: keys.budgetsAt(scope, month),
     queryFn: () =>
-      unwrap(
-        api.GET("/api/v1/accounts/{account_id}/budgets", {
-          params: { path: { account_id: accountId }, query: { month } },
-        }),
-      ),
+      unwrap(api.GET("/api/v1/budgets", { params: { query: { month, budget_account_id: scope } } })),
   });
 
 export const tokensQuery = queryOptions({
@@ -136,21 +153,36 @@ export const login = (body: Schemas["LoginIn"]) => unwrap(api.POST("/api/v1/auth
 
 export const logout = () => unwrap(api.POST("/api/v1/auth/logout"));
 
-export const createAccount = (body: Schemas["AccountCreateIn"]) =>
-  unwrap(api.POST("/api/v1/accounts", { body }));
+/** Sets the base currency. Only the label changes; no amount is converted. */
+export const updateSettings = (body: Schemas["SettingsUpdateIn"]) =>
+  unwrap(api.PUT("/api/v1/settings", { body }));
 
-export const createCategory = (accountId: number, body: Schemas["CategoryCreateIn"]) =>
+export const createBudgetAccount = (body: Schemas["BudgetAccountCreateIn"]) =>
+  unwrap(api.POST("/api/v1/budget-accounts", { body }));
+
+export const renameBudgetAccount = (budgetAccountId: number, body: Schemas["BudgetAccountUpdateIn"]) =>
   unwrap(
-    api.POST("/api/v1/accounts/{account_id}/categories", {
-      params: { path: { account_id: accountId } },
+    api.PATCH("/api/v1/budget-accounts/{budget_account_id}", {
+      params: { path: { budget_account_id: budgetAccountId } },
       body,
     }),
   );
 
-export const renameAccount = (accountId: number, body: Schemas["AccountUpdateIn"]) =>
-  unwrap(api.PATCH("/api/v1/accounts/{account_id}", { params: { path: { account_id: accountId } }, body }));
+export const createChannel = (body: Schemas["ChannelCreateIn"]) =>
+  unwrap(api.POST("/api/v1/channels", { body }));
 
-export const renameCategory = (categoryId: number, body: Schemas["CategoryUpdateIn"]) =>
+export const renameChannel = (channelId: number, body: Schemas["ChannelUpdateIn"]) =>
+  unwrap(api.PATCH("/api/v1/channels/{channel_id}", { params: { path: { channel_id: channelId } }, body }));
+
+/** A level-2 category (with `parent_id`) needs `budget_account_id`; a level-1 one must not have it. */
+export const createCategory = (body: Schemas["CategoryCreateIn"]) =>
+  unwrap(api.POST("/api/v1/categories", { body }));
+
+/**
+ * Only the fields present in `body` change; `description: null` removes the description,
+ * `budget_account_id` moves a level-2 category (with its history) to another budget account.
+ */
+export const updateCategory = (categoryId: number, body: Schemas["CategoryUpdateIn"]) =>
   unwrap(api.PATCH("/api/v1/categories/{category_id}", { params: { path: { category_id: categoryId } }, body }));
 
 export const deleteCategory = (categoryId: number) =>
@@ -173,8 +205,7 @@ export const deleteTransaction = (transactionId: number) =>
   );
 
 /** Sets each item from `effective_from` on; an `amount` of null clears that budget. */
-export const putBudgets = (accountId: number, body: Schemas["BudgetsPutIn"]) =>
-  unwrap(api.PUT("/api/v1/accounts/{account_id}/budgets", { params: { path: { account_id: accountId } }, body }));
+export const putBudgets = (body: Schemas["BudgetsPutIn"]) => unwrap(api.PUT("/api/v1/budgets", { body }));
 
 export const createToken = (body: Schemas["TokenCreateIn"]) => unwrap(api.POST("/api/v1/tokens", { body }));
 

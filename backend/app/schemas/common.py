@@ -21,6 +21,8 @@ Month = Annotated[str, StringConstraints(pattern=MONTH_PATTERN)]
 # Money is NUMERIC(14,2) in the database and a decimal string ("12.30") in JSON.
 Money = Annotated[Decimal, Field(max_digits=14, decimal_places=2)]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100), NoNul]
+# Free text, newlines allowed. Blank after stripping is stored as NULL (by the service).
+Description = Annotated[str, StringConstraints(strip_whitespace=True, max_length=500), NoNul]
 
 
 class Schema(BaseModel):

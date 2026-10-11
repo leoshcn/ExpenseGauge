@@ -9,29 +9,70 @@ export const PAGE_SIZE = 50;
 /** How many months back the month filter offers, counting the current one. */
 export const MONTH_OPTIONS = 24;
 
+/** The lists a URL filter is checked against; `undefined` while that list is loading. */
+export type FilterLists = {
+  tree: Schemas["CategoryTree"] | undefined;
+  channels: readonly Schemas["ChannelOut"][] | undefined;
+  budgetAccounts: readonly Schemas["BudgetAccountOut"][] | undefined;
+};
+
+/** A positive integer id from the URL that is in `ids` (or not yet checkable), else null. */
+function knownId(raw: string | null, ids: readonly number[] | undefined): number | null {
+  const id = Number(raw);
+  if (raw === null || !Number.isInteger(id) || id <= 0) return null;
+  return ids === undefined || ids.includes(id) ? id : null;
+}
+
 /**
  * The filter from the URL. Anything unreadable falls back to "not filtered" instead of
- * reaching the API: a malformed month, a category that is not in this account's tree
- * (checked once the tree is known), a page that is not a positive integer.
+ * reaching the API: a malformed month, a channel, budget account or category that does
+ * not exist (checked once its list is known), a page that is not a positive integer.
  */
-export function readFilter(
-  params: URLSearchParams,
-  tree: Schemas["CategoryTree"] | undefined,
-): TransactionFilter {
+export function readFilter(params: URLSearchParams, lists: FilterLists): TransactionFilter {
   const month = params.get("month");
-  const category = Number(params.get("category"));
   const page = Number(params.get("page"));
-  const known =
-    tree === undefined ||
-    tree.categories.some(
-      (parent) => parent.id === category || parent.children.some((child) => child.id === category),
-    );
+  const categoryIds = lists.tree?.categories.flatMap((parent) => [
+    parent.id,
+    ...parent.children.map((child) => child.id),
+  ]);
   return {
     month: isMonth(month) ? month : null,
-    categoryId: Number.isInteger(category) && category > 0 && known ? category : null,
+    channelId: knownId(params.get("channel"), lists.channels?.map((channel) => channel.id)),
+    budgetAccountId: knownId(
+      params.get("budget_account"),
+      lists.budgetAccounts?.map((account) => account.id),
+    ),
+    categoryId: knownId(params.get("category"), categoryIds),
     page: Number.isInteger(page) && page > 0 ? page : 1,
     pageSize: PAGE_SIZE,
   };
+}
+
+/** Whether the URL names an id that cannot be checked yet because its list is loading. */
+export function awaitsLists(params: URLSearchParams, lists: FilterLists): boolean {
+  return (
+    (params.has("channel") && lists.channels === undefined) ||
+    (params.has("budget_account") && lists.budgetAccounts === undefined) ||
+    (params.has("category") && lists.tree === undefined)
+  );
+}
+
+/** Whether any filter (not the page) is in effect. */
+export function isFiltered(filter: TransactionFilter): boolean {
+  return (
+    filter.month !== null ||
+    filter.channelId !== null ||
+    filter.budgetAccountId !== null ||
+    filter.categoryId !== null
+  );
+}
+
+/** The budget account a level-2 category belongs to, or null if it is not in the tree. */
+export function budgetAccountOf(
+  tree: Schemas["CategoryTree"],
+  categoryId: number,
+): Schemas["BudgetAccountOut"] | null {
+  return findCategory(tree, categoryId)?.child?.budget_account ?? null;
 }
 
 /** The current month and the ones before it, newest first; `selected` is kept if older. */

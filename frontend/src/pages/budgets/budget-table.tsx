@@ -113,12 +113,15 @@ export function BudgetTable({
   groups,
   draft,
   currency,
+  showBudgetAccount = false,
   onChange,
   className,
 }: {
   groups: readonly BudgetGroup[];
   draft: BudgetDraft;
   currency: string;
+  /** Name each row's budget account (the "全部" view, where rows of several are mixed). */
+  showBudgetAccount?: boolean;
   onChange: (categoryId: number, text: string) => void;
   className?: string;
 }) {
@@ -194,6 +197,12 @@ export function BudgetTable({
                             </span>
                           ) : null}
                         </div>
+                        {showBudgetAccount ? (
+                          <div className="mt-0.5 text-xs text-muted-foreground">
+                            <span className="sr-only">{T.budgetAccountLabel}</span>
+                            {line.budget_account_name}
+                          </div>
+                        ) : null}
                         <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
                           {line.amount === null ? (
                             T.noBudget

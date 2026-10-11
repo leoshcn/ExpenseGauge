@@ -12,7 +12,7 @@ describe("createQueryClient", () => {
     const client = createQueryClient();
     client.setQueryData(keys.me, user);
     await client
-      .fetchQuery({ queryKey: keys.accounts, queryFn: () => Promise.reject(expired) })
+      .fetchQuery({ queryKey: keys.channels, queryFn: () => Promise.reject(expired) })
       .catch(() => {});
     expect(client.getQueryData(keys.me)).toBeNull();
   });

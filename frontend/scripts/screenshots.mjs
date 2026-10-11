@@ -98,18 +98,20 @@ for (const viewport of Object.keys(VIEWPORTS)) {
 // States, in one theme each: other accounts, a month with a negative actual, failures.
 for (const viewport of Object.keys(VIEWPORTS)) {
   const { context, page } = await open(browser, viewport, "light");
-  const accounts = await (await context.request.get(`${BASE}/api/v1/accounts`)).json();
-  const byName = (name) => accounts.find((account) => account.name === name)?.id;
+  const budgetAccounts = await (await context.request.get(`${BASE}/api/v1/budget-accounts`)).json();
+  const byName = (name) => budgetAccounts.find((account) => account.name === name)?.id;
 
-  const usd = byName("美元信用卡");
-  if (usd) {
-    await page.goto(`${BASE}/dashboard?account=${usd}`);
+  // One budget account: only its level-2 categories and their parents.
+  const fixed = byName("固定");
+  if (fixed) {
+    await page.goto(`${BASE}/dashboard?scope=${fixed}`);
     await ready(page);
-    await capture(page, `dashboard-${viewport}-usd-account`);
+    await page.getByRole("button", { name: "全部展开" }).click();
+    await capture(page, `dashboard-${viewport}-budget-account`);
   }
   const empty = byName("旅行基金");
   if (empty) {
-    await page.goto(`${BASE}/dashboard?account=${empty}`);
+    await page.goto(`${BASE}/dashboard?scope=${empty}`);
     await page.getByText("还没有流水").waitFor();
     await capture(page, `dashboard-${viewport}-empty`);
   }
@@ -123,7 +125,7 @@ for (const viewport of Object.keys(VIEWPORTS)) {
   await capture(page, `dashboard-${viewport}-refund-month`);
 
   // The API failing: the error envelope's message and code are shown with a retry.
-  await page.route("**/api/v1/accounts/*/summary/**", (route) =>
+  await page.route("**/api/v1/summary/**", (route) =>
     route.fulfill({
       status: 500,
       contentType: "application/json",
@@ -139,7 +141,7 @@ for (const viewport of Object.keys(VIEWPORTS)) {
 // Loading skeleton: hold the summary requests open.
 {
   const { context, page } = await open(browser, "desktop", "light");
-  await page.route("**/api/v1/accounts/*/summary/**", () => {});
+  await page.route("**/api/v1/summary/**", () => {});
   await page.goto(`${BASE}/dashboard`);
   await page.getByRole("status").waitFor();
   await capture(page, "dashboard-desktop-loading");
@@ -173,8 +175,9 @@ if (want("transactions")) {
   }
   for (const viewport of Object.keys(VIEWPORTS)) {
     const { context, page } = await open(browser, viewport, "light");
-    const accounts = await (await context.request.get(`${BASE}/api/v1/accounts`)).json();
-    const tree = await (await context.request.get(`${BASE}/api/v1/accounts/${accounts[0].id}/categories`)).json();
+    const channels = await (await context.request.get(`${BASE}/api/v1/channels`)).json();
+    const budgetAccounts = await (await context.request.get(`${BASE}/api/v1/budget-accounts`)).json();
+    const tree = await (await context.request.get(`${BASE}/api/v1/categories`)).json();
     const now = new Date();
     const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
@@ -182,6 +185,11 @@ if (want("transactions")) {
     await page.goto(`${BASE}/transactions?month=${month}&category=${tree.categories[0].id}`);
     await settled(page);
     await capture(page, `transactions-${viewport}-filtered`);
+
+    // Filtered to one payment channel and one budget account.
+    await page.goto(`${BASE}/transactions?channel=${channels[0].id}&budget_account=${budgetAccounts[0].id}`);
+    await settled(page);
+    await capture(page, `transactions-${viewport}-channel-budget-account`);
 
     // The edit dialog (opened and cancelled), and the delete confirmation.
     await page.goto(`${BASE}/transactions`);
@@ -198,12 +206,6 @@ if (want("transactions")) {
     await captureScreen(page, `transactions-${viewport}-delete`);
     await page.getByRole("alertdialog").getByRole("button", { name: "取消" }).click();
 
-    const empty = accounts.find((account) => account.name === "旅行基金");
-    if (empty) {
-      await page.goto(`${BASE}/transactions?account=${empty.id}`);
-      await page.getByText("还没有流水").waitFor();
-      await capture(page, `transactions-${viewport}-empty`);
-    }
     await page.goto(`${BASE}/transactions?category=${tree.categories.at(-1).children.at(-1).id}&month=2000-01`);
     await page.getByText("没有符合条件的流水").waitFor();
     await capture(page, `transactions-${viewport}-no-match`);
@@ -239,7 +241,16 @@ if (want("budgets")) {
     await settled(page);
     await capture(page, `budgets-${viewport}-earlier-month`);
 
-    await page.route("**/api/v1/accounts/*/budgets**", failure);
+    // One budget account: only its level-2 categories.
+    const budgetAccounts = await (await context.request.get(`${BASE}/api/v1/budget-accounts`)).json();
+    const fixed = budgetAccounts.find((account) => account.name === "固定");
+    if (fixed) {
+      await page.goto(`${BASE}/budgets?scope=${fixed.id}`);
+      await settled(page);
+      await capture(page, `budgets-${viewport}-budget-account`);
+    }
+
+    await page.route("**/api/v1/budgets**", failure);
     await page.goto(`${BASE}/budgets?month=2001-01`);
     await page.getByText("数据加载失败").waitFor();
     await capture(page, `budgets-${viewport}-error`);
@@ -251,7 +262,7 @@ if (want("settings")) {
   for (const viewport of Object.keys(VIEWPORTS)) {
     for (const theme of THEMES) {
       const { context, page } = await open(browser, viewport, theme);
-      for (const tab of ["accounts", "categories", "agent"]) {
+      for (const tab of ["ledger", "categories", "agent"]) {
         await page.goto(`${BASE}/settings?tab=${tab}`);
         await settled(page);
         await capture(page, `settings-${viewport}-${theme}-${tab}`);
@@ -276,11 +287,21 @@ if (want("settings")) {
     await captureScreen(page, `settings-${viewport}-category-add`);
     await page.keyboard.press("Escape");
 
+    // A level-2 category's dialog: name, budget account, description (cancelled).
+    await page.getByRole("button", { name: /^编辑「/ }).first().click();
+    await page.getByRole("dialog").waitFor();
+    await captureScreen(page, `settings-${viewport}-category-edit`);
+    await page.keyboard.press("Escape");
+
     await page.goto(`${BASE}/settings`);
     await settled(page);
-    await page.getByRole("button", { name: "添加账户" }).click();
+    await page.getByRole("button", { name: "添加预算账户" }).click();
     await page.getByRole("dialog").waitFor();
-    await captureScreen(page, `settings-${viewport}-account-add`);
+    await captureScreen(page, `settings-${viewport}-budget-account-add`);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "添加渠道" }).click();
+    await page.getByRole("dialog").waitFor();
+    await captureScreen(page, `settings-${viewport}-channel-add`);
     await page.keyboard.press("Escape");
 
     // The token shown once. The response is stubbed so no token is created.

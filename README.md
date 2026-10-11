@@ -1,9 +1,16 @@
 # ExpenseGauge
 
-A single-user personal expense manager. Per account, a dashboard compares actual spending
-with the budget by category. An AI agent classifies bank transactions and submits them
-through the REST API or the MCP server; the app is the source of truth for categories,
-budgets and stored transactions.
+A single-user personal expense manager. A dashboard compares actual spending with the
+budget by category, for all budget accounts together or one at a time. An AI agent
+classifies bank transactions and submits them per payment channel through the REST API
+or the MCP server; the app is the source of truth for channels, categories, budgets and
+stored transactions.
+
+Three concepts: a **payment channel** (付款渠道) is where transactions come from (a card,
+a statement) and only scopes duplicate detection; a **category** (分类) is a global
+two-level tree of what money is spent on; a **budget account** (预算账户) is a budget pool,
+and every level-2 category belongs to one, so a transaction counts towards the budget
+account of its category whichever channel paid it. All amounts are in one base currency.
 
 Status: MVP complete: backend, frontend, Docker Compose deployment and the
 [agent integration guide](docs/agent-guide.md).
@@ -36,16 +43,23 @@ The frontend build inside `docker compose build` needs roughly 1 GB of free memo
 
 1. Open the app. With no user yet it shows "create user": choose a username and a
    password (8 characters or more). This page closes for good once the user exists.
-2. Onboarding asks for a first account (name and currency, e.g. `CNY`) and at least one
-   level-1 category with one level-2 category. Then the Dashboard opens.
-3. Add more categories under 设置 → 分类 and budgets on the 预算 page.
+2. Onboarding has three steps:
+   1. the base currency (e.g. `CNY`) and a first budget account (e.g. `日常`);
+   2. categories: at least one level-1 category with one level-2 category; each level-2
+      category picks its budget account (the first one by default). More budget accounts
+      (e.g. `固定`) can be added from this step;
+   3. a first payment channel (e.g. `储蓄卡`). Then the Dashboard opens.
+3. Add more budget accounts and channels under 设置 → 账本, more categories (or move a
+   level-2 category to another budget account) under 设置 → 分类, and budgets on the 预算
+   page. The base currency can be changed under 设置 → 账本; this only relabels amounts,
+   nothing is converted.
 
 ### Connecting an agent
 
 1. In the web UI go to 设置 → AI 助手 and click "创建令牌". The token (`eg_...`) is shown
    once; copy it now. Revoke it on the same page when it is no longer needed.
-2. The same page shows the MCP address (`http://<host>:8080/mcp`), the account IDs and a
-   Hermes Agent config snippet.
+2. The same page shows the MCP address (`http://<host>:8080/mcp`), the payment channel
+   IDs (the agent can also call `list_channels`) and a Hermes Agent config snippet.
 3. Follow [`docs/agent-guide.md`](docs/agent-guide.md): workflow, tools, reason codes and
    the single-use `confirm_duplicate` rule.
 
@@ -82,6 +96,16 @@ Migrations only move forward; to go back to an older version, restore the backup
 before the upgrade. Changing `POSTGRES_*` in `.env` after the first start does not change
 the existing database (PostgreSQL reads them only when its volume is empty).
 
+**Upgrading to the payment-channel / budget-account version (migration 0004) clears the
+ledger.** Migration `0004_channels_budget_accounts` drops and recreates the business
+tables: all accounts, categories, budgets and transactions are deleted. The user, the
+login sessions and the agent access tokens are kept. After the upgrade the app opens the
+onboarding again (base currency, budget accounts, categories, payment channels); then
+update the agent's instructions to the new tools and channel IDs
+([`docs/agent-guide.md`](docs/agent-guide.md), "Upgrading from the account-based
+version") and have it submit the transactions again. Take a backup first if you want to
+keep the old data for reference.
+
 ### Logs
 
 ```bash
@@ -97,7 +121,7 @@ docker compose restart                    # restart everything; data is kept
 | `backend/` | FastAPI app: REST under `/api/v1`, MCP Streamable HTTP under `/mcp` |
 | `backend/openapi.json` | Exported API contract, the input for the frontend's typed client |
 | `frontend/` | React web UI; `frontend/README.md` has the commands to run it with demo data |
-| `docs/agent-guide.md` | How an AI agent connects, the three tools and their feedback |
+| `docs/agent-guide.md` | How an AI agent connects, the four tools and their feedback |
 | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf` | Deployment |
 
 ## Backend development

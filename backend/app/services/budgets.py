@@ -2,6 +2,9 @@
 
 A version whose amount is NULL clears the budget: from its month on the category has
 "no budget", exactly as if it never had one. Amount 0 is a real budget.
+
+A budget belongs to its category, and through it to the category's current budget
+account: moving a category to another budget account moves its whole history (D4).
 """
 
 from bisect import bisect_right
@@ -16,12 +19,13 @@ from app.errors import invalid
 from app.models import Budget, Category
 from app.months import format_month, parse_month
 from app.schemas.budget import BudgetItemIn, BudgetLine, BudgetsOut
-from app.services.accounts import get_account
+from app.services.budget_accounts import budget_account_names, get_budget_account
 from app.services.categories import load_categories
+from app.services.settings import require_currency
 
 
 class BudgetHistory:
-    """All budget versions of one account; the single place that resolves "in force"."""
+    """Budget versions of a set of categories; the single place that resolves "in force"."""
 
     def __init__(self, rows: list[Budget]) -> None:
         self._months: dict[int, list[date]] = {}
@@ -45,22 +49,28 @@ class BudgetHistory:
         return row.amount if row else None
 
 
-def load_history(db: Session, account_id: int) -> BudgetHistory:
-    rows = db.scalars(
-        select(Budget)
-        .join(Category, Budget.category_id == Category.id)
-        .where(Category.account_id == account_id)
-    )
-    return BudgetHistory(list(rows))
+def load_history(db: Session, budget_account_id: int | None = None) -> BudgetHistory:
+    """Every budget version, or those of the level-2 categories that currently belong to
+    one budget account."""
+    statement = select(Budget)
+    if budget_account_id is not None:
+        statement = statement.join(Category, Budget.category_id == Category.id).where(
+            Category.budget_account_id == budget_account_id
+        )
+    return BudgetHistory(list(db.scalars(statement)))
 
 
-def get_budgets(db: Session, account_id: int, month: str | None) -> BudgetsOut:
-    """Budget in force per level-2 category for `month` (default: the current month)."""
-    account = get_account(db, account_id)
+def get_budgets(db: Session, month: str | None, budget_account_id: int | None = None) -> BudgetsOut:
+    """Budget in force per level-2 category for `month` (default: the current month), for
+    every level-2 category or only those of one budget account."""
+    if budget_account_id is not None:
+        get_budget_account(db, budget_account_id, status_code=422)
+    currency = require_currency(db)
     month_date = parse_month(month) if month else date.today().replace(day=1)
-    categories = load_categories(db, account_id)
+    categories = load_categories(db, budget_account_id)
     names = {c.id: c.name for c in categories}
-    history = load_history(db, account_id)
+    budget_accounts = budget_account_names(db)
+    history = load_history(db, budget_account_id)
     lines = []
     for category in categories:
         if category.parent_id is None:
@@ -72,36 +82,38 @@ def get_budgets(db: Session, account_id: int, month: str | None) -> BudgetsOut:
                 category_name=category.name,
                 parent_id=category.parent_id,
                 parent_name=names[category.parent_id],
+                budget_account_id=category.budget_account_id,
+                budget_account_name=budget_accounts[category.budget_account_id],
                 amount=row.amount if row else None,
                 effective_from=format_month(row.effective_from) if row else None,
             )
         )
     return BudgetsOut(
-        account_id=account_id,
-        currency=account.currency,
+        budget_account_id=budget_account_id,
+        currency=currency,
         month=format_month(month_date),
         budgets=lines,
     )
 
 
-def set_budgets(
-    db: Session, account_id: int, effective_from: str, items: list[BudgetItemIn]
-) -> BudgetsOut:
+def set_budgets(db: Session, effective_from: str, items: list[BudgetItemIn]) -> BudgetsOut:
     """Upserts one budget version per item at `effective_from`; all items or none.
 
-    An item with amount None clears the budget from that month. Afterwards each touched
-    category's clearing versions with no budget in force before them are removed
-    (`_drop_redundant_clears`), in the same transaction.
+    Any level-2 category may be in the request, whatever its budget account. An item with
+    amount None clears the budget from that month. Afterwards each touched category's
+    clearing versions with no budget in force before them are removed
+    (`_drop_redundant_clears`), in the same transaction. Returns every budget line of
+    the month.
     """
-    get_account(db, account_id)
+    require_currency(db)  # the response reports it: fail before writing anything
     month_date = parse_month(effective_from)
-    categories = {c.id: c for c in load_categories(db, account_id)}
+    categories = {c.id: c for c in load_categories(db)}
     seen: set[int] = set()
     for item in items:
         details = {"category_id": item.category_id}
         category = categories.get(item.category_id)
         if category is None:
-            raise invalid("CATEGORY_NOT_FOUND", "分类不存在或不属于该账户", details)
+            raise invalid("CATEGORY_NOT_FOUND", "分类不存在", details)
         if category.parent_id is None:
             raise invalid(
                 "CATEGORY_NOT_LEAF",
@@ -123,7 +135,7 @@ def set_budgets(
         )
     _drop_redundant_clears(db, seen)
     db.commit()
-    return get_budgets(db, account_id, effective_from)
+    return get_budgets(db, effective_from)
 
 
 def _drop_redundant_clears(db: Session, category_ids: set[int]) -> None:

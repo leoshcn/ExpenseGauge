@@ -1,5 +1,5 @@
-"""AC16: the three MCP tools over real HTTP at /mcp, with the official SDK client and a
-Bearer token, return the same results and rejections as the REST endpoints."""
+"""AC16 / R6: the four MCP tools over real HTTP at /mcp, with the official SDK client and
+a Bearer token, return the same results and rejections as the REST endpoints."""
 
 import asyncio
 import json
@@ -62,14 +62,18 @@ def call(url: str, token: str, name: str, arguments: dict):
     return run_mcp(url, token, calls)
 
 
-def test_exactly_three_tools(server_url, token):
+def test_exactly_four_tools(server_url, token):
     async def calls(mcp_client):
         return await mcp_client.list_tools()
 
     tools = {tool.name: tool for tool in run_mcp(f"{server_url}/mcp", token["token"], calls).tools}
-    assert set(tools) == {"list_categories", "get_budgets", "submit_transactions"}
-    assert set(tools["get_budgets"].input_schema["properties"]) == {"account_id", "month"}
-    item_schema = tools["submit_transactions"].input_schema["properties"]["items"]["items"]
+    assert set(tools) == {"list_channels", "list_categories", "get_budgets", "submit_transactions"}
+    assert set(tools["list_channels"].input_schema.get("properties", {})) == set()
+    assert set(tools["list_categories"].input_schema.get("properties", {})) == set()
+    assert set(tools["get_budgets"].input_schema["properties"]) == {"month", "budget_account_id"}
+    submit = tools["submit_transactions"].input_schema
+    assert set(submit["properties"]) == {"channel_id", "items"}
+    item_schema = submit["properties"]["items"]["items"]
     assert {"date", "amount", "counterparty", "category_id", "confirm_duplicate"} <= set(
         item_schema["properties"]
     )
@@ -77,23 +81,39 @@ def test_exactly_three_tools(server_url, token):
 
 @pytest.mark.parametrize("path", ["/mcp", "/mcp/"])
 def test_read_tools_return_the_rest_payloads(server_url, client, token, ledger, path):
+    fixed = ledger.budget_account("固定")
+    housing = ledger.category("居住")
+    ledger.category("房租", housing, fixed)
+    ledger.add_channel("信用卡")
     ledger.set_budgets("2026-09", {ledger.groceries: "1200", ledger.metro: "0"})
+    client.patch(f"{API}/categories/{ledger.groceries}", json={"description": "线下商超\n不含外卖"})
     url = server_url + path
 
-    categories = call(url, token["token"], "list_categories", {"account_id": ledger.account_id})
+    channels = call(url, token["token"], "list_channels", {})
+    assert channels.is_error is False
+    assert channels.structured_content == {"channels": client.get(f"{API}/channels").json()}
+    assert [c["name"] for c in channels.structured_content["channels"]] == ["储蓄卡", "信用卡"]
+
+    categories = call(url, token["token"], "list_categories", {})
     assert categories.is_error is False
-    assert categories.structured_content == client.get(f"{ledger.base}/categories").json()
+    assert categories.structured_content == client.get(f"{API}/categories").json()
+    children = [c for node in categories.structured_content["categories"] for c in node["children"]]
+    assert [c["description"] for c in children] == ["线下商超\n不含外卖", None, None, None]
+    assert [c["budget_account"]["name"] for c in children] == ["日常", "日常", "日常", "固定"]
     assert json.loads(categories.content[0].text) == categories.structured_content
 
-    budgets = call(
-        url, token["token"], "get_budgets", {"account_id": ledger.account_id, "month": "2026-10"}
-    )
-    rest = client.get(f"{ledger.base}/budgets", params={"month": "2026-10"}).json()
+    budgets = call(url, token["token"], "get_budgets", {"month": "2026-10"})
+    rest = client.get(f"{API}/budgets", params={"month": "2026-10"}).json()
     assert budgets.structured_content == rest
     assert {line["amount"] for line in rest["budgets"]} == {"1200.00", None, "0.00"}
 
-    default_month = call(url, token["token"], "get_budgets", {"account_id": ledger.account_id})
-    assert default_month.structured_content == client.get(f"{ledger.base}/budgets").json()
+    scoped = call(url, token["token"], "get_budgets", {"budget_account_id": fixed})
+    rest = client.get(f"{API}/budgets", params={"budget_account_id": fixed}).json()
+    assert scoped.structured_content == rest
+    assert [line["category_name"] for line in rest["budgets"]] == ["房租"]
+
+    default_month = call(url, token["token"], "get_budgets", {})
+    assert default_month.structured_content == client.get(f"{API}/budgets").json()
 
 
 def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger):
@@ -103,10 +123,9 @@ def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger
     url = f"{server_url}/mcp"
 
     def amounts(month: str) -> dict[int, str | None]:
-        arguments = {"account_id": ledger.account_id, "month": month}
-        result = call(url, token["token"], "get_budgets", arguments)
+        result = call(url, token["token"], "get_budgets", {"month": month})
         assert result.is_error is False
-        rest = client.get(f"{ledger.base}/budgets", params={"month": month}).json()
+        rest = client.get(f"{API}/budgets", params={"month": month}).json()
         assert result.structured_content == rest
         return {line["category_id"]: line["amount"] for line in rest["budgets"]}
 
@@ -122,14 +141,15 @@ def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger
 def test_submit_transactions_matches_rest(server_url, client, token, ledger):
     url = f"{server_url}/mcp"
     arguments = {
-        "account_id": ledger.account_id,
+        "channel_id": ledger.channel,
         "items": [ledger.item(), ledger.item(counterparty="海底捞", category_id=ledger.dining)],
     }
     accepted = call(url, token["token"], "submit_transactions", arguments)
     assert accepted.is_error is False
     body = accepted.structured_content
     assert body["accepted"] is True and len(body["transactions"]) == 2
-    listed = client.get(f"{ledger.base}/transactions").json()
+    assert {t["channel_id"] for t in body["transactions"]} == {ledger.channel}
+    listed = client.get(f"{API}/transactions").json()
     assert listed["total"] == 2
     assert sorted(t["id"] for t in listed["items"]) == [t["id"] for t in body["transactions"]]
     from app.db import get_engine
@@ -164,42 +184,68 @@ def test_submit_transactions_matches_rest(server_url, client, token, ledger):
         "DUPLICATE_IN_BATCH",
         "INVALID_FIELD",
     ]
-    assert client.get(f"{ledger.base}/transactions").json()["total"] == 2
+    assert client.get(f"{API}/transactions").json()["total"] == 2
 
     confirmed = call(
         url,
         token["token"],
         "submit_transactions",
-        {"account_id": ledger.account_id, "items": [ledger.item(confirm_duplicate=True)]},
+        {"channel_id": ledger.channel, "items": [ledger.item(confirm_duplicate=True)]},
     )
     assert confirmed.structured_content["transactions"][0]["confirmed_duplicate"] is True
-    assert client.get(f"{ledger.base}/transactions").json()["total"] == 3
+    assert client.get(f"{API}/transactions").json()["total"] == 3
+
+    # The same item from another channel is not a duplicate.
+    card = ledger.add_channel("信用卡")
+    other = call(
+        url, token["token"], "submit_transactions", {"channel_id": card, "items": [ledger.item()]}
+    )
+    assert other.structured_content["accepted"] is True
+    assert client.get(f"{API}/transactions").json()["total"] == 4
 
 
 def test_other_failures_are_tool_errors_with_the_rest_envelope(server_url, client, token, ledger):
     url = f"{server_url}/mcp"
-    missing = call(url, token["token"], "list_categories", {"account_id": 999})
+    item = ledger.item()
+    missing = call(url, token["token"], "submit_transactions", {"channel_id": 999, "items": [item]})
     assert missing.is_error is True
-    rest = assert_envelope(client.get(f"{API}/accounts/999/categories"), 404, "ACCOUNT_NOT_FOUND")
+    rest = assert_envelope(ledger.submit([item], channel_id=999), 404, "CHANNEL_NOT_FOUND")
     assert missing.structured_content == rest
     assert json.loads(missing.content[0].text) == rest
 
     # An id PostgreSQL's INTEGER cannot hold is "not found" here too, not a crash.
-    beyond = call(url, token["token"], "get_budgets", {"account_id": 2**31})
+    beyond = call(
+        url, token["token"], "submit_transactions", {"channel_id": 2**31, "items": [item]}
+    )
     assert beyond.is_error is True
     assert beyond.structured_content == rest
 
-    bad_month = call(
-        url, token["token"], "get_budgets", {"account_id": ledger.account_id, "month": "2026-13"}
+    unknown_account = call(url, token["token"], "get_budgets", {"budget_account_id": 999})
+    assert unknown_account.is_error is True
+    rest = client.get(f"{API}/budgets", params={"budget_account_id": 999})
+    assert unknown_account.structured_content == assert_envelope(
+        rest, 422, "BUDGET_ACCOUNT_NOT_FOUND"
     )
+
+    bad_month = call(url, token["token"], "get_budgets", {"month": "2026-13"})
     assert bad_month.is_error is True
     assert bad_month.structured_content["code"] == "INVALID_MONTH"
 
     empty = call(
-        url, token["token"], "submit_transactions", {"account_id": ledger.account_id, "items": []}
+        url, token["token"], "submit_transactions", {"channel_id": ledger.channel, "items": []}
     )
     assert empty.is_error is True
     assert empty.structured_content["code"] == "INVALID_BATCH_SIZE"
+
+
+def test_get_budgets_before_the_currency_is_set(server_url, client, token):
+    """Before onboarding sets the base currency the tool reports the REST error."""
+    result = call(f"{server_url}/mcp", token["token"], "get_budgets", {})
+    assert result.is_error is True
+    rest = assert_envelope(client.get(f"{API}/budgets"), 409, "SETTINGS_NOT_INITIALIZED")
+    assert result.structured_content == rest
+    channels = call(f"{server_url}/mcp", token["token"], "list_channels", {})
+    assert channels.structured_content == {"channels": []}
 
 
 def test_mcp_requires_a_live_bearer_token(server_url, client, token, ledger):
@@ -215,12 +261,11 @@ def test_mcp_requires_a_live_bearer_token(server_url, client, token, ledger):
     assert_envelope(cookie_only, 401, "INVALID_TOKEN")
     assert_envelope(httpx.get(url, headers=headers), 401, "INVALID_TOKEN")
 
-    arguments = {"account_id": ledger.account_id}
-    assert call(url, token["token"], "list_categories", arguments).is_error is False
+    assert call(url, token["token"], "list_categories", {}).is_error is False
     assert client.delete(f"{API}/tokens/{token['id']}").status_code == 204
     revoked = httpx.post(
         url, json=request, headers={**headers, "Authorization": f"Bearer {token['token']}"}
     )
     assert_envelope(revoked, 401, "INVALID_TOKEN")
     with pytest.raises(Exception):  # noqa: B017 - the SDK surfaces the 401 as a transport error
-        call(url, token["token"], "list_categories", arguments)
+        call(url, token["token"], "list_categories", {})

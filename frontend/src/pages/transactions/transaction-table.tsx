@@ -54,7 +54,7 @@ function Row({
       <td className={cn("num hidden pr-3 pl-5 whitespace-nowrap text-muted-foreground md:table-cell", cell)}>
         {day}
       </td>
-      <th scope="row" className={cn("w-full max-w-0 px-4 text-left font-normal md:w-[34%] md:px-3", cell)}>
+      <th scope="row" className={cn("w-full max-w-0 px-4 text-left font-normal md:w-[30%] md:px-3", cell)}>
         <div className="flex min-w-0 items-center gap-2">
           <span className="min-w-0 truncate font-medium" title={transaction.counterparty}>
             {transaction.counterparty}
@@ -71,10 +71,11 @@ function Row({
             {transaction.description}
           </div>
         ) : null}
-        {/* Below `md` the date, category and note fold in under the counterparty. */}
+        {/* Below `md` the date, category, channel and note fold in under the counterparty. */}
         <div className="mt-1 truncate text-xs md:hidden">
           <span className="num text-muted-foreground">{day} · </span>
           {category}
+          <span className="text-muted-foreground"> · {transaction.channel_name}</span>
         </div>
         {transaction.note ? (
           <div className="mt-1 flex min-w-0 items-center gap-1 text-xs text-muted-foreground lg:hidden">
@@ -85,8 +86,11 @@ function Row({
         ) : null}
       </th>
       <td className={cn("hidden max-w-0 truncate px-3 md:table-cell md:w-[22%]", cell)}>{category}</td>
+      <td className={cn("hidden max-w-0 truncate px-3 md:table-cell md:w-[16%]", cell)} title={transaction.channel_name}>
+        {transaction.channel_name}
+      </td>
       <td
-        className={cn("hidden max-w-0 truncate px-3 text-muted-foreground lg:table-cell lg:w-[20%]", cell)}
+        className={cn("hidden max-w-0 truncate px-3 text-muted-foreground lg:table-cell lg:w-[16%]", cell)}
         title={transaction.note ?? undefined}
       >
         {transaction.note ?? S.common.none}
@@ -166,6 +170,9 @@ export function TransactionTable({
             </th>
             <th scope="col" className={cn(heading, "hidden text-left md:table-cell")}>
               {T.columns.category}
+            </th>
+            <th scope="col" className={cn(heading, "hidden text-left md:table-cell")}>
+              {T.columns.channel}
             </th>
             <th scope="col" className={cn(heading, "hidden text-left lg:table-cell")}>
               {T.columns.note}

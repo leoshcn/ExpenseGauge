@@ -29,9 +29,9 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
     """AC13: level-1 rows expand to level-2 rows; unbudgeted categories report null."""
     _seed(ledger)
     empty = ledger.category("居家")  # level 1 without children
-    body = client.get(f"{ledger.base}/summary/months/2026-09").json()
+    body = client.get(f"{API}/summary/months/2026-09").json()
     assert body == {
-        "account_id": ledger.account_id,
+        "budget_account_id": None,
         "currency": "CNY",
         "month": "2026-09",
         "budget": "1400.00",
@@ -87,10 +87,10 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
 def test_monthly_series_uses_the_budget_version_in_force(client, ledger):
     """AC13 monthly totals; AC12 with a budget change in the middle of the range."""
     _seed(ledger)
-    body = client.get(f"{ledger.base}/summary/monthly", params={"from": "2026-06", "to": "2026-10"})
+    body = client.get(f"{API}/summary/monthly", params={"from": "2026-06", "to": "2026-10"})
     assert body.status_code == 200
     assert body.json() == {
-        "account_id": ledger.account_id,
+        "budget_account_id": None,
         "currency": "CNY",
         "months": [
             {"month": "2026-06", "budget": None, "actual": "0.00"},  # before any budget
@@ -102,7 +102,7 @@ def test_monthly_series_uses_the_budget_version_in_force(client, ledger):
     }
     # Monthly totals agree with the month detail.
     for month in body.json()["months"]:
-        detail = client.get(f"{ledger.base}/summary/months/{month['month']}").json()
+        detail = client.get(f"{API}/summary/months/{month['month']}").json()
         assert (detail["budget"], detail["actual"]) == (month["budget"], month["actual"])
 
 
@@ -117,7 +117,7 @@ def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, l
     _seed(ledger)  # groceries 1000 from 07 and 1200 from 09, metro 200 from 07
     ledger.set_budgets("2026-09", {ledger.groceries: None})
 
-    august = client.get(f"{ledger.base}/summary/months/2026-08").json()
+    august = client.get(f"{API}/summary/months/2026-08").json()
     assert august["budget"] == "1200.00"
     assert _budgets(august) == {
         ledger.food: "1000.00",
@@ -127,7 +127,7 @@ def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, l
         ledger.metro: "200.00",
     }
     for month in ("2026-09", "2026-10"):
-        detail = client.get(f"{ledger.base}/summary/months/{month}").json()
+        detail = client.get(f"{API}/summary/months/{month}").json()
         assert detail["budget"] == "200.00"
         assert _budgets(detail) == {
             ledger.food: None,  # every child is unbudgeted
@@ -137,13 +137,11 @@ def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, l
             ledger.metro: "200.00",
         }
     # Actuals do not depend on the budget.
-    september = client.get(f"{ledger.base}/summary/months/2026-09").json()
+    september = client.get(f"{API}/summary/months/2026-09").json()
     assert september["actual"] == "828.80"
     assert september["categories"][0]["children"][0]["actual"] == "480.00"
 
-    monthly = client.get(
-        f"{ledger.base}/summary/monthly", params={"from": "2026-07", "to": "2026-11"}
-    )
+    monthly = client.get(f"{API}/summary/monthly", params={"from": "2026-07", "to": "2026-11"})
     assert monthly.json()["months"] == [
         {"month": "2026-07", "budget": "1200.00", "actual": "300.00"},
         {"month": "2026-08", "budget": "1200.00", "actual": "410.10"},
@@ -156,18 +154,16 @@ def test_cleared_budget_is_unbudgeted_from_its_month_in_both_summaries(client, l
     ledger.set_budgets("2026-10", {ledger.metro: None})
     # ... and setting an amount again restores one from that month.
     ledger.set_budgets("2026-11", {ledger.groceries: "900"})
-    monthly = client.get(
-        f"{ledger.base}/summary/monthly", params={"from": "2026-09", "to": "2026-11"}
-    )
+    monthly = client.get(f"{API}/summary/monthly", params={"from": "2026-09", "to": "2026-11"})
     assert [(m["month"], m["budget"]) for m in monthly.json()["months"]] == [
         ("2026-09", "200.00"),
         ("2026-10", None),
         ("2026-11", "900.00"),
     ]
-    october = client.get(f"{ledger.base}/summary/months/2026-10").json()
+    october = client.get(f"{API}/summary/months/2026-10").json()
     assert october["budget"] is None
     assert set(_budgets(october).values()) == {None}
-    november = client.get(f"{ledger.base}/summary/months/2026-11").json()
+    november = client.get(f"{API}/summary/months/2026-11").json()
     assert (november["budget"], _budgets(november)[ledger.food]) == ("900.00", "900.00")
 
 
@@ -184,7 +180,7 @@ def test_level1_budget_sums_budgeted_zero_and_cleared_children(client, ledger):
     # never-set child under 交通.
     ledger.set_budgets("2026-03", {ledger.dining: "0", snacks: None, ledger.metro: None})
 
-    february = client.get(f"{ledger.base}/summary/months/2026-02").json()
+    february = client.get(f"{API}/summary/months/2026-02").json()
     assert february["budget"] == "1550.00"
     assert _budgets(february) == {
         ledger.food: "1350.00",
@@ -195,7 +191,7 @@ def test_level1_budget_sums_budgeted_zero_and_cleared_children(client, ledger):
         ledger.metro: "200.00",
         bus: None,
     }
-    march = client.get(f"{ledger.base}/summary/months/2026-03").json()
+    march = client.get(f"{API}/summary/months/2026-03").json()
     assert march["budget"] == "1000.00"
     assert _budgets(march) == {
         ledger.food: "1000.00",
@@ -209,14 +205,12 @@ def test_level1_budget_sums_budgeted_zero_and_cleared_children(client, ledger):
 
     # Zero and cleared only: the level-1 budget is a real 0, not "no budget".
     ledger.set_budgets("2026-05", {ledger.groceries: None})
-    may = client.get(f"{ledger.base}/summary/months/2026-05").json()
+    may = client.get(f"{API}/summary/months/2026-05").json()
     assert may["budget"] == "0.00"
     assert _budgets(may)[ledger.food] == "0.00"
     assert _budgets(may)[ledger.transport] is None
 
-    monthly = client.get(
-        f"{ledger.base}/summary/monthly", params={"from": "2026-02", "to": "2026-05"}
-    )
+    monthly = client.get(f"{API}/summary/monthly", params={"from": "2026-02", "to": "2026-05"})
     assert [(m["month"], m["budget"]) for m in monthly.json()["months"]] == [
         ("2026-02", "1550.00"),
         ("2026-03", "1000.00"),
@@ -226,45 +220,24 @@ def test_level1_budget_sums_budgeted_zero_and_cleared_children(client, ledger):
 
 
 def test_monthly_series_defaults_to_twelve_months(client, ledger):
-    months = client.get(f"{ledger.base}/summary/monthly").json()["months"]
+    months = client.get(f"{API}/summary/monthly").json()["months"]
     this_month = date.today().replace(day=1)
     assert len(months) == 12
     assert months[-1]["month"] == format_month(this_month)
     assert months[0]["month"] == format_month(add_months(this_month, -11))
 
-    ending = client.get(f"{ledger.base}/summary/monthly", params={"to": "2026-01"}).json()["months"]
+    ending = client.get(f"{API}/summary/monthly", params={"to": "2026-01"}).json()["months"]
     assert [m["month"] for m in ending][::11] == ["2025-02", "2026-01"]
 
 
-def test_figures_are_per_account(client, ledger):
-    """AC13: switching account changes all figures."""
-    _seed(ledger)
-    other = Ledger(client, name="美元账户", currency="USD")
-    other.set_budgets("2026-09", {other.metro: "50"})
-    assert (
-        other.submit(
-            [other.item(date="2026-09-05", amount="12", category_id=other.metro)]
-        ).status_code
-        == 201
-    )
-
-    detail = client.get(f"{other.base}/summary/months/2026-09").json()
-    assert (detail["currency"], detail["budget"], detail["actual"]) == ("USD", "50.00", "12.00")
-    monthly = client.get(
-        f"{other.base}/summary/monthly", params={"from": "2026-09", "to": "2026-09"}
-    )
-    assert monthly.json()["months"] == [{"month": "2026-09", "budget": "50.00", "actual": "12.00"}]
-    assert client.get(f"{ledger.base}/summary/months/2026-09").json()["actual"] == "828.80"
-
-
 def test_summary_validation(client, ledger):
-    url = f"{ledger.base}/summary/monthly"
+    url = f"{API}/summary/monthly"
     reversed_range = client.get(url, params={"from": "2026-10", "to": "2026-09"})
     assert_envelope(reversed_range, 422, "INVALID_MONTH_RANGE")
     too_long = client.get(url, params={"from": "2000-01", "to": "2026-09"})
     assert_envelope(too_long, 422, "INVALID_MONTH_RANGE")
     assert_envelope(client.get(url, params={"from": "2026/09"}), 422, "VALIDATION_ERROR")
-    assert_envelope(client.get(f"{ledger.base}/summary/months/2026-9"), 422, "VALIDATION_ERROR")
+    assert_envelope(client.get(f"{API}/summary/months/2026-9"), 422, "VALIDATION_ERROR")
     # The ends of the calendar are a rejected month, not a crash in month arithmetic.
     for path in (
         "summary/months/9999-12",
@@ -272,8 +245,94 @@ def test_summary_validation(client, ledger):
         "summary/monthly?to=0001-01",
         "transactions?month=9999-12",
     ):
-        assert_envelope(client.get(f"{ledger.base}/{path}"), 422, "INVALID_MONTH")
-    assert_envelope(client.get(f"{API}/accounts/999/summary/monthly"), 404, "ACCOUNT_NOT_FOUND")
-    assert_envelope(
-        client.get(f"{API}/accounts/999/summary/months/2026-09"), 404, "ACCOUNT_NOT_FOUND"
+        assert_envelope(client.get(f"{API}/{path}"), 422, "INVALID_MONTH")
+    unknown = {"budget_account_id": 999}
+    for path in ("summary/monthly", "summary/months/2026-09"):
+        response = client.get(f"{API}/{path}", params=unknown)
+        assert_envelope(response, 422, "BUDGET_ACCOUNT_NOT_FOUND")
+
+
+def _housing(ledger: Ledger) -> tuple[int, int, int, int]:
+    """居住 with 房租 in a "固定" budget account and 维修 in "日常". 房租 is paid from the
+    savings card, 维修 from a credit card. Returns (固定, 居住, 房租, 维修)."""
+    fixed = ledger.budget_account("固定")
+    housing = ledger.category("居住")
+    rent = ledger.category("房租", housing, fixed)
+    repair = ledger.category("维修", housing, ledger.daily)
+    card = ledger.add_channel("信用卡")
+    ledger.set_budgets("2026-09", {rent: "6500", repair: "500"})
+    rent_paid = ledger.item(amount="6500", counterparty="自如寓", category_id=rent)
+    assert ledger.submit([rent_paid]).status_code == 201
+    repair_paid = ledger.item(amount="300", counterparty="维修师傅", category_id=repair)
+    assert ledger.submit([repair_paid], channel_id=card).status_code == 201
+    return fixed, housing, rent, repair
+
+
+def _rows(detail: dict) -> dict[str, tuple[str | None, str, list[str]]]:
+    """Level-1 name -> (budget, actual, level-2 names) of a month detail."""
+    return {
+        row["name"]: (row["budget"], row["actual"], [child["name"] for child in row["children"]])
+        for row in detail["categories"]
+    }
+
+
+def test_spending_counts_in_the_budget_account_of_its_category(client, ledger):
+    """Acceptance (R5, D3, D9): rent paid through the savings card counts in "固定"; it
+    does not appear under "日常"; "全部" shows 居住 = 房租 + 维修. Channels play no part."""
+    fixed, _, _, _ = _housing(ledger)
+    url = f"{API}/summary/months/2026-09"
+
+    fixed_view = client.get(url, params={"budget_account_id": fixed}).json()
+    assert fixed_view["budget_account_id"] == fixed
+    assert (fixed_view["budget"], fixed_view["actual"]) == ("6500.00", "6500.00")
+    assert _rows(fixed_view) == {"居住": ("6500.00", "6500.00", ["房租"])}
+
+    daily_view = client.get(url, params={"budget_account_id": ledger.daily}).json()
+    assert _rows(daily_view) == {
+        "餐饮": (None, "0.00", ["买菜", "外食"]),
+        "交通": (None, "0.00", ["地铁"]),
+        "居住": ("500.00", "300.00", ["维修"]),
+    }
+    assert (daily_view["budget"], daily_view["actual"]) == ("500.00", "300.00")
+
+    everything = client.get(url).json()
+    assert everything["budget_account_id"] is None
+    assert _rows(everything)["居住"] == ("7000.00", "6800.00", ["房租", "维修"])
+    assert (everything["budget"], everything["actual"]) == ("7000.00", "6800.00")
+
+    def monthly(params: dict) -> list[dict]:
+        query = {"from": "2026-09", "to": "2026-09", **params}
+        return client.get(f"{API}/summary/monthly", params=query).json()["months"]
+
+    assert monthly({"budget_account_id": fixed}) == [
+        {"month": "2026-09", "budget": "6500.00", "actual": "6500.00"}
+    ]
+    assert monthly({"budget_account_id": ledger.daily}) == [
+        {"month": "2026-09", "budget": "500.00", "actual": "300.00"}
+    ]
+    assert monthly({}) == [{"month": "2026-09", "budget": "7000.00", "actual": "6800.00"}]
+
+
+def test_moving_a_category_to_another_budget_account_moves_its_history(client, ledger):
+    """Acceptance (D4): after 维修 moves to "固定", past months of "固定" include it."""
+    fixed, _, _, repair = _housing(ledger)
+    moved = client.patch(f"{API}/categories/{repair}", json={"budget_account_id": fixed})
+    assert moved.status_code == 200
+
+    url = f"{API}/summary/months/2026-09"
+    fixed_view = client.get(url, params={"budget_account_id": fixed}).json()
+    assert _rows(fixed_view) == {"居住": ("7000.00", "6800.00", ["房租", "维修"])}
+    daily_view = client.get(url, params={"budget_account_id": ledger.daily}).json()
+    assert "居住" not in _rows(daily_view)
+    assert daily_view["actual"] == "0.00"
+    monthly = client.get(
+        f"{API}/summary/monthly",
+        params={"from": "2026-09", "to": "2026-09", "budget_account_id": fixed},
     )
+    assert monthly.json()["months"] == [
+        {"month": "2026-09", "budget": "7000.00", "actual": "6800.00"}
+    ]
+    # The transactions themselves report the new budget account.
+    listed = client.get(f"{API}/transactions", params={"budget_account_id": fixed}).json()
+    assert {t["budget_account_name"] for t in listed["items"]} == {"固定"}
+    assert listed["total"] == 2

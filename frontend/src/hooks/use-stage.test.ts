@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Schemas } from "@/api/client";
 
-import { resolveStage, type StageInputs } from "./use-stage";
+import { missingStep, resolveStage, type StageInputs } from "./use-stage";
 
 type Step<T> = { data: T | undefined; isLoadingError: boolean; error: unknown; refetch: () => unknown };
 
@@ -21,14 +21,20 @@ const failed = <T>(error: unknown, refetch: () => unknown = () => {}): Step<T> =
 });
 
 const user: Schemas["UserOut"] = { id: 1, username: "demo", created_at: "2026-10-10T00:00:00Z" };
-const account = (id: number): Schemas["AccountOut"] => ({ id, name: `账户${id}`, currency: "CNY" });
-const tree = (accountId: number, children: number): Schemas["CategoryTree"] => ({
-  account_id: accountId,
+const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常" };
+const card: Schemas["ChannelOut"] = { id: 1, name: "储蓄卡" };
+const tree = (children: number): Schemas["CategoryTree"] => ({
+  budget_account_id: null,
   categories: [
     {
-      id: accountId * 10,
+      id: 10,
       name: "餐饮",
-      children: Array.from({ length: children }, (_, index) => ({ id: index + 1, name: "买菜" })),
+      children: Array.from({ length: children }, (_, index) => ({
+        id: index + 11,
+        name: "买菜",
+        description: null,
+        budget_account: daily,
+      })),
     },
   ],
 });
@@ -37,11 +43,15 @@ function inputs(overrides: Partial<StageInputs> = {}): StageInputs {
   return {
     setup: loaded({ user_exists: true }),
     me: loaded<Schemas["UserOut"] | null>(user),
-    accounts: loaded([account(1)]),
-    trees: [loaded(tree(1, 1))],
+    settings: loaded({ currency: "CNY" }),
+    budgetAccounts: loaded([daily]),
+    tree: loaded(tree(1)),
+    channels: loaded([card]),
     ...overrides,
   };
 }
+
+const onboarding = { status: "ready", stage: "onboarding" };
 
 describe("resolveStage", () => {
   it("walks setup -> login -> onboarding -> app", () => {
@@ -50,46 +60,35 @@ describe("resolveStage", () => {
       stage: "setup",
     });
     expect(resolveStage(inputs({ me: loaded(null) }))).toEqual({ status: "ready", stage: "login" });
-    expect(resolveStage(inputs({ accounts: loaded([]), trees: [] }))).toEqual({
-      status: "ready",
-      stage: "onboarding",
-    });
+    expect(resolveStage(inputs({ budgetAccounts: loaded([]) }))).toEqual(onboarding);
     expect(resolveStage(inputs())).toEqual({ status: "ready", stage: "app" });
+  });
+
+  it("stays in onboarding until currency, budget account, usable category and channel exist", () => {
+    expect(resolveStage(inputs({ settings: loaded({ currency: null }) }))).toEqual(onboarding);
+    expect(resolveStage(inputs({ tree: loaded(tree(0)) }))).toEqual(onboarding);
+    expect(resolveStage(inputs({ channels: loaded([]) }))).toEqual(onboarding);
+  });
+
+  it("decides onboarding from an earlier step while a later one is still loading", () => {
+    expect(resolveStage(inputs({ budgetAccounts: loaded([]), tree: loading(), channels: loading() }))).toEqual(
+      onboarding,
+    );
+    expect(resolveStage(inputs({ tree: loaded(tree(0)), channels: failed("boom") }))).toEqual(onboarding);
   });
 
   it("is loading while the deciding step has no answer yet", () => {
     expect(resolveStage(inputs({ setup: loading() }))).toEqual({ status: "loading" });
     expect(resolveStage(inputs({ me: loading() }))).toEqual({ status: "loading" });
-    expect(resolveStage(inputs({ accounts: loading(), trees: [] }))).toEqual({ status: "loading" });
-    expect(resolveStage(inputs({ trees: [loading()] }))).toEqual({ status: "loading" });
-  });
-
-  it("resumes onboarding for an account without a usable category", () => {
-    expect(resolveStage(inputs({ trees: [loaded(tree(1, 0))] }))).toEqual({
-      status: "ready",
-      stage: "onboarding",
-    });
-  });
-
-  it("lets one usable account open the app while another is loading or failed", () => {
-    const accounts = loaded([account(1), account(2)]);
-    expect(resolveStage(inputs({ accounts, trees: [loading(), loaded(tree(2, 1))] }))).toEqual({
-      status: "ready",
-      stage: "app",
-    });
-    expect(resolveStage(inputs({ accounts, trees: [failed("boom"), loaded(tree(2, 1))] }))).toEqual({
-      status: "ready",
-      stage: "app",
-    });
-    expect(resolveStage(inputs({ accounts, trees: [failed("boom"), loaded(tree(2, 0))] }))).toMatchObject({
-      status: "error",
-      error: "boom",
-    });
+    expect(resolveStage(inputs({ settings: loading() }))).toEqual({ status: "loading" });
+    expect(resolveStage(inputs({ budgetAccounts: loading() }))).toEqual({ status: "loading" });
+    expect(resolveStage(inputs({ tree: loading() }))).toEqual({ status: "loading" });
+    expect(resolveStage(inputs({ channels: loading() }))).toEqual({ status: "loading" });
   });
 
   it("sends an ended session to login even if a later query failed on its first load", () => {
-    // `me` went null on a 401 while `accounts` was still failing from the same 401.
-    const state = resolveStage(inputs({ me: loaded(null), accounts: failed("401"), trees: [] }));
+    // `me` went null on a 401 while `settings` was still failing from the same 401.
+    const state = resolveStage(inputs({ me: loaded(null), settings: failed("401"), channels: failed("401") }));
     expect(state).toEqual({ status: "ready", stage: "login" });
   });
 
@@ -101,9 +100,18 @@ describe("resolveStage", () => {
     expect(refetch).toHaveBeenCalledOnce();
 
     expect(resolveStage(inputs({ me: failed("500") }))).toMatchObject({ status: "error", error: "500" });
-    expect(resolveStage(inputs({ accounts: failed("500"), trees: [] }))).toMatchObject({
-      status: "error",
-      error: "500",
-    });
+    expect(resolveStage(inputs({ settings: failed("500") }))).toMatchObject({ status: "error", error: "500" });
+    expect(resolveStage(inputs({ tree: failed("500") }))).toMatchObject({ status: "error", error: "500" });
+    expect(resolveStage(inputs({ channels: failed("500") }))).toMatchObject({ status: "error", error: "500" });
+  });
+});
+
+describe("missingStep", () => {
+  it("names the first missing piece, or null when the ledger is ready", () => {
+    expect(missingStep({ currency: null }, [daily], tree(1), [card])).toBe(1);
+    expect(missingStep({ currency: "CNY" }, [], tree(1), [card])).toBe(1);
+    expect(missingStep({ currency: "CNY" }, [daily], tree(0), [card])).toBe(2);
+    expect(missingStep({ currency: "CNY" }, [daily], tree(1), [])).toBe(3);
+    expect(missingStep({ currency: "CNY" }, [daily], tree(1), [card])).toBeNull();
   });
 });

@@ -3,14 +3,16 @@
     uv run python -m scripts.dev_server --reset      # terminal 1
     uv run python -m scripts.seed_demo               # terminal 2
 
-Creates the user (or signs in as it), three accounts, two-level category trees in
-Chinese, budgets with one mid-range change, and nine months of transactions ending
-today: refunds, over-budget categories, unbudgeted categories and one account with no
-transactions. The data is generated from a fixed seed, so every run gives the same
-figures for the same date.
+Creates the user (or signs in as it), the base currency (CNY), three budget accounts,
+four payment channels, a global two-level category tree in Chinese, budgets with one
+mid-range change, and nine months of transactions ending today: refunds, over-budget
+categories, unbudgeted categories, a budget account with no transactions and fixed
+bills paid from several channels. Foreign-currency spending is stored converted to CNY,
+as an agent would submit it. The data is generated from a fixed seed, so every run gives
+the same figures for the same date.
 
-Does nothing if the database already has accounts; start the dev server with `--reset`
-to seed again. Development only: the password below is public.
+Does nothing if the database already has budget accounts; start the dev server with
+`--reset` to seed again. Development only: the password below is public.
 """
 
 import argparse
@@ -72,43 +74,60 @@ class Api:
             )
 
 
-class Account:
-    """One account, its category tree (by name) and the transactions queued for it."""
+class Ledger:
+    """The global category tree (leaves by name), budget accounts and payment channels."""
 
-    def __init__(self, api: Api, name: str, currency: str, tree: dict[str, list[str]]) -> None:
+    def __init__(self, api: Api) -> None:
         self.api = api
-        account = api.call("POST", "/accounts", 201, json={"name": name, "currency": currency})
-        self.id: int = account["id"]
-        self.name = name
         self.leaf: dict[str, int] = {}
-        for parent, children in tree.items():
-            parent_id = self._category(parent, None)
-            for child in children:
-                self.leaf[child] = self._category(child, parent_id)
-        self.count = 0
+        self.budget_accounts: dict[str, int] = {}
+        self.channels: dict[str, int] = {}
+        self.count: dict[str, int] = {}
 
-    def _category(self, name: str, parent_id: int | None) -> int:
-        body = {"name": name, "parent_id": parent_id}
-        return self.api.call("POST", f"/accounts/{self.id}/categories", 201, json=body)["id"]
+    def budget_account(self, name: str) -> int:
+        created = self.api.call("POST", "/budget-accounts", 201, json={"name": name})
+        self.budget_accounts[name] = created["id"]
+        return created["id"]
+
+    def channel(self, name: str) -> int:
+        created = self.api.call("POST", "/channels", 201, json={"name": name})
+        self.channels[name] = created["id"]
+        self.count[name] = 0
+        return created["id"]
+
+    def tree(self, tree: dict[str, list[str]], budget_account_of: dict[str, str]) -> None:
+        """Adds level-1 categories and their children; each child goes to the budget
+        account `budget_account_of[child]`, "日常" when absent."""
+        for parent, children in tree.items():
+            parent_id = self._category({"name": parent})
+            for child in children:
+                account = self.budget_accounts[budget_account_of.get(child, "日常")]
+                body = {"name": child, "parent_id": parent_id, "budget_account_id": account}
+                self.leaf[child] = self._category(body)
+
+    def _category(self, body: dict) -> int:
+        return self.api.call("POST", "/categories", 201, json=body)["id"]
 
     def set_budgets(self, effective_from: date, amounts: dict[str, str]) -> None:
         items = [{"category_id": self.leaf[k], "amount": v} for k, v in amounts.items()]
         body = {"effective_from": month_key(effective_from), "items": items}
-        self.api.call("PUT", f"/accounts/{self.id}/budgets", 200, json=body)
+        self.api.call("PUT", "/budgets", 200, json=body)
 
-    def submit(self, first: date, by_leaf: dict[str, list[Tx]]) -> None:
-        """One all-or-nothing batch per month. The API rejects items with the same date,
-        amount, counterparty and description as suspected duplicates, so repeats that the
-        generator happens to produce are dropped here."""
+    def submit(self, first: date, by_leaf: dict[str, list[Tx]], channel_of: dict[str, str]) -> None:
+        """One all-or-nothing batch per channel and month; `channel_of[leaf]` says which
+        channel paid. The API rejects items with the same date, amount, counterparty and
+        description on one channel as suspected duplicates, so repeats that the generator
+        happens to produce are dropped here."""
         seen: set[tuple] = set()
-        items = []
+        batches: dict[str, list[dict]] = {}
         for leaf, transactions in by_leaf.items():
+            channel = channel_of[leaf]
             for tx in transactions:
-                key = (tx.day, tx.amount, tx.counterparty, tx.description)
+                key = (channel, tx.day, tx.amount, tx.counterparty, tx.description)
                 if key in seen:
                     continue
                 seen.add(key)
-                items.append(
+                batches.setdefault(channel, []).append(
                     {
                         "date": first.replace(day=tx.day).isoformat(),
                         "amount": str(tx.amount),
@@ -118,11 +137,10 @@ class Account:
                         "note": tx.note,
                     }
                 )
-        if not items:
-            return
-        path = f"/accounts/{self.id}/transactions/batch"
-        self.api.call("POST", path, 201, json={"items": items})
-        self.count += len(items)
+        for channel, items in batches.items():
+            path = f"/channels/{self.channels[channel]}/transactions/batch"
+            self.api.call("POST", path, 201, json={"items": items})
+            self.count[channel] += len(items)
 
 
 class Month:
@@ -194,6 +212,35 @@ DAILY_BUDGETS = {
 # Raised three months ago: earlier months keep the amounts above.
 DAILY_BUDGET_RAISE = {"买菜": "1800", "外食": "1200"}
 
+# Level-2 categories outside the "日常" budget account.
+BUDGET_ACCOUNT_OF = {
+    "房租": "固定",
+    "水电燃气": "固定",
+    "物业网络": "固定",
+    "订阅会员": "固定",
+    "健身": "固定",
+    "软件订阅": "固定",
+    "云服务": "固定",
+    "机酒交通": "旅行基金",
+    "住宿": "旅行基金",
+}
+# Which channel paid each level-2 category; the rest is paid by credit card. Rent and
+# utilities come from the savings card yet count in "固定" through their category.
+CHANNEL_OF = {
+    "房租": "储蓄卡",
+    "水电燃气": "储蓄卡",
+    "物业网络": "储蓄卡",
+    "买菜": "支付宝",
+    "外食": "支付宝",
+    "咖啡饮品": "支付宝",
+    "地铁公交": "支付宝",
+    "软件订阅": "美元信用卡",
+    "云服务": "美元信用卡",
+    "电子产品": "美元信用卡",
+    "运费关税": "美元信用卡",
+}
+CREDIT_CARD = "招行信用卡"
+
 
 def daily_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     """`offset` is 0 for the current month, -1 for the one before, and so on."""
@@ -263,8 +310,15 @@ def daily_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     return items
 
 
+# Spending in USD, stored in the base currency (CNY) at a fixed demo rate, the way an
+# agent converts at the day's rate before submitting.
 USD_TREE = {"订阅服务": ["软件订阅", "云服务"], "海淘": ["电子产品", "运费关税"]}
-USD_BUDGETS = {"软件订阅": "40", "云服务": "40"}
+USD_TO_CNY = Decimal("7.10")
+USD_BUDGETS = {"软件订阅": "290", "云服务": "290"}
+
+# A budget account with categories and a budget but no transactions: the Dashboard's
+# empty state when it is selected.
+FUND_TREE = {"长途旅行": ["机酒交通", "住宿"]}
 
 
 def usd_month(m: Month, offset: int) -> dict[str, list[Tx]]:
@@ -281,14 +335,26 @@ def usd_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     if offset in (-3, -1):
         items["电子产品"] = m.fixed(11, str(m.money(89, 249, "0.01")), "Amazon", "Order")
         items["运费关税"] = m.fixed(16, str(m.money(12, 30, "0.01")), "转运四方", "Shipping")
-    return items
+    return {
+        leaf: [
+            Tx(
+                tx.day,
+                (tx.amount * USD_TO_CNY).quantize(Decimal("0.01")),
+                tx.counterparty,
+                tx.description,
+                f"USD {tx.amount}",
+            )
+            for tx in transactions
+        ]
+        for leaf, transactions in items.items()
+    }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     args = parser.parse_args()
-    # Account names are Chinese; a redirected Windows stdout would otherwise garble them.
+    # Names are Chinese; a redirected Windows stdout would otherwise garble them.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     api = Api(args.base_url)
@@ -296,35 +362,40 @@ def main() -> None:
         api.sign_in()
     except httpx.ConnectError:
         sys.exit(f"No API at {args.base_url}. Start it: uv run python -m scripts.dev_server")
-    if api.call("GET", "/accounts", 200):
-        print("The database already has accounts; nothing done. Use dev_server --reset first.")
+    if api.call("GET", "/budget-accounts", 200):
+        print(
+            "The database already has budget accounts; nothing done. Use dev_server --reset first."
+        )
         return
 
     today = date.today()
     current = today.replace(day=1)
     rng = random.Random(SEED)
 
-    daily = Account(api, "日常账户", "CNY", DAILY_TREE)
-    daily.set_budgets(add_months(current, -(MONTHS - 1)), DAILY_BUDGETS)
-    daily.set_budgets(add_months(current, -3), DAILY_BUDGET_RAISE)
+    api.call("PUT", "/settings", 200, json={"currency": "CNY"})
+    ledger = Ledger(api)
+    for name in ("日常", "固定", "旅行基金"):
+        ledger.budget_account(name)
+    for name in ("储蓄卡", CREDIT_CARD, "支付宝", "美元信用卡"):
+        ledger.channel(name)
+    ledger.tree({**DAILY_TREE, **USD_TREE, **FUND_TREE}, BUDGET_ACCOUNT_OF)
+    channel_of = {leaf: CHANNEL_OF.get(leaf, CREDIT_CARD) for leaf in ledger.leaf}
 
-    card = Account(api, "美元信用卡", "USD", USD_TREE)
-    card.set_budgets(add_months(current, -4), USD_BUDGETS)
-
-    # Categories and a budget but no transactions: the Dashboard's empty state.
-    fund = Account(api, "旅行基金", "CNY", {"旅行": ["交通", "住宿"]})
-    fund.set_budgets(current, {"交通": "2000", "住宿": "3000"})
+    ledger.set_budgets(add_months(current, -(MONTHS - 1)), DAILY_BUDGETS)
+    ledger.set_budgets(add_months(current, -3), DAILY_BUDGET_RAISE)
+    ledger.set_budgets(add_months(current, -4), USD_BUDGETS)
+    ledger.set_budgets(current, {"机酒交通": "2000", "住宿": "3000"})
 
     for offset in range(-(MONTHS - 1), 1):
         first = add_months(current, offset)
         days = calendar.monthrange(first.year, first.month)[1]
         month = Month(rng, first, today.day if offset == 0 else days)
-        daily.submit(first, daily_month(month, offset))
+        ledger.submit(first, daily_month(month, offset), channel_of)
         if offset >= -4:
-            card.submit(first, usd_month(month, offset))
+            ledger.submit(first, usd_month(month, offset), channel_of)
 
-    for account in (daily, card, fund):
-        print(f"account {account.id}: {account.name}, {account.count} transactions")
+    for name, count in ledger.count.items():
+        print(f"channel {ledger.channels[name]}: {name}, {count} transactions")
     print(f"sign in as {USERNAME} / {PASSWORD}")
 
 

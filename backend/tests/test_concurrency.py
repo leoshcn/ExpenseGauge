@@ -24,7 +24,7 @@ def test_concurrent_overlapping_batches_store_the_shared_item_once(app, client, 
     def submit(barrier: threading.Barrier, items: list[dict]):
         http = TestClient(app, cookies=cookies)
         barrier.wait(timeout=10)
-        return http.post(f"{ledger.base}/transactions/batch", json={"items": items})
+        return http.post(ledger.batch_url(), json={"items": items})
 
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for round_number in range(ROUNDS):
@@ -59,13 +59,13 @@ def test_concurrent_overlapping_batches_store_the_shared_item_once(app, client, 
     assert len(counts) == ROUNDS * 2
 
 
-def test_batch_waits_for_the_account_lock_then_sees_the_committed_duplicate(app, client, ledger):
-    """Deterministic version: while another transaction holds the account's advisory
+def test_batch_waits_for_the_channel_lock_then_sees_the_committed_duplicate(app, client, ledger):
+    """Deterministic version: while another transaction holds the channel's advisory
     lock, a batch neither checks nor inserts. Once that transaction commits a row
     with the same fingerprint, the batch sees it and is rejected."""
     item = ledger.item(counterparty="并发商户")
     fingerprint = compute_fingerprint(
-        ledger.account_id, date(2026, 9, 15), Decimal("35.50"), "并发商户", item["description"]
+        ledger.channel, date(2026, 9, 15), Decimal("35.50"), "并发商户", item["description"]
     )
     result = {}
 
@@ -76,22 +76,22 @@ def test_batch_waits_for_the_account_lock_then_sees_the_committed_duplicate(app,
 
     with get_engine().connect() as holder:
         holder.execute(
-            text("SELECT pg_advisory_xact_lock(1002, :account_id)"),
-            {"account_id": ledger.account_id},
+            text("SELECT pg_advisory_xact_lock(1002, :channel_id)"),
+            {"channel_id": ledger.channel},
         )
         worker = threading.Thread(target=submit)
         worker.start()
         time.sleep(1.0)
-        assert worker.is_alive(), "the batch must wait for the account lock"
+        assert worker.is_alive(), "the batch must wait for the channel lock"
 
         holder.execute(
             text(
-                "INSERT INTO transactions (account_id, category_id, date, amount, counterparty,"
-                " description, fingerprint) VALUES (:account_id, :category_id, '2026-09-15',"
+                "INSERT INTO transactions (channel_id, category_id, date, amount, counterparty,"
+                " description, fingerprint) VALUES (:channel_id, :category_id, '2026-09-15',"
                 " 35.50, '并发商户', :description, :fingerprint)"
             ),
             {
-                "account_id": ledger.account_id,
+                "channel_id": ledger.channel,
                 "category_id": ledger.groceries,
                 "description": item["description"],
                 "fingerprint": fingerprint,
@@ -105,10 +105,8 @@ def test_batch_waits_for_the_account_lock_then_sees_the_committed_duplicate(app,
     assert response.json()["details"]["items"][0]["code"] == "SUSPECTED_DUPLICATE"
     assert ledger.count() == 1
 
-    # A different account's lock does not block this account.
+    # A different channel's lock does not block this channel.
     with get_engine().connect() as holder:
-        holder.execute(
-            text("SELECT pg_advisory_xact_lock(1002, :id)"), {"id": ledger.account_id + 1}
-        )
+        holder.execute(text("SELECT pg_advisory_xact_lock(1002, :id)"), {"id": ledger.channel + 1})
         assert ledger.submit([ledger.item(counterparty="不受影响")]).status_code == 201
         holder.rollback()

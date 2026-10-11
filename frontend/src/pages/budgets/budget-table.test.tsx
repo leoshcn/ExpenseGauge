@@ -8,23 +8,44 @@ import type { Schemas } from "@/api/client";
 import { BudgetTable } from "./budget-table";
 import { type BudgetDraft, budgetChanges, groupLines } from "./model";
 
+const daily = { id: 1, name: "日常" };
+const fixed = { id: 2, name: "固定" };
+
 const tree: Schemas["CategoryTree"] = {
-  account_id: 1,
+  budget_account_id: null,
   categories: [
-    { id: 1, name: "餐饮", children: [{ id: 11, name: "买菜" }, { id: 12, name: "外卖" }] },
-    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品" }] },
+    {
+      id: 1,
+      name: "餐饮",
+      children: [
+        { id: 11, name: "买菜", description: null, budget_account: daily },
+        { id: 12, name: "外卖", description: null, budget_account: daily },
+      ],
+    },
+    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品", description: null, budget_account: fixed }] },
     { id: 3, name: "空的", children: [] },
   ],
 };
 
+const of = (account: { id: number; name: string }) => ({
+  budget_account_id: account.id,
+  budget_account_name: account.name,
+});
+
 const lines: Schemas["BudgetLine"][] = [
-  { category_id: 11, category_name: "买菜", parent_id: 1, parent_name: "餐饮", amount: "500.00", effective_from: "2026-07" },
-  { category_id: 12, category_name: "外卖", parent_id: 1, parent_name: "餐饮", amount: "0.00", effective_from: "2026-09" },
-  { category_id: 21, category_name: "猫粮用品", parent_id: 2, parent_name: "宠物", amount: null, effective_from: null },
+  { category_id: 11, category_name: "买菜", parent_id: 1, parent_name: "餐饮", ...of(daily), amount: "500.00", effective_from: "2026-07" },
+  { category_id: 12, category_name: "外卖", parent_id: 1, parent_name: "餐饮", ...of(daily), amount: "0.00", effective_from: "2026-09" },
+  { category_id: 21, category_name: "猫粮用品", parent_id: 2, parent_name: "宠物", ...of(fixed), amount: null, effective_from: null },
 ];
 
 /** The table with its draft state, reporting the PUT items it would send. */
-function Harness({ onItems }: { onItems: (items: ReturnType<typeof budgetChanges>) => void }) {
+function Harness({
+  onItems,
+  showBudgetAccount,
+}: {
+  onItems: (items: ReturnType<typeof budgetChanges>) => void;
+  showBudgetAccount?: boolean;
+}) {
   const [draft, setDraft] = useState<BudgetDraft>({});
   onItems(budgetChanges(lines, draft));
   return (
@@ -32,6 +53,7 @@ function Harness({ onItems }: { onItems: (items: ReturnType<typeof budgetChanges
       groups={groupLines(tree, lines)}
       draft={draft}
       currency="CNY"
+      showBudgetAccount={showBudgetAccount}
       onChange={(id, text) => setDraft({ ...draft, [id]: text })}
     />
   );
@@ -80,5 +102,15 @@ describe("BudgetTable", () => {
     expect(input("买菜")).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText("请输入不小于 0 的金额，最多两位小数")).toBeInTheDocument();
     expect(latest).toEqual({ items: [], invalid: [11] });
+  });
+
+  it("names each row's budget account only in the all-accounts view", () => {
+    const { unmount } = render(<Harness onItems={() => {}} />);
+    expect(screen.queryByText("固定")).not.toBeInTheDocument();
+    unmount();
+
+    render(<Harness onItems={() => {}} showBudgetAccount />);
+    const row = screen.getAllByRole("rowheader", { name: /猫粮用品/ })[0]!;
+    expect(within(row).getByText("固定")).toBeInTheDocument();
   });
 });

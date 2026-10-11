@@ -22,6 +22,8 @@ class BudgetLine(Schema):
     category_name: str
     parent_id: int
     parent_name: str
+    budget_account_id: int
+    budget_account_name: str
     amount: Money | None = Field(
         description="Budget in force for the month; null means no budget (never set, or cleared)"
     )
@@ -31,7 +33,9 @@ class BudgetLine(Schema):
 
 
 class BudgetsOut(Schema):
-    account_id: int
+    budget_account_id: int | None = Field(
+        description="The budget account the lines were filtered by; null for all"
+    )
     currency: str
     month: Month
     budgets: list[BudgetLine]

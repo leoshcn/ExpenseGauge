@@ -10,7 +10,9 @@ class MonthTotal(Schema):
 
 
 class MonthlySummaryOut(Schema):
-    account_id: int
+    budget_account_id: int | None = Field(
+        description="The budget account the figures are for; null for all of them"
+    )
     currency: str
     months: list[MonthTotal]
 
@@ -31,7 +33,9 @@ class Level1Row(Schema):
 
 
 class MonthDetailOut(Schema):
-    account_id: int
+    budget_account_id: int | None = Field(
+        description="The budget account the figures are for; null for all of them"
+    )
     currency: str
     month: Month
     budget: Money | None

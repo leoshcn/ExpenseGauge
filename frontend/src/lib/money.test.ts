@@ -36,7 +36,7 @@ describe("cents", () => {
 });
 
 describe("formatting", () => {
-  it("formats with the account currency", () => {
+  it("formats with the base currency", () => {
     expect(formatMoney("1234.50", "CNY")).toBe("¥1,234.50");
     expect(formatMoney("-12.00", "CNY")).toBe("-¥12.00");
     expect(formatMoney("16.90", "USD")).toBe("US$16.90");

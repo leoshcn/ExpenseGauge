@@ -32,19 +32,20 @@ import { formatDay } from "@/lib/date";
 import { formatMoney } from "@/lib/money";
 import { S } from "@/strings.zh";
 
-import { isRefund, transactionChanges } from "./model";
+import { budgetAccountOf, isRefund, transactionChanges } from "./model";
 
 const T = S.transactions;
 const NOTE_MAX = 1000;
 
 /** Everything that shows a transaction's figures changes when one is edited or deleted. */
-function useInvalidate(accountId: number) {
+function useInvalidate() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: keys.transactions(accountId) }),
-      // Also the Dashboard queries not on screen, so going back never shows stale figures.
-      queryClient.invalidateQueries({ queryKey: keys.summaries(accountId), refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: keys.transactions }),
+      // Also the Dashboard queries not on screen (every scope: a new category can move the
+      // amount to another budget account), so going back never shows stale figures.
+      queryClient.invalidateQueries({ queryKey: keys.summaries, refetchType: "all" }),
     ]);
 }
 
@@ -74,6 +75,8 @@ function ReadOnlyFacts({
       </dd>
       <dt className="text-muted-foreground">{D.date}</dt>
       <dd className="num">{formatDay(transaction.date, now)}</dd>
+      <dt className="text-muted-foreground">{D.channel}</dt>
+      <dd className="min-w-0 break-words">{transaction.channel_name}</dd>
       <dt className="text-muted-foreground">{D.descriptionLabel}</dt>
       <dd className={cn("min-w-0 break-words", !transaction.description && "text-muted-foreground")}>
         {transaction.description || D.noDescription}
@@ -83,8 +86,9 @@ function ReadOnlyFacts({
 }
 
 /**
- * Changes a transaction's category (a level-2 category of the same account) and note.
- * Mounted per transaction (`key`), so the form starts from that transaction's values.
+ * Changes a transaction's category (any level-2 category of the global tree; the budget
+ * account follows from it) and note. The channel cannot change. Mounted per transaction
+ * (`key`), so the form starts from that transaction's values.
  */
 export function EditTransactionDialog({
   transaction,
@@ -107,8 +111,9 @@ export function EditTransactionDialog({
   const noteId = useId();
   const [category, setCategory] = useState(transaction.category_id);
   const [note, setNote] = useState(transaction.note ?? "");
-  const invalidate = useInvalidate(transaction.account_id);
+  const invalidate = useInvalidate();
   const changes = transactionChanges(transaction, { categoryId: category, note });
+  const budgetAccount = budgetAccountOf(tree, category)?.name ?? transaction.budget_account_name;
 
   const save = useMutation({
     mutationFn: (body: Schemas["TransactionUpdateIn"]) => updateTransaction(transaction.id, body),
@@ -155,7 +160,7 @@ export function EditTransactionDialog({
               </SelectContent>
             </Select>
             <p id={`${categoryId}-hint`} className="text-xs text-muted-foreground">
-              {D.categoryHint}
+              {D.categoryHint(budgetAccount)}
             </p>
           </div>
           <div className="space-y-1.5">
@@ -209,7 +214,7 @@ export function DeleteTransactionDialog({
   onClose: () => void;
 }) {
   const D = T.deleteDialog;
-  const invalidate = useInvalidate(transaction.account_id);
+  const invalidate = useInvalidate();
   const remove = useMutation({
     mutationFn: () => deleteTransaction(transaction.id),
     onSuccess: async () => {

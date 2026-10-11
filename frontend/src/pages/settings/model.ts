@@ -20,6 +20,50 @@ export function hermesConfig(endpoint: string, token: string): string {
   ].join("\n");
 }
 
+/** Longest description of a level-2 category (`categories.description VARCHAR(500)`). */
+export const CATEGORY_DESCRIPTION_MAX = 500;
+
+/** A level-2 category's editable fields as the API stores them. */
+export type CategoryFields = { name: string; description: string | null; budgetAccountId: number };
+
+/** The form's values as the API stores them: trimmed, a blank description as `null`. */
+export function categoryFields(name: string, description: string, budgetAccountId: number): CategoryFields {
+  return { name: name.trim(), description: description.trim() || null, budgetAccountId };
+}
+
+/** The body that creates a level-2 category under `parentId`. */
+export function categoryCreateBody(parentId: number, fields: CategoryFields): Schemas["CategoryCreateIn"] {
+  return {
+    name: fields.name,
+    description: fields.description,
+    parent_id: parentId,
+    budget_account_id: fields.budgetAccountId,
+  };
+}
+
+/** The PATCH body with the fields of `next` that differ from `initial`, or `null` when nothing changed. */
+export function categoryChanges(
+  initial: CategoryFields,
+  next: CategoryFields,
+): Schemas["CategoryUpdateIn"] | null {
+  const changes: Schemas["CategoryUpdateIn"] = {};
+  if (next.name !== initial.name) changes.name = next.name;
+  if (next.description !== initial.description) changes.description = next.description;
+  if (next.budgetAccountId !== initial.budgetAccountId) changes.budget_account_id = next.budgetAccountId;
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/** How many level-2 categories each budget account has, by budget account id. */
+export function leafCounts(tree: Schemas["CategoryTree"]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const parent of tree.categories) {
+    for (const child of parent.children) {
+      counts.set(child.budget_account.id, (counts.get(child.budget_account.id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 /** Usable tokens first, newest first; revoked ones after them, most recently revoked first. */
 export function activeFirst(tokens: readonly Schemas["TokenOut"][]): Schemas["TokenOut"][] {
   return [...tokens].sort((a, b) => {
