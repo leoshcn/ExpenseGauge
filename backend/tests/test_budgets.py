@@ -402,3 +402,47 @@ def test_annual_budget_versions_start_in_january(client, agent, ledger):
         ledger.metro: "month",
         insurance: "year",
     }
+
+
+def test_budget_lines_follow_the_category_order(client, ledger):
+    """AC4: after a reorder the lines follow the tree, and the level-2 categories of one
+    level-1 category stay next to each other although their ids interleave."""
+    taxi = ledger.category("打车", ledger.transport)
+    snacks = ledger.category("零食", ledger.food)
+    order = f"{API}/categories/order"
+
+    def names(params: dict | None = None) -> list[tuple[str, str]]:
+        body = client.get(f"{API}/budgets", params=params or {}).json()
+        return [(line["parent_name"], line["category_name"]) for line in body["budgets"]]
+
+    assert names() == [
+        ("餐饮", "买菜"),
+        ("餐饮", "外食"),
+        ("餐饮", "零食"),
+        ("交通", "地铁"),
+        ("交通", "打车"),
+    ]
+    top = {"parent_id": None, "ordered_ids": [ledger.transport, ledger.food]}
+    assert client.put(order, json=top).status_code == 200
+    food = {"parent_id": ledger.food, "ordered_ids": [snacks, ledger.groceries, ledger.dining]}
+    assert client.put(order, json=food).status_code == 200
+    transport = {"parent_id": ledger.transport, "ordered_ids": [taxi, ledger.metro]}
+    assert client.put(order, json=transport).status_code == 200
+
+    expected = [
+        ("交通", "打车"),
+        ("交通", "地铁"),
+        ("餐饮", "零食"),
+        ("餐饮", "买菜"),
+        ("餐饮", "外食"),
+    ]
+    assert names() == expected
+    assert names({"budget_account_id": ledger.daily}) == expected
+    stored = ledger.set_budgets("2026-09", {ledger.metro: "100"})
+    assert [line["category_id"] for line in stored["budgets"]] == [
+        taxi,
+        ledger.metro,
+        snacks,
+        ledger.groceries,
+        ledger.dining,
+    ]

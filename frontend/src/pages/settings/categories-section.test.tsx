@@ -1,10 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Schemas } from "@/api/client";
+import { ApiError, type Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
+
+import { reorderTree } from "./model";
 
 const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常", period: "month" };
 const fixed: Schemas["BudgetAccountOut"] = { id: 2, name: "固定", period: "month" };
@@ -29,6 +31,12 @@ const tree: Schemas["CategoryTree"] = {
   ],
 };
 
+/**
+ * What the backend holds; `GET /categories` and a successful reorder read and write it.
+ * While `offline`, `GET /categories` fails.
+ */
+const server = { tree, offline: false };
+
 const categoryOut = (id: number, body: { name?: string; description?: string | null; parent_id?: number | null; budget_account_id?: number | null }): Schemas["CategoryOut"] => ({
   id,
   parent_id: body.parent_id ?? 10,
@@ -41,7 +49,14 @@ vi.mock("@/api/queries", async (importOriginal) => {
   const actual = await importOriginal<typeof Queries>();
   return {
     ...actual,
-    categoriesQuery: () => ({ queryKey: actual.keys.categories(null), queryFn: async () => tree }),
+    categoriesQuery: () => ({
+      queryKey: actual.keys.categories(null),
+      queryFn: async () => {
+        if (server.offline) throw new Error("offline");
+        return server.tree;
+      },
+    }),
+    reorderCategories: vi.fn(),
     updateCategory: vi.fn(async (id: number, body: Schemas["CategoryUpdateIn"]) => categoryOut(id, body)),
     createCategory: vi.fn(async (body: Schemas["CategoryCreateIn"]) => categoryOut(99, body)),
   };
@@ -63,6 +78,7 @@ describe("CategoriesSection", () => {
   beforeEach(() => {
     vi.mocked(queries.updateCategory).mockClear();
     vi.mocked(queries.createCategory).mockClear();
+    server.tree = tree;
   });
 
   it("shows a level-2 description and budget account; level 1 keeps the rename dialog", async () => {
@@ -185,5 +201,136 @@ describe("CategoriesSection", () => {
         budget_account_id: 1,
       }),
     );
+  });
+});
+
+describe("CategoriesSection: reordering", () => {
+  const handle = (name: string) => screen.getByRole("button", { name: `拖动调整「${name}」的顺序` });
+  /** Category names as shown, top to bottom: level 1 with its level 2 right after it. */
+  const shown = () =>
+    screen.getAllByRole("listitem").map((item) => item.querySelector("span, p")!.firstChild!.textContent);
+  /** Picks the row up with the keyboard, moves it one step and drops it (or `end`). */
+  async function dragByKeyboard(name: string, arrow: "ArrowUp" | "ArrowDown", end = "Space") {
+    const user = userEvent.setup();
+    handle(name).focus();
+    await user.keyboard("[Space]");
+    await user.keyboard(`[${arrow}]`);
+    await user.keyboard(`[${end}]`);
+  }
+
+  beforeEach(() => {
+    server.tree = tree;
+    server.offline = false;
+    vi.mocked(queries.reorderCategories)
+      .mockReset()
+      .mockImplementation(async (body) => {
+        server.tree = reorderTree(server.tree, body.parent_id, body.ordered_ids);
+        return server.tree;
+      });
+    // jsdom has no layout. Rows of 40px stacked in document order (a level-1 row spans its
+    // children) let dnd-kit tell which row is below which.
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const rows = [...document.querySelectorAll("li")];
+      const inside = this.querySelectorAll("li").length;
+      const self = this.tagName === "LI";
+      const first = rows.indexOf((self ? this : this.querySelector("li")) as HTMLLIElement);
+      if (first < 0) return new DOMRect(0, 0, 0, 0);
+      return new DOMRect(0, first * 40, 300, (inside + (self ? 1 : 0)) * 40);
+    });
+  });
+
+  afterEach(() => {
+    vi.mocked(Element.prototype.getBoundingClientRect).mockRestore();
+  });
+
+  it("gives every row a named handle, disabled where there is nothing to reorder", async () => {
+    renderSection();
+    await screen.findByText("超市");
+    for (const name of ["餐饮", "居住", "超市", "外食"]) {
+      expect(handle(name)).toBeEnabled();
+      expect(handle(name)).toHaveAttribute("aria-disabled", "false");
+      expect(handle(name)).toHaveAttribute("aria-roledescription", "可排序项");
+      expect(handle(name)).toHaveAccessibleDescription(/按空格键拾起，用上下方向键移动/);
+    }
+    expect(handle("房租")).toBeDisabled(); // the only level 2 of 居住
+    // The handle comes first in its row, before the name and the row's own actions.
+    const row = screen.getByText("超市").closest("li")!;
+    expect(within(row).getAllByRole("button")[0]).toBe(handle("超市"));
+    expect(within(row).getByRole("button", { name: "编辑「超市」" })).toBeEnabled();
+  });
+
+  it("moves a level-1 category with its children by keyboard and saves the new order", async () => {
+    renderSection();
+    await screen.findByText("超市");
+    expect(shown()).toEqual(["餐饮", "超市", "外食", "居住", "房租"]);
+
+    await dragByKeyboard("餐饮", "ArrowDown");
+
+    await waitFor(() =>
+      expect(queries.reorderCategories).toHaveBeenCalledExactlyOnceWith({ parent_id: null, ordered_ids: [20, 10] }),
+    );
+    await waitFor(() => expect(shown()).toEqual(["居住", "房租", "餐饮", "超市", "外食"]));
+    expect(screen.getByText("已放下「餐饮」，现在在第 2 位，共 2 项。")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("moves a level-2 category inside its parent only", async () => {
+    renderSection();
+    await screen.findByText("超市");
+
+    await dragByKeyboard("外食", "ArrowUp");
+
+    await waitFor(() =>
+      expect(queries.reorderCategories).toHaveBeenCalledExactlyOnceWith({ parent_id: 10, ordered_ids: [12, 11] }),
+    );
+    await waitFor(() => expect(shown()).toEqual(["餐饮", "外食", "超市", "居住", "房租"]));
+  });
+
+  it("sends nothing when the row is dropped where it was, or the drag is cancelled", async () => {
+    renderSection();
+    await screen.findByText("超市");
+
+    await dragByKeyboard("超市", "ArrowUp"); // already the first of its parent: stays inside 餐饮
+    await dragByKeyboard("外食", "ArrowDown"); // already the last: 居住's rows are out of reach
+    await dragByKeyboard("居住", "ArrowUp", "Escape");
+    expect(screen.getByText("已取消，「居住」回到原来的位置。")).toBeInTheDocument();
+
+    expect(queries.reorderCategories).not.toHaveBeenCalled();
+    expect(shown()).toEqual(["餐饮", "超市", "外食", "居住", "房租"]);
+  });
+
+  it("shows the new order while saving, then goes back and says why when the save fails", async () => {
+    let fail!: (error: unknown) => void;
+    vi.mocked(queries.reorderCategories).mockImplementation(
+      () => new Promise((_resolve, reject) => (fail = reject)),
+    );
+    renderSection();
+    await screen.findByText("超市");
+
+    await dragByKeyboard("居住", "ArrowUp");
+
+    // Optimistic: shown at once, and no second reorder can start meanwhile.
+    await waitFor(() => expect(shown()).toEqual(["居住", "房租", "餐饮", "超市", "外食"]));
+    expect(queries.reorderCategories).toHaveBeenCalledExactlyOnceWith({ parent_id: null, ordered_ids: [20, 10] });
+    for (const name of ["餐饮", "居住", "超市", "外食"]) {
+      expect(handle(name)).toHaveAttribute("aria-disabled", "true");
+    }
+    await dragByKeyboard("超市", "ArrowDown");
+    expect(queries.reorderCategories).toHaveBeenCalledTimes(1);
+
+    // The refetch after the failure fails too, so only the rollback can restore the order.
+    server.offline = true;
+    fail(new ApiError(422, "CATEGORY_ORDER_MISMATCH", "分类已发生变化，请刷新后重试"));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("顺序没有保存：分类已发生变化，请刷新后重试");
+    expect(shown()).toEqual(["餐饮", "超市", "外食", "居住", "房租"]);
+    await waitFor(() => expect(handle("餐饮")).toHaveAttribute("aria-disabled", "false"));
+
+    // The next successful reorder clears the message.
+    server.offline = false;
+    vi.mocked(queries.reorderCategories).mockImplementation(async () => server.tree);
+    await dragByKeyboard("超市", "ArrowDown");
+    await waitFor(() => expect(queries.reorderCategories).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 });

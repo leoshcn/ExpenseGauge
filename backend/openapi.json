@@ -565,6 +565,39 @@
         "title": "CategoryNode",
         "type": "object"
       },
+      "CategoryOrderIn": {
+        "additionalProperties": false,
+        "description": "The complete new order of one sibling group: the level-1 categories when\n`parent_id` is null, otherwise the level-2 categories of that level-1 category.",
+        "properties": {
+          "ordered_ids": {
+            "description": "Every category id of the group, each exactly once, in display order",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Ordered Ids",
+            "type": "array"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null reorders level 1",
+            "title": "Parent Id"
+          }
+        },
+        "required": [
+          "parent_id",
+          "ordered_ids"
+        ],
+        "title": "CategoryOrderIn",
+        "type": "object"
+      },
       "CategoryOut": {
         "properties": {
           "budget_account_id": {
@@ -1909,6 +1942,58 @@
           }
         },
         "summary": "Create Category",
+        "tags": [
+          "categories"
+        ]
+      }
+    },
+    "/api/v1/categories/order": {
+      "put": {
+        "description": "Sets the display order of one sibling group (level 1, or one level-1 category's\nchildren) and returns the whole tree. The ids must be exactly those of the group\n(422 `CATEGORY_ORDER_MISMATCH`), so a level-2 category cannot change its parent here.",
+        "operationId": "reorder_categories_api_v1_categories_order_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryOrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTree"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Reorder Categories",
         "tags": [
           "categories"
         ]

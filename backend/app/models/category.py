@@ -11,6 +11,10 @@ class Category(Base):
     and has no description. Name uniqueness is two partial unique indexes: level-1 names
     are unique globally, level-2 names per parent (a plain unique(parent_id, name) would
     allow duplicate level-1 names because PostgreSQL treats NULLs as distinct).
+
+    `position` is the display order among siblings (all level-1 rows; the level-2 rows of
+    one parent), sorted by `(position, id)`. It is deliberately not unique: a reorder
+    rewrites the rows one by one, and a tie or a gap is harmless because `id` breaks it.
     """
 
     __tablename__ = "categories"
@@ -41,6 +45,8 @@ class Category(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id", ondelete="RESTRICT"))
     name: Mapped[str] = mapped_column(String(100))
+    # No default: `services/categories.py::create_category` is the only place that builds one.
+    position: Mapped[int] = mapped_column()
     # What belongs (or does not) in a level-2 category, for the agent that classifies
     # transactions. Level-1 rows always have NULL here.
     description: Mapped[str | None] = mapped_column(String(500))

@@ -519,3 +519,35 @@ def test_all_scope_keeps_annual_spending_out_of_the_monthly_comparison(client, l
     assert annual_series.json()["months"] == [
         {"month": "2026-01", "budget": None, "actual": "0.00", "annual_actual": "6000.00"}
     ]
+
+
+def test_summaries_follow_the_category_order(client, ledger):
+    """AC4: the month detail and the annual summary list categories in the order set by
+    the user, level-2 rows under their own level-1 row."""
+    _seed(ledger)
+    yearly = ledger.budget_account("年度", "year")
+    insurance = ledger.category("保险")
+    car = ledger.category("车险", insurance, yearly)
+    medical = ledger.category("医疗险", insurance, yearly)
+    travel = ledger.category("机票", ledger.transport, yearly)
+    order = f"{API}/categories/order"
+    for parent_id, ordered_ids in [
+        (None, [insurance, ledger.transport, ledger.food]),
+        (ledger.food, [ledger.dining, ledger.groceries]),
+        (insurance, [medical, car]),
+        (ledger.transport, [travel, ledger.metro]),
+    ]:
+        reordered = client.put(order, json={"parent_id": parent_id, "ordered_ids": ordered_ids})
+        assert reordered.status_code == 200, reordered.text
+
+    def rows(body: dict) -> list[tuple[str, list[str]]]:
+        return [(r["name"], [c["name"] for c in r["children"]]) for r in body["categories"]]
+
+    detail = client.get(f"{API}/summary/months/2026-09").json()
+    assert rows(detail) == [("交通", ["地铁"]), ("餐饮", ["外食", "买菜"])]
+    assert (detail["budget"], detail["actual"]) == ("1400.00", "828.80")  # totals unchanged
+
+    annual = client.get(f"{API}/summary/annual/2026-09").json()
+    assert [rows(account) for account in annual["accounts"]] == [
+        [("保险", ["医疗险", "车险"]), ("交通", ["机票"])]
+    ]

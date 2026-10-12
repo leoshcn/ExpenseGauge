@@ -203,6 +203,13 @@ export const createCategory = (body: Schemas["CategoryCreateIn"]) =>
 export const updateCategory = (categoryId: number, body: Schemas["CategoryUpdateIn"]) =>
   unwrap(api.PATCH("/api/v1/categories/{category_id}", { params: { path: { category_id: categoryId } }, body }));
 
+/**
+ * The complete new order of one sibling group: level 1 when `parent_id` is null, else that
+ * level-1 category's children. Answers with the whole tree.
+ */
+export const reorderCategories = (body: Schemas["CategoryOrderIn"]) =>
+  unwrap(api.PUT("/api/v1/categories/order", { body }));
+
 export const deleteCategory = (categoryId: number) =>
   unwrap(api.DELETE("/api/v1/categories/{category_id}", { params: { path: { category_id: categoryId } } }));
 

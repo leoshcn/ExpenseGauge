@@ -217,6 +217,11 @@ with these meanings.
 - **Status chips** follow one shape (fully round, 11 px, medium): "超支" and "退款" use the
   state colours, "已修改" and "有效" use `--accent`, neutral facts ("已撤销", "已确认重复")
   are outlined.
+- **Reordering categories** (settings → 分类): every row starts with a grip handle in
+  `--muted-foreground`, the only part that drags; level-2 rows stay indented under their
+  level-1 row. The row being dragged is lifted with `bg-card` and `shadow-card`, the others
+  slide to make room, and it can move only up and down inside its own list. A failed save
+  puts the rows back and says so in an `--over-soft` strip at the top of the list.
 - **Copy buttons** confirm with a check mark in `--positive` for 2 s. Copying works over
   plain HTTP on a LAN too (`src/lib/clipboard.ts` falls back when the Clipboard API is
   missing).
@@ -231,7 +236,8 @@ keeps the previous result on screen at 60% opacity until the new one arrives.
 
 ## Motion and accessibility
 
-- Motion is limited to meter width, chevron rotation and opacity, 150 to 300 ms, and is
+- Motion is limited to meter width, chevron rotation, opacity and rows sliding while a
+  category is dragged, 150 to 300 ms, and is
   switched off under `prefers-reduced-motion`. Charts do not animate.
 - Meters have `role="meter"` with a label and value text; expandable rows are buttons with
   `aria-expanded`; the month can be changed with the previous/next buttons as well as by

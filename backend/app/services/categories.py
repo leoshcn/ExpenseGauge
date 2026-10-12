@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import delete, exists, select
+from sqlalchemy import delete, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -22,11 +22,28 @@ from app.schemas.budget_account import BudgetAccountOut
 from app.schemas.category import CategoryLeaf, CategoryNode, CategoryTree
 from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 
+# Display order among siblings; `id` breaks a tie between equal positions.
+ORDER = (Category.position, Category.id)
+
 
 def load_categories(db: Session, budget_account_id: int | None = None) -> list[Category]:
     """The whole tree, or only the level-2 categories of one budget account and their
-    level-1 parents. Ordered by id."""
-    categories = list(db.scalars(select(Category).order_by(Category.id)))
+    level-1 parents.
+
+    In display order, as a flat list: level-1 categories by `(position, id)`, each one
+    followed by its level-2 categories by `(position, id)`. This is the one place that
+    decides the order of categories everywhere (tree, budgets, summaries, transactions).
+    """
+    rows = list(db.scalars(select(Category).order_by(*ORDER)))
+    children: dict[int, list[Category]] = {}
+    for row in rows:
+        if row.parent_id is not None:
+            children.setdefault(row.parent_id, []).append(row)
+    categories: list[Category] = []
+    for row in rows:
+        if row.parent_id is None:
+            categories.append(row)
+            categories.extend(children.get(row.id, []))
     if budget_account_id is None:
         return categories
     parent_ids = {c.parent_id for c in categories if c.budget_account_id == budget_account_id}
@@ -110,6 +127,26 @@ def _check_budget_account(db: Session, parent_id: int | None, budget_account_id:
     get_budget_account(db, budget_account_id, status_code=422)
 
 
+def _check_parent(db: Session, parent_id: int | None) -> None:
+    """A parent, when given, must be an existing level-1 category."""
+    if parent_id is None:
+        return
+    parent = get_by_id(db, Category, parent_id)
+    if parent is None:
+        raise invalid("INVALID_PARENT", "上级分类不存在", {"parent_id": parent_id})
+    if parent.parent_id is not None:
+        raise invalid(
+            "INVALID_PARENT",
+            "分类只支持两级，上级分类必须是一级分类",
+            {"parent_id": parent_id},
+        )
+
+
+def _siblings(parent_id: int | None):
+    """The WHERE clause of one sibling group: level 1, or the children of one parent."""
+    return Category.parent_id.is_(None) if parent_id is None else Category.parent_id == parent_id
+
+
 def create_category(
     db: Session,
     name: str,
@@ -117,28 +154,45 @@ def create_category(
     description: str | None = None,
     budget_account_id: int | None = None,
 ) -> Category:
+    """The new category goes last among its siblings."""
     description = _normalize_description(description)
-    if parent_id is not None:
-        parent = get_by_id(db, Category, parent_id)
-        if parent is None:
-            raise invalid("INVALID_PARENT", "上级分类不存在", {"parent_id": parent_id})
-        if parent.parent_id is not None:
-            raise invalid(
-                "INVALID_PARENT",
-                "分类只支持两级，上级分类必须是一级分类",
-                {"parent_id": parent_id},
-            )
+    _check_parent(db, parent_id)
     _check_description(parent_id, description)
     _check_budget_account(db, parent_id, budget_account_id)
+    last = db.scalar(select(func.max(Category.position)).where(_siblings(parent_id)))
     category = Category(
         parent_id=parent_id,
         name=name,
+        position=0 if last is None else last + 1,
         description=description,
         budget_account_id=budget_account_id,
     )
     db.add(category)
     _commit_name(db)
     return category
+
+
+def reorder_categories(db: Session, parent_id: int | None, ordered_ids: list[int]) -> CategoryTree:
+    """Rewrites the display order of one sibling group (level 1 when `parent_id` is None,
+    else that parent's level-2 categories) and returns the whole tree.
+
+    `ordered_ids` must be exactly the ids of the group, each once. That is also what keeps
+    a level-2 category inside its parent: an id of another group never matches.
+    """
+    _check_parent(db, parent_id)
+    siblings = {
+        c.id: c for c in db.scalars(select(Category).where(_siblings(parent_id)).order_by(*ORDER))
+    }
+    if len(ordered_ids) != len(siblings) or set(ordered_ids) != set(siblings):
+        raise invalid(
+            "CATEGORY_ORDER_MISMATCH",
+            "分类已发生变化，请刷新后重试",
+            {"parent_id": parent_id, "expected_ids": list(siblings)},
+        )
+    for position, category_id in enumerate(ordered_ids):
+        siblings[category_id].position = position
+    db.commit()
+    return get_tree(db)
 
 
 def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Category:

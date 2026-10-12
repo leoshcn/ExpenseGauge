@@ -116,6 +116,31 @@ def test_read_tools_return_the_rest_payloads(server_url, client, token, ledger, 
     assert default_month.structured_content == client.get(f"{API}/budgets").json()
 
 
+def test_list_categories_follows_the_order_set_by_the_user(server_url, client, token, ledger):
+    """AC4: the tool returns the tree in the display order, like the REST endpoint, and so
+    does the `valid_categories` feedback of a rejected batch."""
+    order = f"{API}/categories/order"
+    top = {"parent_id": None, "ordered_ids": [ledger.transport, ledger.food]}
+    assert client.put(order, json=top).status_code == 200
+    food = {"parent_id": ledger.food, "ordered_ids": [ledger.dining, ledger.groceries]}
+    assert client.put(order, json=food).status_code == 200
+    url = f"{server_url}/mcp"
+
+    categories = call(url, token["token"], "list_categories", {})
+    assert categories.is_error is False
+    tree = categories.structured_content
+    assert tree == client.get(f"{API}/categories").json()
+    assert [(n["name"], [c["name"] for c in n["children"]]) for n in tree["categories"]] == [
+        ("交通", ["地铁"]),
+        ("餐饮", ["外食", "买菜"]),
+    ]
+
+    arguments = {"channel_id": ledger.channel, "items": [ledger.item(category_id=999)]}
+    rejected = call(url, token["token"], "submit_transactions", arguments)
+    feedback = rejected.structured_content["details"]["items"][0]
+    assert feedback["valid_categories"] == tree["categories"]
+
+
 def test_get_budgets_reflects_a_cleared_budget(server_url, client, token, ledger):
     """AC12 over MCP: the tool returns the REST payload before and after the clearing."""
     ledger.set_budgets("2026-01", {ledger.groceries: "1000", ledger.metro: "0"})

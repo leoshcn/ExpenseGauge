@@ -1,7 +1,13 @@
 from fastapi import APIRouter
 
 from app.deps import AnyPrincipal, DbSession, SessionPrincipal
-from app.schemas.category import CategoryCreateIn, CategoryOut, CategoryTree, CategoryUpdateIn
+from app.schemas.category import (
+    CategoryCreateIn,
+    CategoryOrderIn,
+    CategoryOut,
+    CategoryTree,
+    CategoryUpdateIn,
+)
 from app.services import categories as category_service
 
 router = APIRouter(tags=["categories"])
@@ -20,6 +26,14 @@ def create_category(payload: CategoryCreateIn, principal: SessionPrincipal, db: 
     return category_service.create_category(
         db, payload.name, payload.parent_id, payload.description, payload.budget_account_id
     )
+
+
+@router.put("/categories/order", response_model=CategoryTree)
+def reorder_categories(payload: CategoryOrderIn, principal: SessionPrincipal, db: DbSession):
+    """Sets the display order of one sibling group (level 1, or one level-1 category's
+    children) and returns the whole tree. The ids must be exactly those of the group
+    (422 `CATEGORY_ORDER_MISMATCH`), so a level-2 category cannot change its parent here."""
+    return category_service.reorder_categories(db, payload.parent_id, payload.ordered_ids)
 
 
 @router.patch("/categories/{category_id}", response_model=CategoryOut)

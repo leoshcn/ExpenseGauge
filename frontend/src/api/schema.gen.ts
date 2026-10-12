@@ -138,6 +138,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/categories/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Categories
+         * @description Sets the display order of one sibling group (level 1, or one level-1 category's
+         *     children) and returns the whole tree. The ids must be exactly those of the group
+         *     (422 `CATEGORY_ORDER_MISMATCH`), so a level-2 category cannot change its parent here.
+         */
+        put: operations["reorder_categories_api_v1_categories_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/categories/{category_id}": {
         parameters: {
             query?: never;
@@ -673,6 +695,23 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+        };
+        /**
+         * CategoryOrderIn
+         * @description The complete new order of one sibling group: the level-1 categories when
+         *     `parent_id` is null, otherwise the level-2 categories of that level-1 category.
+         */
+        CategoryOrderIn: {
+            /**
+             * Ordered Ids
+             * @description Every category id of the group, each exactly once, in display order
+             */
+            ordered_ids: number[];
+            /**
+             * Parent Id
+             * @description Null reorders level 1
+             */
+            parent_id: number | null;
         };
         /** CategoryOut */
         CategoryOut: {
@@ -1397,6 +1436,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reorder_categories_api_v1_categories_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryOrderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryTree"];
                 };
             };
             /** @description Validation error */

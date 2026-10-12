@@ -498,3 +498,144 @@ def test_moving_a_category_across_periods_resets_its_budget(client, ledger):
     metro_url = f"{API}/categories/{ledger.metro}"
     assert client.patch(metro_url, json={"budget_account_id": fixed}).status_code == 200
     assert _versions(ledger.metro) == [("2025-01", "100.00")]
+
+
+def _names(http, budget_account_id: int | None = None) -> list[tuple[str, list[str]]]:
+    """The tree as (level-1 name, level-2 names), in the order the API returns it."""
+    params = {} if budget_account_id is None else {"budget_account_id": budget_account_id}
+    body = http.get(f"{API}/categories", params=params).json()
+    return [(n["name"], [c["name"] for c in n["children"]]) for n in body["categories"]]
+
+
+def _positions() -> dict[int, int]:
+    with get_engine().connect() as connection:
+        return dict(connection.execute(text("SELECT id, position FROM categories")).all())
+
+
+def _reorder(http, parent_id: int | None, ordered_ids: list[int]):
+    return http.put(
+        f"{API}/categories/order", json={"parent_id": parent_id, "ordered_ids": ordered_ids}
+    )
+
+
+def test_reordering_level1_and_level2_categories(client, agent, ledger):
+    """AC1/AC2/AC4: a level-1 category moves with its children; level-2 categories are
+    reordered inside one parent and the other parents keep their order. New categories go
+    last among their siblings. The output carries no position, only the array order."""
+    taxi = ledger.category("打车", ledger.transport)
+    assert _names(client) == [("餐饮", ["买菜", "外食"]), ("交通", ["地铁", "打车"])]
+
+    level1 = _reorder(client, None, [ledger.transport, ledger.food])
+    assert level1.status_code == 200, level1.text
+    assert level1.json() == client.get(f"{API}/categories").json()
+    assert _names(client) == [("交通", ["地铁", "打车"]), ("餐饮", ["买菜", "外食"])]
+
+    level2 = _reorder(client, ledger.food, [ledger.dining, ledger.groceries])
+    assert level2.status_code == 200, level2.text
+    assert level2.json()["budget_account_id"] is None
+    assert _names(client) == [("交通", ["地铁", "打车"]), ("餐饮", ["外食", "买菜"])]
+    assert _names(agent) == _names(client)
+    assert "position" not in level2.text
+
+    # Sending the same order again changes nothing.
+    assert _reorder(client, ledger.food, [ledger.dining, ledger.groceries]).status_code == 200
+    assert _names(client) == [("交通", ["地铁", "打车"]), ("餐饮", ["外食", "买菜"])]
+    assert _positions() == {
+        ledger.transport: 0,
+        ledger.food: 1,
+        ledger.metro: 0,
+        taxi: 1,
+        ledger.dining: 0,
+        ledger.groceries: 1,
+    }
+
+    # New categories are appended, also after a reorder and after a deletion left a gap.
+    assert client.delete(f"{API}/categories/{ledger.dining}").status_code == 204
+    ledger.category("零食", ledger.food)
+    ledger.category("居住")
+    assert _names(client) == [
+        ("交通", ["地铁", "打车"]),
+        ("餐饮", ["买菜", "零食"]),
+        ("居住", []),
+    ]
+
+
+def test_reordered_tree_filtered_by_budget_account(client, ledger):
+    """The budget account's view of the tree follows the same order."""
+    fixed = ledger.budget_account("固定")
+    insurance = ledger.category("保险", ledger.transport, fixed)
+    snacks = ledger.category("零食", ledger.food, fixed)
+    assert _reorder(client, None, [ledger.transport, ledger.food]).status_code == 200
+    assert _reorder(client, ledger.transport, [insurance, ledger.metro]).status_code == 200
+    food = [snacks, ledger.dining, ledger.groceries]
+    assert _reorder(client, ledger.food, food).status_code == 200
+    assert _names(client, fixed) == [("交通", ["保险"]), ("餐饮", ["零食"])]
+    assert _names(client, ledger.daily) == [("交通", ["地铁"]), ("餐饮", ["外食", "买菜"])]
+
+
+def test_reorder_refuses_anything_but_the_exact_sibling_group(client, ledger):
+    """AC3: ids of another parent, a missing id, a duplicate, an unknown id or another
+    level are 422 CATEGORY_ORDER_MISMATCH and nothing is stored."""
+    before = _names(client)
+    stored = _positions()
+    refused = [
+        (ledger.food, [ledger.dining, ledger.metro]),  # 地铁 belongs to 交通
+        (ledger.food, [ledger.dining, ledger.groceries, ledger.metro]),
+        (ledger.food, [ledger.dining]),  # 买菜 is missing
+        (ledger.food, [ledger.dining, ledger.dining]),  # a duplicate instead of 买菜
+        (ledger.food, [ledger.dining, ledger.groceries, ledger.dining]),
+        (ledger.food, [ledger.dining, 999]),
+        (ledger.food, [ledger.dining, 2**40]),  # beyond INTEGER
+        (ledger.food, [ledger.food]),  # the parent itself
+        (None, [ledger.transport]),
+        (None, [ledger.transport, ledger.food, ledger.groceries]),  # a level 2 among level 1
+        (None, [ledger.transport, ledger.transport]),
+    ]
+    for parent_id, ordered_ids in refused:
+        body = assert_envelope(
+            _reorder(client, parent_id, ordered_ids), 422, "CATEGORY_ORDER_MISMATCH"
+        )
+        expected = (
+            [ledger.groceries, ledger.dining] if parent_id else [ledger.food, ledger.transport]
+        )
+        assert body["details"] == {"parent_id": parent_id, "expected_ids": expected}, ordered_ids
+    assert _names(client) == before
+    assert _positions() == stored
+
+    # `expected_ids` is the group in its current order.
+    assert _reorder(client, ledger.food, [ledger.dining, ledger.groceries]).status_code == 200
+    body = assert_envelope(_reorder(client, ledger.food, [1]), 422, "CATEGORY_ORDER_MISMATCH")
+    assert body["details"]["expected_ids"] == [ledger.dining, ledger.groceries]
+
+    # A level 1 without children has no group to reorder.
+    empty = ledger.category("空的")
+    body = assert_envelope(_reorder(client, empty, [ledger.metro]), 422, "CATEGORY_ORDER_MISMATCH")
+    assert body["details"] == {"parent_id": empty, "expected_ids": []}
+
+
+def test_reorder_validates_the_parent_and_the_body(client, ledger):
+    for parent_id in (999, 2**40, ledger.groceries):  # unknown, beyond INTEGER, a level 2
+        body = assert_envelope(
+            _reorder(client, parent_id, [ledger.groceries]), 422, "INVALID_PARENT"
+        )
+        assert body["details"] == {"parent_id": parent_id}
+    url = f"{API}/categories/order"
+    both = [ledger.transport, ledger.food]
+    bad_bodies = [
+        {"parent_id": None, "ordered_ids": []},
+        {"ordered_ids": both},  # parent_id is required, null is not implied
+        {"parent_id": None},
+        {"parent_id": None, "ordered_ids": both, "position": 1},
+        {"parent_id": None, "ordered_ids": ["餐饮"]},
+    ]
+    for bad in bad_bodies:
+        assert_envelope(client.put(url, json=bad), 422, "VALIDATION_ERROR")
+    assert _names(client) == [("餐饮", ["买菜", "外食"]), ("交通", ["地铁"])]
+
+
+def test_agent_token_cannot_reorder_categories(client, agent, anon, ledger):
+    """AC6: the order is the user's; an agent token only reads categories."""
+    forbidden = _reorder(agent, None, [ledger.transport, ledger.food])
+    assert_envelope(forbidden, 403, "TOKEN_SCOPE_FORBIDDEN")
+    assert_envelope(_reorder(anon, None, [ledger.transport, ledger.food]), 401, "UNAUTHENTICATED")
+    assert _names(client) == [("餐饮", ["买菜", "外食"]), ("交通", ["地铁"])]

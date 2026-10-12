@@ -49,6 +49,19 @@ class CategoryUpdateIn(RequestSchema):
         return self
 
 
+class CategoryOrderIn(RequestSchema):
+    """The complete new order of one sibling group: the level-1 categories when
+    `parent_id` is null, otherwise the level-2 categories of that level-1 category."""
+
+    parent_id: int | None = Field(description="Null reorders level 1")
+    # Duplicates are refused by the service (`CATEGORY_ORDER_MISMATCH`), like any other
+    # list that is not exactly the group.
+    ordered_ids: list[int] = Field(
+        min_length=1,
+        description="Every category id of the group, each exactly once, in display order",
+    )
+
+
 class CategoryOut(Schema):
     id: int
     parent_id: int | None
