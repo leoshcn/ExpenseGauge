@@ -1,5 +1,7 @@
 /** Pure helpers of the settings page. */
 
+import type { CollisionDetection } from "@dnd-kit/core";
+
 import type { Schemas } from "@/api/client";
 import { parseBudgetInput } from "@/pages/budgets/model";
 
@@ -89,6 +91,80 @@ export function leafCounts(tree: Schemas["CategoryTree"]): Map<number, number> {
   }
   return counts;
 }
+
+function inOrder<T extends { id: number }>(items: readonly T[], orderedIds: readonly number[]): T[] {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  const of = (item: T) => rank.get(item.id) ?? orderedIds.length;
+  return [...items].sort((a, b) => of(a) - of(b));
+}
+
+/**
+ * The tree with one sibling group in the order of `orderedIds`: level 1 when `parentId` is
+ * null, else that level-1 category's children. Every other group is untouched; a category
+ * of the group that is not listed keeps its place after the listed ones.
+ */
+export function reorderTree(
+  tree: Schemas["CategoryTree"],
+  parentId: number | null,
+  orderedIds: readonly number[],
+): Schemas["CategoryTree"] {
+  if (parentId === null) return { ...tree, categories: inOrder(tree.categories, orderedIds) };
+  return {
+    ...tree,
+    categories: tree.categories.map((parent) =>
+      parent.id === parentId ? { ...parent, children: inOrder(parent.children, orderedIds) } : parent,
+    ),
+  };
+}
+
+/**
+ * `ids` after the item `activeId` is dropped on the place of `overId`, or `null` when
+ * nothing moves (dropped on itself, outside the list, or an id the list does not have).
+ */
+export function movedOrder(
+  ids: readonly number[],
+  activeId: number | string,
+  overId: number | string | undefined,
+): number[] | null {
+  const from = ids.findIndex((id) => id === activeId);
+  const to = ids.findIndex((id) => id === overId);
+  if (from < 0 || to < 0 || from === to) return null;
+  const next = [...ids];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
+
+/**
+ * Which row a dragged row is over, for rows of different heights (a level-1 row is as tall
+ * as its children): the farthest row whose middle the leading edge has passed, the bottom
+ * edge when moving down and the top edge when moving up. Comparing centres, as dnd-kit's
+ * `closestCenter` does, never lets a tall block swap with a short neighbour, because the
+ * list bounds stop the block before the two centres meet.
+ */
+export const leadingEdgeCollision: CollisionDetection = ({
+  active,
+  collisionRect,
+  droppableRects,
+  droppableContainers,
+}) => {
+  const start = droppableRects.get(active.id);
+  if (!start) return [];
+  const down = collisionRect.top > start.top;
+  const edge = down ? collisionRect.top + collisionRect.height : collisionRect.top;
+  let over = active.id;
+  let farthest = start.top;
+  for (const container of droppableContainers) {
+    const rect = droppableRects.get(container.id);
+    if (!rect || container.id === active.id) continue;
+    const middle = rect.top + rect.height / 2;
+    const passed = down ? rect.top > farthest && middle < edge : rect.top < farthest && middle > edge;
+    if (passed) {
+      over = container.id;
+      farthest = rect.top;
+    }
+  }
+  return [{ id: over }];
+};
 
 /** Usable tokens first, newest first; revoked ones after them, most recently revoked first. */
 export function activeFirst(tokens: readonly Schemas["TokenOut"][]): Schemas["TokenOut"][] {

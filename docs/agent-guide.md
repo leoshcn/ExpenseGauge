@@ -167,6 +167,10 @@ The global two-level category tree.
 Use only `children[].id` as `category_id`, from any level-1 category. A level-1 category
 with no children cannot be used yet.
 
+The order of `categories` and of each `children` array is the display order the user set
+in the web UI (设置 → 分类). It does not express priority: a category listed first is not
+a better match. Only the user can change it; the agent cannot.
+
 `description` (level 2 only, up to 500 characters, may contain line breaks) is the user's
 own note on what belongs in that category, for example which merchants or which kinds of
 spending, and what does not. When it is present, follow it when classifying; when a

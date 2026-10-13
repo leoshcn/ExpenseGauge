@@ -9,7 +9,7 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from fastapi.testclient import TestClient
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, ProgrammingError
 
 import app.models  # noqa: F401
 from alembic import command
@@ -49,7 +49,9 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
     assert types == {"budgets.amount": "numeric(14,2)", "transactions.amount": "numeric(14,2)"}
 
     budget = "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
-    category = "INSERT INTO categories (parent_id, name, budget_account_id, description) VALUES"
+    category = (
+        "INSERT INTO categories (position, parent_id, name, budget_account_id, description) VALUES"
+    )
     statements = [
         # amount must not be zero
         "INSERT INTO transactions (channel_id, category_id, date, amount, counterparty,"
@@ -59,12 +61,12 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
         f"{budget} ({ledger.metro}, '2026-01-01', -1)",
         f"{budget} ({ledger.metro}, '2026-01-15', 1)",
         # level-1 names are unique globally although parent_id is NULL
-        f"{category} (NULL, '餐饮', NULL, NULL)",
+        f"{category} (9,NULL, '餐饮', NULL, NULL)",
         # level 1 has neither a budget account nor a description
-        f"{category} (NULL, '居住', {ledger.daily}, NULL)",
-        f"{category} (NULL, '居住', NULL, '说明')",
+        f"{category} (9,NULL, '居住', {ledger.daily}, NULL)",
+        f"{category} (9,NULL, '居住', NULL, '说明')",
         # level 2 always has a budget account
-        f"{category} ({ledger.food}, '零食', NULL, NULL)",
+        f"{category} (9,{ledger.food}, '零食', NULL, NULL)",
         # one settings row only
         "INSERT INTO app_settings (id, currency) VALUES (2, 'USD')",
     ]
@@ -75,7 +77,7 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
     with get_engine().begin() as connection:
         connection.execute(text(f"{budget} ({ledger.metro}, '2026-01-01', NULL)"))
         connection.execute(text(f"{budget} ({ledger.metro}, '2026-02-01', 0)"))
-        connection.execute(text(f"{category} ({ledger.food}, '零食', {ledger.daily}, '说明')"))
+        connection.execute(text(f"{category} (9,{ledger.food}, '零食', {ledger.daily}, '说明')"))
 
 
 def _insert_0001_ledger(connection) -> None:
@@ -329,6 +331,67 @@ def test_0005_makes_existing_budget_accounts_monthly(client):
         downgraded = snapshot()
         assert downgraded[0] == [(1, "日常"), (2, "固定"), (3, "年度")]
         assert downgraded[1:] == before[1:]
+    finally:
+        get_engine().dispose()
+        command.upgrade(config, "head")
+
+
+def test_0006_keeps_the_order_of_existing_categories(client):
+    """AC5 (R1): upgrading 0005 -> 0006 numbers existing categories by id within their
+    sibling group, so the tree reads as before; a new category goes last. The downgrade
+    drops the column and nothing else."""
+
+    def rows(columns: str) -> list[tuple]:
+        with get_engine().connect() as connection:
+            result = connection.execute(text(f"SELECT {columns} FROM categories ORDER BY id"))
+            return [tuple(row) for row in result]
+
+    config = alembic_config()
+    get_engine().dispose()
+    try:
+        command.downgrade(config, "0005")
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("INSERT INTO budget_accounts (id, name, period) VALUES (1, '日常', 'month')")
+            )
+            # Ids interleave the two parents, and there is a gap (a deleted category).
+            connection.execute(
+                text(
+                    "INSERT INTO categories (id, parent_id, name, budget_account_id) VALUES"
+                    " (1, NULL, '餐饮', NULL), (2, NULL, '交通', NULL), (3, 2, '地铁', 1),"
+                    " (4, 1, '买菜', 1), (6, 2, '打车', 1), (7, 1, '外食', 1),"
+                    " (8, NULL, '空的', NULL)"
+                )
+            )
+            connection.execute(text("SELECT setval('categories_id_seq', 8)"))
+        before = rows("id, parent_id, name, description, budget_account_id")
+
+        command.upgrade(config, "0006")
+        assert rows("id, position") == [(1, 0), (2, 1), (3, 0), (4, 0), (6, 1), (7, 1), (8, 2)]
+        assert rows("id, parent_id, name, description, budget_account_id") == before
+
+        def tree() -> list[tuple[str, list[str]]]:
+            body = client.get(f"{API}/categories").json()
+            return [(n["name"], [c["name"] for c in n["children"]]) for n in body["categories"]]
+
+        assert tree() == [("餐饮", ["买菜", "外食"]), ("交通", ["地铁", "打车"]), ("空的", [])]
+        new_child = {"name": "公交", "parent_id": 2, "budget_account_id": 1}
+        assert client.post(f"{API}/categories", json=new_child).status_code == 201
+        assert client.post(f"{API}/categories", json={"name": "居住"}).status_code == 201
+        assert tree() == [
+            ("餐饮", ["买菜", "外食"]),
+            ("交通", ["地铁", "打车", "公交"]),
+            ("空的", []),
+            ("居住", []),
+        ]
+        with pytest.raises(IntegrityError), get_engine().begin() as connection:
+            connection.execute(text("INSERT INTO categories (name) VALUES ('无位置')"))
+
+        get_engine().dispose()
+        command.downgrade(config, "0005")
+        assert rows("id, parent_id, name, description, budget_account_id")[: len(before)] == before
+        with pytest.raises(ProgrammingError), get_engine().connect() as connection:
+            connection.execute(text("SELECT position FROM categories"))
     finally:
         get_engine().dispose()
         command.upgrade(config, "head")

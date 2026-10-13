@@ -451,6 +451,19 @@ export const S = {
       delete: (name: string) => `删除「${name}」`,
       childCount: (count: number) => `${count} 个二级分类`,
       noChildren: "尚无二级分类，暂不可用",
+      reorder: {
+        handle: (name: string) => `拖动调整「${name}」的顺序`,
+        roleDescription: "可排序项",
+        instructions: "按空格键拾起，用上下方向键移动，再按空格键放下，按 Esc 键取消。",
+        picked: (name: string, position: number, total: number) =>
+          `已拾起「${name}」，当前在第 ${position} 位，共 ${total} 项。`,
+        moved: (name: string, position: number, total: number) =>
+          `「${name}」移到第 ${position} 位，共 ${total} 项。`,
+        dropped: (name: string, position: number, total: number) =>
+          `已放下「${name}」，现在在第 ${position} 位，共 ${total} 项。`,
+        cancelled: (name: string) => `已取消，「${name}」回到原来的位置。`,
+        failed: (reason: string) => `顺序没有保存：${reason}`,
+      },
       empty: {
         title: "还没有分类",
         body: "先添加一个一级分类，再在它下面添加二级分类。",

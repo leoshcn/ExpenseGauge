@@ -90,7 +90,8 @@ def create_mcp_server() -> MCPServer:
         level-2 category shows its `budget_account` `{id, name}` for reference only; it
         does not restrict which channel may use it. A level-2 category may carry a
         `description` written by the user (what belongs / does not belong there); follow
-        it when classifying. `description` is null when none was written.
+        it when classifying. `description` is null when none was written. The array order
+        is the display order the user chose; it does not express priority.
         """
         try:
             tree = await _run(category_service.get_tree)
