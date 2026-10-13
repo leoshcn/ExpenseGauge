@@ -44,18 +44,32 @@ transactions. The agent is the bookkeeper in front of it:
    choice.
 5. **Ask the user** about anything uncertain (category, whether it is a real expense),
    and only then submit.
-6. **Submit** the confirmed batch of **one channel** (`submit_transactions(channel_id,
-   items)`). Expense = positive amount, refund = negative amount in the original
-   expense's category.
-7. **Read the feedback.** If the batch is rejected nothing was stored; fix or confirm the
+6. **Match refunds to their payments.** For each refund, find the payment it reverses:
+   in the same batch (`refund_of_index`), or already stored (`find_payments`, then
+   `refund_of_id`). If you cannot find it or are unsure, ask the user; if it still cannot
+   be determined, submit the refund without either field (it is stored unmatched and the
+   user can match it later).
+7. **Submit** the confirmed batch of **one channel** (`submit_transactions(channel_id,
+   items)`). Expense = positive amount, refund = negative amount.
+8. **Read the feedback.** If the batch is rejected nothing was stored; fix or confirm the
    rejected items with the user and submit the batch again.
-8. Optionally read the month's budgets (`get_budgets`) to tell the user how a category
-   stands against its budget. The agent cannot read stored transactions or actual
-   spending; the user sees those on the Dashboard.
+9. Optionally read the month's budgets (`get_budgets`) to tell the user how a category
+   stands against its budget. Apart from `find_payments` (stored payments only, to match
+   refunds) the agent cannot read stored transactions or actual spending; the user sees
+   those on the Dashboard.
 
-The agent can never change or delete an existing record, edit budgets, categories,
-channels or budget accounts, or read user information. Corrections are made by the user
-in the web UI (Transactions page).
+The agent can never change or delete an existing record (a stored match included), edit
+budgets, categories, channels or budget accounts, or read user information. Corrections
+are made by the user in the web UI (Transactions page).
+
+### How a matched refund counts
+
+A refund matched to a payment counts in the **payment's** month and category: the
+payment's net amount is its amount minus its matched refunds. A payment counts as one
+"consumption" (消费笔数) while its net amount is above zero; fully refunded, it no longer
+counts. An unmatched refund counts in its own month and in its own `category_id`. One
+payment may have several refunds (partial or repeated) as long as they add up to at most
+its amount; one refund matches at most one payment.
 
 ## Connecting
 
@@ -89,11 +103,11 @@ mcp_servers:
   (including `~/.hermes/.env`), so the token can live there instead, e.g.
   `Authorization: "Bearer ${EXPENSEGAUGE_TOKEN}"`.
 - Hermes registers the tools as `mcp_expensegauge_list_channels`,
-  `mcp_expensegauge_list_categories`, `mcp_expensegauge_get_budgets` and
-  `mcp_expensegauge_submit_transactions`.
+  `mcp_expensegauge_list_categories`, `mcp_expensegauge_get_budgets`,
+  `mcp_expensegauge_find_payments` and `mcp_expensegauge_submit_transactions`.
 - After editing the file, restart Hermes or run `/reload-mcp` in a session.
 - Optional keys: `enabled: false` to switch the server off, and `tools.include` /
-  `tools.exclude` to filter tools (all four are needed for the workflow above).
+  `tools.exclude` to filter tools (all five are needed for the workflow above).
 
 These keys were re-checked on 2026-10-10 against
 <https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp> (section "HTTP
@@ -222,6 +236,28 @@ budget of zero. A level-1 budget is the sum of its children and is not returned.
   January up to now, never with a single month's, and do not divide it by 12. One large
   payment (an annual insurance premium, a holiday) is expected in such a category.
 
+### `find_payments(date_from: str, date_to: str, channel_id: int | None = None, counterparty: str | None = None, limit: int = 20)`
+
+Stored **payments** (positive amounts; refunds are never returned) dated from `date_from`
+to `date_to` (`YYYY-MM-DD`, both inclusive; the range covers at most 366 days, both ends
+counted), newest first. Use it only to find the payment a refund reverses.
+
+- `channel_id`: only that channel's payments. A refund usually, but not always, comes
+  back on the channel that paid; search without it when nothing is found.
+- `counterparty`: matched anywhere in the counterparty, ignoring case.
+- `limit`: 1 to 50.
+
+```json
+{ "payments": [
+  { "id": 87, "channel_id": 1, "channel_name": "储蓄卡", "date": "2026-09-28",
+    "amount": "199.00", "counterparty": "京东", "description": "网购",
+    "category_id": 41, "category_name": "数码", "refunded": "50.00", "refundable": "149.00" } ] }
+```
+
+`refunded` is what is already matched to it; `refundable` (`amount - refunded`) is the most
+a new refund of it may be. A payment is never dated after its refund, so `date_to` can be
+the refund's date.
+
 ### `submit_transactions(channel_id: int, items: list[item])`
 
 Submits a batch of 1 to 500 items, all from **one channel**. **All or nothing.** Each item:
@@ -235,8 +271,20 @@ Submits a batch of 1 to 500 items, all from **one channel**. **All or nothing.**
 | `category_id` | int | yes | any level-2 category |
 | `note` | string, 0-1000 | no | free text, e.g. what the user said or the original foreign amount |
 | `confirm_duplicate` | bool | no (default `false`) | **single-use**, see below |
+| `refund_of_id` | int | no | refunds only: `id` of the stored payment it reverses (from `find_payments`) |
+| `refund_of_index` | int | no | refunds only: `index` of the payment item in this same batch that it reverses |
 
 No other fields are accepted (an unknown field rejects that item as `INVALID_FIELD`).
+`refund_of_id` and `refund_of_index` are mutually exclusive (both on one item:
+`INVALID_FIELD`). A matched refund still needs a level-2 `category_id`: it is ignored while
+the match exists (the refund counts in its payment's category) and applies again if the
+user removes the match; the original expense's category is the natural choice. A refund
+without either field is stored **unmatched**, exactly as before.
+
+Each transaction in the result also carries `refund_of` (`{id, date, amount,
+counterparty, category_name}` of the matched payment, or `null`) and `refunded` (a
+payment's matched refunds, positive; `"0.00"` for a refund). A matched refund's
+`category_*` and `budget_account_*` are its payment's.
 
 Accepted (everything stored):
 
@@ -282,7 +330,9 @@ Rejected (**nothing stored**, one entry per item, in item order):
 | `DUPLICATE_IN_BATCH` | `duplicate_of_index`, `hint` | The item is identical to an earlier item of the same batch. Ask the user: if it is the same transaction listed twice, drop one; if both are real, set `confirm_duplicate: true` on the later one(s) and resubmit. |
 | `CATEGORY_NOT_FOUND` | `valid_categories` (the global tree, same shape as `list_categories`) | The `category_id` does not exist. Re-classify with a level-2 id from `valid_categories` (ask the user if unsure). Your cached category list is probably stale. |
 | `CATEGORY_NOT_LEAF` | `parent` `{id, name}`, `children` `[{id, name, description, budget_account}]` | A level-1 category was used. Pick one of `children` (ask the user if unsure). If `children` is empty, the user must first add a level-2 category in the web UI. |
-| `INVALID_FIELD` | `errors` `[{field, reason}]` | A field is missing, malformed or not allowed (e.g. amount 0, more than 2 decimals, bad date, empty counterparty, unknown field). Fix the item from the source data; do not invent values. |
+| `INVALID_FIELD` | `errors` `[{field, reason}]` | A field is missing, malformed or not allowed (e.g. amount 0, more than 2 decimals, bad date, empty counterparty, unknown field, both `refund_of_id` and `refund_of_index`). Fix the item from the source data; do not invent values. |
+| `INVALID_REFUND_TARGET` | `refund_of_id` or `refund_of_index` | The match is not possible: the item is not a refund, the target does not exist, is a refund or the item itself, is dated after the refund, or (for `refund_of_index`) the referenced item is itself rejected. Check with `find_payments` / the batch; if the right payment cannot be found, ask the user, or drop the field to store the refund unmatched. |
+| `REFUND_EXCEEDS_PAYMENT` | `payment_amount`, `refunded`, `refundable`, and the reference | The payment's matched refunds (stored ones plus earlier refunds of this batch pointing at it) would exceed its amount. It is probably the wrong payment: look again, or ask the user. |
 
 Duplicate detection: two transactions are "the same" when **channel**, date, amount (to
 the cent), counterparty and description match after normalization (Unicode NFKC, trimmed,
@@ -295,8 +345,10 @@ a statement under its own channel.
 | Code | HTTP | Meaning / action |
 |---|---|---|
 | `INVALID_TOKEN` | 401 | Token missing, unknown or revoked. Stop and ask the user for a new token. |
-| `TOKEN_SCOPE_FORBIDDEN` | 403 | REST only: an agent token was used on an endpoint other than the four agent operations. Do not retry. |
-| `CHANNEL_NOT_FOUND` | 404 | Wrong `channel_id`. Call `list_channels` and ask the user which channel the statement belongs to. |
+| `TOKEN_SCOPE_FORBIDDEN` | 403 | REST only: an agent token was used on an endpoint other than the five agent operations. Do not retry. |
+| `CHANNEL_NOT_FOUND` | 404 / 422 | Wrong `channel_id` (422 when it is a `find_payments` filter). Call `list_channels` and ask the user which channel the statement belongs to. |
+| `INVALID_DATE_RANGE` | 422 | `find_payments`: `date_from` after `date_to`, or a range of more than 366 days (both ends counted). Narrow the range. |
+| `INVALID_LIMIT` | 422 | `find_payments`: `limit` is not 1 to 50. |
 | `BUDGET_ACCOUNT_NOT_FOUND` | 422 | `get_budgets` with a `budget_account_id` that does not exist. Use an id from `list_categories` (`budget_account.id`) or omit it. |
 | `SETTINGS_NOT_INITIALIZED` | 409 | `get_budgets` before the user finished the first-time setup (no base currency yet). Ask the user to finish setup in the web UI. |
 | `INVALID_BATCH_SIZE` | 422 | `items` empty or more than 500. Split the batch. |
@@ -330,8 +382,13 @@ a normal result with `accepted: false`, so read `details.items`.
    "already present, skip": drop those items and submit the rest.
 7. **No corrections through the agent.** A wrongly stored transaction is fixed (category,
    note) or deleted by the user on the Transactions page. Its channel cannot be changed.
-8. **Refunds** are negative amounts in the category of the original expense. Transfers
-   between the user's own accounts and credit-card repayments are not submitted at all.
+8. **Refunds** are negative amounts. Name the payment each one reverses: `refund_of_index`
+   when that payment is in the same batch, otherwise `find_payments` then `refund_of_id`.
+   Never guess: if no payment fits (or several do and you cannot tell), ask the user; if
+   it is still unknown, submit the refund without either field. Give it the original
+   expense's category anyway. A stored match is changed or removed only by the user.
+   Transfers between the user's own accounts and credit-card repayments are not
+   submitted at all.
 
 ## REST equivalents
 
@@ -344,6 +401,7 @@ payloads. Use them with the same `Authorization: Bearer eg_...` header and
 | `list_channels()` | `GET /channels` (returns the array itself, without the `{"channels": ...}` wrapper) |
 | `list_categories()` | `GET /categories` |
 | `get_budgets(month, budget_account_id)` | `GET /budgets?month=YYYY-MM&budget_account_id=<id>` (both optional) |
+| `find_payments(date_from, date_to, channel_id, counterparty, limit)` | `GET /payments/search?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&channel_id=<id>&counterparty=<text>&limit=<n>` |
 | `submit_transactions(channel_id, items)` | `POST /channels/{channel_id}/transactions/batch` with body `{"items": [...]}` |
 
 Differences on REST: success is `201` with `{"accepted": true, "transactions": [...]}`;

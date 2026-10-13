@@ -259,6 +259,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Payments
+         * @description Stored payments (never refunds) between two dates (inclusive, at most 366 days),
+         *     to find the payment a refund reverses. Open to agent tokens; the MCP `find_payments`
+         *     tool returns the same.
+         */
+        get: operations["search_payments_api_v1_payments_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -430,7 +452,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Transactions */
+        /**
+         * List Transactions
+         * @description The ledger, newest first, with `stats` (consumption count and net amount) for the
+         *     same filters by effective attribution, as the summaries count.
+         */
         get: operations["list_transactions_api_v1_transactions_get"];
         put?: never;
         post?: never;
@@ -450,12 +476,61 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Transaction */
+        /**
+         * Delete Transaction
+         * @description A payment that still has matched refunds is refused (409); a refund never is.
+         */
         delete: operations["delete_transaction_api_v1_transactions__transaction_id__delete"];
         options?: never;
         head?: never;
-        /** Update Transaction */
+        /**
+         * Update Transaction
+         * @description Category and note; for a refund also `refund_of_id` (match, re-match, or null to
+         *     remove the match). A matched refund's category follows its payment.
+         */
         patch: operations["update_transaction_api_v1_transactions__transaction_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/transactions/{transaction_id}/refund-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Refund Candidates
+         * @description Payments this refund may be matched to (dated on or before it, enough left to
+         *     refund): same channel and counterparty first, then newest first. `q` searches
+         *     counterparty and description.
+         */
+        get: operations["refund_candidates_api_v1_transactions__transaction_id__refund_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/{transaction_id}/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Refunds
+         * @description The refunds matched to this payment, oldest first (empty for a refund).
+         */
+        get: operations["list_refunds_api_v1_transactions__transaction_id__refunds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
@@ -481,6 +556,11 @@ export interface components {
              * @description Rows with the annual budget and the year-to-date actual
              */
             categories: components["schemas"]["Level1Row"][];
+            /**
+             * Count
+             * @description Consumption count from January to the end of `through`
+             */
+            count: number;
             /**
              * Months
              * @description January to `through`, one entry per month
@@ -557,6 +637,16 @@ export interface components {
                 description: string;
                 /** Note */
                 note?: string | null;
+                /**
+                 * Refund Of Id
+                 * @description Refunds only: id of the stored payment this refund reverses (from the payment search). Not together with `refund_of_index`
+                 */
+                refund_of_id?: number | null;
+                /**
+                 * Refund Of Index
+                 * @description Refunds only: index, in this batch, of the payment item this refund reverses. Not together with `refund_of_id`
+                 */
+                refund_of_index?: number | null;
             }[];
         };
         /** BudgetAccountCreateIn */
@@ -822,6 +912,11 @@ export interface components {
             category_id: number;
             /** Children */
             children: components["schemas"]["Level2Row"][];
+            /**
+             * Count
+             * @description Sum of the children's counts
+             */
+            count: number;
             /** Name */
             name: string;
         };
@@ -836,6 +931,11 @@ export interface components {
             budget: string | null;
             /** Category Id */
             category_id: number;
+            /**
+             * Count
+             * @description Payments counted here whose net amount (after matched refunds) is above 0
+             */
+            count: number;
             /** Name */
             name: string;
         };
@@ -855,7 +955,7 @@ export interface components {
             actual: string;
             /**
              * Annual Actual
-             * @description Actual of the annual budget accounts' categories in the month; they are in neither `actual` nor `categories`
+             * @description Actual of the annual budget accounts' categories in the month; they are in neither `actual`, `count` nor `categories`
              */
             annual_actual: string;
             /** Budget */
@@ -867,6 +967,11 @@ export interface components {
             budget_account_id: number | null;
             /** Categories */
             categories: components["schemas"]["Level1Row"][];
+            /**
+             * Count
+             * @description Consumption count over the same categories as `actual`: payments of the month whose net amount (after matched refunds) is above 0
+             */
+            count: number;
             /** Currency */
             currency: string;
             /** Month */
@@ -903,6 +1008,84 @@ export interface components {
             currency: string;
             /** Months */
             months: components["schemas"]["MonthTotal"][];
+        };
+        /**
+         * PaymentOut
+         * @description A stored payment, as much of it as finding a refund's original payment needs.
+         */
+        PaymentOut: {
+            /** Amount */
+            amount: string;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Channel Id */
+            channel_id: number;
+            /** Channel Name */
+            channel_name: string;
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Description */
+            description: string;
+            /** Id */
+            id: number;
+            /**
+             * Refundable
+             * @description `amount - refunded`: what a new refund may not exceed
+             */
+            refundable: string;
+            /**
+             * Refunded
+             * @description Total of the refunds already matched to it (positive)
+             */
+            refunded: string;
+        };
+        /** PaymentSearchOut */
+        PaymentSearchOut: {
+            /**
+             * Payments
+             * @description Newest first
+             */
+            payments: components["schemas"]["PaymentOut"][];
+        };
+        /**
+         * RefundCandidatePage
+         * @description Payments a refund can be matched to, best guesses first.
+         */
+        RefundCandidatePage: {
+            /** Items */
+            items: components["schemas"]["TransactionOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * RefundTarget
+         * @description The payment a matched refund reverses.
+         */
+        RefundTarget: {
+            /** Amount */
+            amount: string;
+            /** Category Name */
+            category_name: string;
+            /** Counterparty */
+            counterparty: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Id */
+            id: number;
         };
         /** SettingsOut */
         SettingsOut: {
@@ -978,7 +1161,10 @@ export interface components {
             budget_account_id: number;
             /** Budget Account Name */
             budget_account_name: string;
-            /** Category Id */
+            /**
+             * Category Id
+             * @description For a matched refund: the category of its payment (where it counts), not the one it was submitted with
+             */
             category_id: number;
             /** Category Name */
             category_name: string;
@@ -1010,6 +1196,13 @@ export interface components {
             parent_category_id: number;
             /** Parent Category Name */
             parent_category_name: string;
+            /** @description The payment this refund is matched to; null for a payment and for an unmatched refund */
+            refund_of: components["schemas"]["RefundTarget"] | null;
+            /**
+             * Refunded
+             * @description Total of the refunds matched to this payment, as a positive amount; "0.00" for a refund
+             */
+            refunded: string;
         };
         /** TransactionPage */
         TransactionPage: {
@@ -1019,18 +1212,42 @@ export interface components {
             page: number;
             /** Page Size */
             page_size: number;
+            stats: components["schemas"]["TransactionStats"];
             /** Total */
             total: number;
         };
         /**
+         * TransactionStats
+         * @description Figures for the list's filters, by effective attribution (a matched refund counts
+         *     in its payment's month, category and channel), like the summaries.
+         */
+        TransactionStats: {
+            /**
+             * Count
+             * @description Payments whose net amount (after matched refunds) is above 0
+             */
+            count: number;
+            /**
+             * Net Amount
+             * @description Payments minus refunds
+             */
+            net_amount: string;
+        };
+        /**
          * TransactionUpdateIn
-         * @description Only category and note are editable. Omitted fields are left unchanged.
+         * @description Category, note and (for a refund) the matched payment are editable. Omitted fields
+         *     are left unchanged.
          */
         TransactionUpdateIn: {
             /** Category Id */
             category_id?: number | null;
             /** Note */
             note?: string | null;
+            /**
+             * Refund Of Id
+             * @description Refunds only: the payment to match (or re-match) this refund to; null removes the match
+             */
+            refund_of_id?: number | null;
         };
         /** UserOut */
         UserOut: {
@@ -1799,6 +2016,50 @@ export interface operations {
             };
         };
     };
+    search_payments_api_v1_payments_search_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+                channel_id?: number | null;
+                counterparty?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentSearchOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     get_settings_api_v1_settings_get: {
         parameters: {
             query?: never;
@@ -2210,6 +2471,8 @@ export interface operations {
                 channel_id?: number | null;
                 budget_account_id?: number | null;
                 category_id?: number | null;
+                /** @description `unmatched`: only refunds not matched to a payment */
+                refund_status?: "unmatched" | null;
                 page?: number;
                 page_size?: number;
             };
@@ -2266,6 +2529,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description TRANSACTION_HAS_REFUNDS: a payment with matched refunds */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             /** @description Validation error */
             422: {
                 headers: {
@@ -2308,6 +2580,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    refund_candidates_api_v1_transactions__transaction_id__refund_candidates_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                transaction_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundCandidatePage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_refunds_api_v1_transactions__transaction_id__refunds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transaction_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionOut"][];
                 };
             };
             /** @description Validation error */

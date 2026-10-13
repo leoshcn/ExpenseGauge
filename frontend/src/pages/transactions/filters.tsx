@@ -2,6 +2,8 @@ import { cn } from "cn";
 import { useId } from "react";
 
 import type { Schemas } from "@/api/client";
+import type { RefundStatus } from "@/api/queries";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -26,6 +28,7 @@ export type FilterChange = {
   channel?: number | null;
   budget_account?: number | null;
   category?: number | null;
+  refund?: RefundStatus | null;
 };
 
 /** A labelled select with an "all" option first. */
@@ -77,7 +80,8 @@ const idOrNull = (value: string | null) => (value === null ? null : Number(value
 /**
  * Month, payment channel, budget account and category filters. `null` is "all"; a level-1
  * category includes its children. The category list is the global tree, whatever the
- * budget-account filter: the two are combined by the API.
+ * budget-account filter: the two are combined by the API. A toggle narrows the list to
+ * refunds that are not matched to a payment yet, for cleaning up older refunds.
  */
 export function Filters({
   tree,
@@ -87,6 +91,7 @@ export function Filters({
   channelId,
   budgetAccountId,
   categoryId,
+  refundStatus,
   now,
   onChange,
   className,
@@ -98,6 +103,7 @@ export function Filters({
   channelId: number | null;
   budgetAccountId: number | null;
   categoryId: number | null;
+  refundStatus: RefundStatus | null;
   now: Date;
   onChange: (next: FilterChange) => void;
   className?: string;
@@ -176,6 +182,19 @@ export function Filters({
           </SelectGroup>
         ))}
       </FilterSelect>
+      <Button
+        type="button"
+        variant="outline"
+        aria-pressed={refundStatus === "unmatched"}
+        title={T.unmatchedOnlyHint}
+        onClick={() => onChange({ refund: refundStatus === "unmatched" ? null : "unmatched" })}
+        className={cn(
+          "col-span-2 bg-card sm:col-span-1",
+          refundStatus === "unmatched" && "border-warning bg-warning-soft text-warning-foreground hover:bg-warning-soft",
+        )}
+      >
+        {T.unmatchedOnly}
+      </Button>
     </div>
   );
 }

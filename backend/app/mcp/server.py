@@ -1,4 +1,4 @@
-"""MCP server: four tools over the same service functions the REST routers call.
+"""MCP server: five tools over the same service functions the REST routers call.
 
 No rule lives here. A tool opens a database session, calls one service function and
 returns the REST payload. Authentication is the ASGI middleware below, which uses the
@@ -7,6 +7,7 @@ same token check as REST.
 
 import json
 from collections.abc import Callable
+from datetime import date
 from typing import Any
 
 import anyio.to_thread
@@ -35,7 +36,11 @@ INSTRUCTIONS = (
     "currency (convert foreign-currency spending at that day's rate before submitting). "
     "Batches are all-or-nothing; read the per-item feedback in a rejected result. "
     "confirm_duplicate is single-use. A level-2 category may carry a `description` written "
-    "by the user (what belongs / does not belong there); follow it when classifying."
+    "by the user (what belongs / does not belong there); follow it when classifying. "
+    "Before submitting a refund (negative amount), call find_payments to find the payment it "
+    "reverses and set the refund's refund_of_id (or refund_of_index when that payment is an "
+    "item of the same batch); if you cannot find it or are unsure, ask the user, and leave "
+    "both out if it still cannot be determined (the refund is then stored unmatched)."
 )
 
 
@@ -121,6 +126,36 @@ def create_mcp_server() -> MCPServer:
         return budgets.model_dump(mode="json")
 
     @server.tool()
+    async def find_payments(
+        date_from: date,
+        date_to: date,
+        channel_id: int | None = None,
+        counterparty: str | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Find stored payments (expenses, never refunds), to match a refund to the payment
+        it reverses: `{"payments": [{id, channel_id, channel_name, date, amount,
+        counterparty, description, category_id, category_name, refunded, refundable}]}`,
+        newest first.
+
+        `date_from` / `date_to` (YYYY-MM-DD, inclusive) may span at most 366 days; a
+        payment is never dated after its refund. Optional `channel_id` (a refund often,
+        not always, comes back on the paying channel) and `counterparty` (matched
+        anywhere, ignoring case). `limit` is 1 to 50. `refundable` is what a new refund
+        of that payment may not exceed. Use the chosen payment's `id` as the refund's
+        `refund_of_id` in submit_transactions.
+        """
+        try:
+            found = await _run(
+                lambda db: transaction_service.search_payments(
+                    db, date_from, date_to, channel_id, counterparty, limit
+                )
+            )
+        except AppError as error:
+            return _error_result(error)
+        return found.model_dump(mode="json")
+
+    @server.tool()
     async def submit_transactions(
         channel_id: int, items: list[RawTransactionItem], ctx: Context
     ) -> dict[str, Any]:
@@ -130,6 +165,15 @@ def create_mcp_server() -> MCPServer:
         `channel_id` comes from list_channels. Each item: date (YYYY-MM-DD), amount (in
         the base currency), counterparty, description, category_id (any level-2
         category), optional note, optional confirm_duplicate.
+
+        A refund may name the payment it reverses, with at most one of: `refund_of_id`
+        (a stored payment's `id` from find_payments) or `refund_of_index` (the index of a
+        payment item in this same batch). The refund then counts against that payment's
+        month and category; still give it a level-2 `category_id` (used if the user later
+        removes the match). Rejected as `INVALID_REFUND_TARGET` when the target is not a
+        payment, is dated after the refund or the item is not a refund, and as
+        `REFUND_EXCEEDS_PAYMENT` when the payment's matched refunds would exceed it.
+        Without either field the refund is stored unmatched, as before.
 
         On success: `{"accepted": true, "transactions": [...]}`. If any item is rejected
         nothing is stored and the result is `{"accepted": false, "code": "BATCH_REJECTED",

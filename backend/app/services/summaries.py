@@ -3,6 +3,11 @@
 Scope is either everything (`budget_account_id` None) or one budget account. A
 transaction counts where its category belongs, whichever payment channel it came from.
 
+Amounts and consumption counts come from `refunds.effective_totals`, the only place that
+decides where a transaction counts: a refund matched to a payment reduces the payment's
+month and category, an unmatched one its own. `count` is the number of payments whose net
+amount (after matched refunds) is above zero.
+
 Monthly and annual budget accounts are never mixed in one comparison. The month views
 (`get_monthly_summary`, `get_month_detail`) compare monthly budgets with the actuals of
 monthly accounts' categories and report annual accounts' spending apart, as
@@ -12,11 +17,10 @@ monthly accounts' categories and report annual accounts' spending apart, as
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Date, cast, func, select
 from sqlalchemy.orm import Session
 
 from app.errors import invalid
-from app.models import BudgetAccount, Category, Transaction
+from app.models import BudgetAccount, Category
 from app.months import add_months, format_month, months_between, parse_month
 from app.schemas.summary import (
     AnnualAccount,
@@ -31,6 +35,7 @@ from app.schemas.summary import (
 from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 from app.services.budgets import BudgetHistory, load_history
 from app.services.categories import load_categories
+from app.services.refunds import NO_TOTALS, Totals, effective_totals, sum_totals
 from app.services.settings import require_currency
 
 DEFAULT_MONTHS = 12
@@ -42,6 +47,18 @@ def _sum_or_none(amounts: list[Decimal | None]) -> Decimal | None:
     """Sum of the known budgets; None when there is none at all ("no budget")."""
     known = [amount for amount in amounts if amount is not None]
     return sum(known, ZERO) if known else None
+
+
+def _level1_row(category: Category) -> Level1Row:
+    return Level1Row(
+        category_id=category.id, name=category.name, budget=None, actual=ZERO, count=0, children=[]
+    )
+
+
+def _sum_children(row: Level1Row) -> None:
+    row.budget = _sum_or_none([child.budget for child in row.children])
+    row.actual = sum((child.actual for child in row.children), ZERO)
+    row.count = sum(child.count for child in row.children)
 
 
 def _scope(db: Session, budget_account_id: int | None) -> tuple[str, list[Category], BudgetHistory]:
@@ -86,21 +103,15 @@ def get_monthly_summary(
 
     currency, categories, history = _scope(db, budget_account_id)
     monthly_ids, annual_ids = _split_by_period(db, categories)
-    month_column = cast(func.date_trunc("month", Transaction.date), Date)
     annual_set = set(annual_ids)
     actuals: dict[date, Decimal] = {}
     annual_actuals: dict[date, Decimal] = {}
-    for month, category_id, amount in db.execute(
-        select(month_column, Transaction.category_id, func.sum(Transaction.amount))
-        .where(
-            Transaction.category_id.in_(monthly_ids + annual_ids),
-            Transaction.date >= start,
-            Transaction.date < add_months(end, 1),
-        )
-        .group_by(month_column, Transaction.category_id)
-    ):
+    totals = effective_totals(
+        db, category_ids=monthly_ids + annual_ids, start=start, end=add_months(end, 1)
+    )
+    for (month, category_id), total in totals.items():
         target = annual_actuals if category_id in annual_set else actuals
-        target[month] = target.get(month, ZERO) + amount
+        target[month] = target.get(month, ZERO) + total.amount
     return MonthlySummaryOut(
         budget_account_id=budget_account_id,
         currency=currency,
@@ -119,7 +130,8 @@ def get_monthly_summary(
 def get_month_detail(
     db: Session, month: str, budget_account_id: int | None = None
 ) -> MonthDetailOut:
-    """Level-1 rows with nested level-2 rows for one month. Refunds reduce actuals.
+    """Level-1 rows with nested level-2 rows for one month. Refunds reduce actuals (see
+    the module docstring for where each one counts).
 
     Only monthly accounts' level-2 categories appear (annual ones are summed into
     `annual_actual`). For one budget account its level-2 categories appear under their
@@ -130,23 +142,14 @@ def get_month_detail(
     currency, categories, history = _scope(db, budget_account_id)
     monthly_ids, annual_ids = _split_by_period(db, categories)
     annual_set = set(annual_ids)
-    actuals = dict(
-        db.execute(
-            select(Transaction.category_id, func.sum(Transaction.amount))
-            .where(
-                Transaction.category_id.in_(monthly_ids + annual_ids),
-                Transaction.date >= start,
-                Transaction.date < add_months(start, 1),
-            )
-            .group_by(Transaction.category_id)
-        ).all()
-    )
-
-    rows: dict[int, Level1Row] = {
-        c.id: Level1Row(category_id=c.id, name=c.name, budget=None, actual=ZERO, children=[])
-        for c in categories
-        if c.parent_id is None
+    totals = {
+        category_id: total
+        for (_, category_id), total in effective_totals(
+            db, category_ids=monthly_ids + annual_ids, start=start, end=add_months(start, 1)
+        ).items()
     }
+
+    rows: dict[int, Level1Row] = {c.id: _level1_row(c) for c in categories if c.parent_id is None}
     annual_parents: set[int] = set()
     for c in categories:
         if c.parent_id is None:
@@ -154,17 +157,18 @@ def get_month_detail(
         if c.id in annual_set:
             annual_parents.add(c.parent_id)
             continue
+        total = totals.get(c.id, NO_TOTALS)
         rows[c.parent_id].children.append(
             Level2Row(
                 category_id=c.id,
                 name=c.name,
                 budget=history.amount(c.id, start),
-                actual=actuals.get(c.id, ZERO),
+                actual=total.amount,
+                count=total.count,
             )
         )
     for row in rows.values():
-        row.budget = _sum_or_none([child.budget for child in row.children])
-        row.actual = sum((child.actual for child in row.children), ZERO)
+        _sum_children(row)
 
     level1 = [row for row in rows.values() if row.children or row.category_id not in annual_parents]
     return MonthDetailOut(
@@ -173,7 +177,8 @@ def get_month_detail(
         month=format_month(start),
         budget=_sum_or_none([row.budget for row in level1]),
         actual=sum((row.actual for row in level1), ZERO),
-        annual_actual=sum((actuals.get(leaf_id, ZERO) for leaf_id in annual_ids), ZERO),
+        count=sum(row.count for row in level1),
+        annual_actual=sum((totals.get(leaf_id, NO_TOTALS).amount for leaf_id in annual_ids), ZERO),
         categories=level1,
     )
 
@@ -206,26 +211,16 @@ def get_annual_summary(
     account_ids = {a.id for a in accounts}
     leaf_ids = [c.id for c in categories if c.budget_account_id in account_ids]
     history = load_history(db)
-    month_column = cast(func.date_trunc("month", Transaction.date), Date)
-    actuals: dict[tuple[int, date], Decimal] = {
-        (category_id, month_start): amount
-        for category_id, month_start, amount in db.execute(
-            select(Transaction.category_id, month_column, func.sum(Transaction.amount))
-            .where(
-                Transaction.category_id.in_(leaf_ids),
-                Transaction.date >= year_start,
-                Transaction.date < add_months(through, 1),
-            )
-            .group_by(Transaction.category_id, month_column)
-        )
-    }
+    totals = effective_totals(
+        db, category_ids=leaf_ids, start=year_start, end=add_months(through, 1)
+    )
     months = months_between(year_start, through)
     return AnnualSummaryOut(
         currency=currency,
         year=through.year,
         through=format_month(through),
         accounts=[
-            _annual_account(account, categories, history, actuals, months) for account in accounts
+            _annual_account(account, categories, history, totals, months) for account in accounts
         ],
     )
 
@@ -234,39 +229,37 @@ def _annual_account(
     account: BudgetAccount,
     categories: list[Category],
     history: BudgetHistory,
-    actuals: dict[tuple[int, date], Decimal],
+    totals: dict[tuple[date, int], Totals],
     months: list[date],
 ) -> AnnualAccount:
     leaves = [c for c in categories if c.budget_account_id == account.id]
     parent_ids = {c.parent_id for c in leaves}
-    rows: dict[int, Level1Row] = {
-        c.id: Level1Row(category_id=c.id, name=c.name, budget=None, actual=ZERO, children=[])
-        for c in categories
-        if c.id in parent_ids
-    }
+    rows: dict[int, Level1Row] = {c.id: _level1_row(c) for c in categories if c.id in parent_ids}
     through = months[-1]
     for c in leaves:
+        year_to_date = sum_totals([totals.get((m, c.id), NO_TOTALS) for m in months])
         rows[c.parent_id].children.append(
             Level2Row(
                 category_id=c.id,
                 name=c.name,
                 budget=history.amount(c.id, through),
-                actual=sum((actuals.get((c.id, m), ZERO) for m in months), ZERO),
+                actual=year_to_date.amount,
+                count=year_to_date.count,
             )
         )
     for row in rows.values():
-        row.budget = _sum_or_none([child.budget for child in row.children])
-        row.actual = sum((child.actual for child in row.children), ZERO)
+        _sum_children(row)
     level1 = list(rows.values())
     return AnnualAccount(
         budget_account_id=account.id,
         name=account.name,
         budget=_sum_or_none([row.budget for row in level1]),
         actual=sum((row.actual for row in level1), ZERO),
+        count=sum(row.count for row in level1),
         months=[
             AnnualMonth(
                 month=format_month(m),
-                actual=sum((actuals.get((c.id, m), ZERO) for c in leaves), ZERO),
+                actual=sum((totals.get((m, c.id), NO_TOTALS).amount for c in leaves), ZERO),
             )
             for m in months
         ],

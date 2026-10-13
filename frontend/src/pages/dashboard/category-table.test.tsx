@@ -12,6 +12,7 @@ const detail: Schemas["MonthDetailOut"] = {
   month: "2026-10",
   budget: "1500.00",
   actual: "3599.80",
+  count: 17,
   annual_actual: "0.00",
   categories: [
     {
@@ -19,9 +20,10 @@ const detail: Schemas["MonthDetailOut"] = {
       name: "餐饮",
       budget: "500.00",
       actual: "300.00",
+      count: 12,
       children: [
-        { category_id: 11, name: "买菜", budget: "500.00", actual: "300.00" },
-        { category_id: 12, name: "礼物人情", budget: null, actual: "0.00" },
+        { category_id: 11, name: "买菜", budget: "500.00", actual: "300.00", count: 12 },
+        { category_id: 12, name: "礼物人情", budget: null, actual: "0.00", count: 0 },
       ],
     },
     {
@@ -29,14 +31,16 @@ const detail: Schemas["MonthDetailOut"] = {
       name: "娱乐休闲",
       budget: "1000.00",
       actual: "3200.00",
-      children: [{ category_id: 21, name: "旅行", budget: "1000.00", actual: "3200.00" }],
+      count: 3,
+      children: [{ category_id: 21, name: "旅行", budget: "1000.00", actual: "3200.00", count: 3 }],
     },
     {
       category_id: 3,
       name: "宠物",
       budget: null,
       actual: "99.80",
-      children: [{ category_id: 31, name: "猫粮用品", budget: null, actual: "99.80" }],
+      count: 2,
+      children: [{ category_id: 31, name: "猫粮用品", budget: null, actual: "99.80", count: 2 }],
     },
   ],
 };
@@ -84,6 +88,19 @@ describe("CategoryTable", () => {
 
     await user.click(screen.getByRole("button", { name: "收起「餐饮」的二级分类" }));
     expect(screen.queryByText("买菜")).not.toBeInTheDocument();
+  });
+
+  it("shows the consumption count per row and for the total, folded under the amount when narrow", async () => {
+    const user = userEvent.setup();
+    render(<CategoryTable detail={detail} />);
+    expect(screen.getByRole("columnheader", { name: "笔数" })).toBeInTheDocument();
+    const food = within(rowOf("餐饮"));
+    // The count column (md and up) and the line under the amount (below md).
+    expect(food.getByRole("cell", { name: "12" })).toBeInTheDocument();
+    expect(food.getByText("12 笔")).toHaveClass("md:hidden");
+    expect(within(rowOf("合计")).getByRole("cell", { name: "17" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "展开「餐饮」的二级分类" }));
+    expect(within(rowOf("礼物人情")).getByText("0 笔")).toBeInTheDocument();
   });
 
   it("expands and collapses everything", async () => {

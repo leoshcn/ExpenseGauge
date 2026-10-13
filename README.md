@@ -15,6 +15,12 @@ account of its category whichever channel paid it. A budget account is either mo
 compared with the spending from January to date, e.g. insurance or holidays); the period
 is chosen when the account is created. All amounts are in one base currency.
 
+Expenses are positive, refunds negative. A refund can be **matched** to the payment it
+reverses (by the agent when it submits it, or by the user on the Transactions page); it
+then reduces that payment's month and category, and a fully refunded payment no longer
+counts as a consumption (消费笔数). An unmatched refund counts in its own month and
+category.
+
 Status: MVP complete: backend, frontend, Docker Compose deployment and the
 [agent integration guide](docs/agent-guide.md).
 
@@ -63,8 +69,23 @@ The frontend build inside `docker compose build` needs roughly 1 GB of free memo
    once; copy it now. Revoke it on the same page when it is no longer needed.
 2. The same page shows the MCP address (`http://<host>:8080/mcp`), the payment channel
    IDs (the agent can also call `list_channels`) and a Hermes Agent config snippet.
-3. Follow [`docs/agent-guide.md`](docs/agent-guide.md): workflow, tools, reason codes and
-   the single-use `confirm_duplicate` rule.
+3. Follow [`docs/agent-guide.md`](docs/agent-guide.md): workflow, tools, reason codes,
+   the single-use `confirm_duplicate` rule and refund matching.
+
+The agent's five MCP tools and their REST equivalents (the only operations an agent token
+may call; everything else needs the signed-in user):
+
+| MCP tool | REST |
+|---|---|
+| `list_channels` | `GET /api/v1/channels` |
+| `list_categories` | `GET /api/v1/categories` |
+| `get_budgets` | `GET /api/v1/budgets` |
+| `find_payments` | `GET /api/v1/payments/search` (stored payments only, to match a refund) |
+| `submit_transactions` | `POST /api/v1/channels/{channel_id}/transactions/batch` |
+
+Refund matching in the web UI uses `GET /api/v1/transactions` (`refund_status=unmatched`,
+`stats`), `GET /api/v1/transactions/{id}/refund-candidates` and `PATCH
+/api/v1/transactions/{id}` (`refund_of_id`); the full contract is at `/api/docs`.
 
 ### Backup and restore
 
@@ -109,6 +130,10 @@ update the agent's instructions to the new tools and channel IDs
 version") and have it submit the transactions again. Take a backup first if you want to
 keep the old data for reference.
 
+**Migration 0007 (refund matching)** only adds a column: every existing refund is
+unmatched and every figure stays as it was. Matching a refund to a payment of an earlier
+month changes that month's figures afterwards. Its downgrade drops the matches.
+
 ### Logs
 
 ```bash
@@ -124,7 +149,7 @@ docker compose restart                    # restart everything; data is kept
 | `backend/` | FastAPI app: REST under `/api/v1`, MCP Streamable HTTP under `/mcp` |
 | `backend/openapi.json` | Exported API contract, the input for the frontend's typed client |
 | `frontend/` | React web UI; `frontend/README.md` has the commands to run it with demo data |
-| `docs/agent-guide.md` | How an AI agent connects, the four tools and their feedback |
+| `docs/agent-guide.md` | How an AI agent connects, the five tools and their feedback |
 | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf` | Deployment |
 
 ## Backend development

@@ -22,11 +22,20 @@ class Transaction(Base):
     """An expense (amount > 0) or a refund (amount < 0), from one payment channel.
 
     Its budget account is not stored: it is the budget account of its category.
+
+    A refund may point at the payment it reverses (`refund_of_id`). Summaries then count
+    it in the payment's month and category; its own `date` and `category_id` stay as
+    submitted and apply again when the match is removed. The rules a CHECK cannot express
+    (the target is a payment, not dated after the refund, not refunded beyond its amount)
+    are enforced by `services/refunds.py`.
     """
 
     __tablename__ = "transactions"
     __table_args__ = (
         CheckConstraint("amount <> 0", name="ck_transactions_amount_non_zero"),
+        CheckConstraint(
+            "refund_of_id IS NULL OR amount < 0", name="ck_transactions_refund_of_is_refund"
+        ),
         # Not unique: user-confirmed duplicates are legitimate rows.
         Index("ix_transactions_channel_fingerprint", "channel_id", "fingerprint"),
         Index("ix_transactions_date", "date"),
@@ -46,5 +55,8 @@ class Transaction(Base):
     confirmed_duplicate: Mapped[bool] = mapped_column(Boolean, server_default="false")
     api_token_id: Mapped[int | None] = mapped_column(
         ForeignKey("api_tokens.id", ondelete="SET NULL")
+    )
+    refund_of_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="RESTRICT"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

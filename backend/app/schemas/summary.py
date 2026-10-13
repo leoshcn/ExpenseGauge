@@ -28,6 +28,9 @@ class Level2Row(Schema):
     name: str
     budget: Money | None = Field(description="null means no budget")
     actual: Money
+    count: int = Field(
+        description="Payments counted here whose net amount (after matched refunds) is above 0"
+    )
 
 
 class Level1Row(Schema):
@@ -35,6 +38,7 @@ class Level1Row(Schema):
     name: str
     budget: Money | None = Field(description="Sum of the children's budgets; null if none has one")
     actual: Money
+    count: int = Field(description="Sum of the children's counts")
     children: list[Level2Row]
 
 
@@ -46,9 +50,13 @@ class MonthDetailOut(Schema):
     month: Month
     budget: Money | None
     actual: Money = Field(description="Actual of the monthly budget accounts' categories")
+    count: int = Field(
+        description="Consumption count over the same categories as `actual`: payments of the"
+        " month whose net amount (after matched refunds) is above 0"
+    )
     annual_actual: Money = Field(
         description="Actual of the annual budget accounts' categories in the month; they are"
-        " in neither `actual` nor `categories`"
+        " in neither `actual`, `count` nor `categories`"
     )
     categories: list[Level1Row]
 
@@ -65,6 +73,7 @@ class AnnualAccount(Schema):
         description="Sum of the year's budgets of its categories; null if none has one"
     )
     actual: Money = Field(description="Actual from January to the end of `through`")
+    count: int = Field(description="Consumption count from January to the end of `through`")
     months: list[AnnualMonth] = Field(description="January to `through`, one entry per month")
     categories: list[Level1Row] = Field(
         description="Rows with the annual budget and the year-to-date actual"

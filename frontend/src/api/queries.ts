@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api, ApiError, type Schemas, unwrap } from "./client";
+import type { paths } from "./schema.gen";
 
 /** A budget-account scope: one budget account's id, or `null` for all of them. */
 export type BudgetScope = number | null;
@@ -33,6 +34,11 @@ export const keys = {
     ["ledger", "summary", "annual", scopeKey(scope), month] as const,
   transactions: ["ledger", "transactions"] as const,
   transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
+  /** Payments a refund may be matched to (under `transactions`, so edits refresh them). */
+  refundCandidates: (transactionId: number, q: string, page: number) =>
+    ["ledger", "transactions", "refund-candidates", transactionId, q, page] as const,
+  /** The refunds matched to one payment. */
+  refunds: (transactionId: number) => ["ledger", "transactions", "refunds", transactionId] as const,
   budgets: ["ledger", "budgets"] as const,
   budgetsAt: (scope: BudgetScope, month: string) => ["ledger", "budgets", scopeKey(scope), month] as const,
   tokens: ["tokens"] as const,
@@ -44,9 +50,16 @@ export type TransactionFilter = {
   channelId: number | null;
   budgetAccountId: number | null;
   categoryId: number | null;
+  /** `"unmatched"`: only refunds without an original payment. */
+  refundStatus: RefundStatus | null;
   page: number;
   pageSize: number;
 };
+
+/** The `refund_status` list filter, as the API declares it. */
+export type RefundStatus = NonNullable<
+  NonNullable<paths["/api/v1/transactions"]["get"]["parameters"]["query"]>["refund_status"]
+>;
 
 export const setupStatusQuery = queryOptions({
   queryKey: keys.setupStatus,
@@ -141,6 +154,7 @@ export const transactionPageQuery = (filter: TransactionFilter) =>
               channel_id: filter.channelId,
               budget_account_id: filter.budgetAccountId,
               category_id: filter.categoryId,
+              refund_status: filter.refundStatus,
               page: filter.page,
               page_size: filter.pageSize,
             },
@@ -213,7 +227,11 @@ export const reorderCategories = (body: Schemas["CategoryOrderIn"]) =>
 export const deleteCategory = (categoryId: number) =>
   unwrap(api.DELETE("/api/v1/categories/{category_id}", { params: { path: { category_id: categoryId } } }));
 
-/** Only the fields present in `body` change; `note: null` removes the note. */
+/**
+ * Only the fields present in `body` change; `note: null` removes the note. On a refund,
+ * `refund_of_id` matches it to a payment (or another one), `null` removes the match; a
+ * matched refund's category follows its payment and cannot be sent.
+ */
 export const updateTransaction = (transactionId: number, body: Schemas["TransactionUpdateIn"]) =>
   unwrap(
     api.PATCH("/api/v1/transactions/{transaction_id}", {
@@ -222,6 +240,40 @@ export const updateTransaction = (transactionId: number, body: Schemas["Transact
     }),
   );
 
+/**
+ * Payments the refund `transactionId` may be matched to: dated on or before it, with
+ * enough left to refund; same channel and counterparty first. `q` searches counterparty
+ * and description.
+ */
+export const refundCandidatesQuery = (transactionId: number, q: string, page = 1) =>
+  queryOptions({
+    queryKey: keys.refundCandidates(transactionId, q, page),
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/transactions/{transaction_id}/refund-candidates", {
+          params: {
+            path: { transaction_id: transactionId },
+            query: { q: q || null, page, page_size: REFUND_CANDIDATES_PAGE_SIZE },
+          },
+        }),
+      ),
+  });
+
+export const REFUND_CANDIDATES_PAGE_SIZE = 20;
+
+/** The refunds matched to the payment `transactionId`, oldest first. */
+export const refundsQuery = (transactionId: number) =>
+  queryOptions({
+    queryKey: keys.refunds(transactionId),
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/transactions/{transaction_id}/refunds", {
+          params: { path: { transaction_id: transactionId } },
+        }),
+      ),
+  });
+
+/** Refused with 409 `TRANSACTION_HAS_REFUNDS` for a payment that refunds still point at. */
 export const deleteTransaction = (transactionId: number) =>
   unwrap(
     api.DELETE("/api/v1/transactions/{transaction_id}", {

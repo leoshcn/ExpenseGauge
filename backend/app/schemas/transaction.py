@@ -1,11 +1,13 @@
 from datetime import date, datetime
 from typing import Annotated, Any
 
-from pydantic import Field, StringConstraints, WithJsonSchema, field_validator
+from pydantic import Field, StringConstraints, WithJsonSchema, field_validator, model_validator
 
 from app.schemas.common import Money, NoNul, RequestSchema, Schema
 
 MAX_BATCH_ITEMS = 500
+MAX_PAYMENT_SEARCH_DAYS = 366
+MAX_PAYMENT_SEARCH_LIMIT = 50
 
 
 class TransactionItemIn(RequestSchema):
@@ -26,6 +28,16 @@ class TransactionItemIn(RequestSchema):
         default=False,
         description="Single-use: set only after the user confirmed a reported duplicate is real",
     )
+    refund_of_id: int | None = Field(
+        default=None,
+        description="Refunds only: id of the stored payment this refund reverses (from the"
+        " payment search). Not together with `refund_of_index`",
+    )
+    refund_of_index: int | None = Field(
+        default=None,
+        description="Refunds only: index, in this batch, of the payment item this refund"
+        " reverses. Not together with `refund_of_id`",
+    )
 
     @field_validator("amount")
     @classmethod
@@ -33,6 +45,12 @@ class TransactionItemIn(RequestSchema):
         if value == 0:
             raise ValueError("amount must not be 0")
         return value
+
+    @model_validator(mode="after")
+    def _one_refund_target(self):
+        if self.refund_of_id is not None and self.refund_of_index is not None:
+            raise ValueError("refund_of_id and refund_of_index are mutually exclusive")
+        return self
 
 
 # Items stay raw dicts at the HTTP/MCP boundary; the JSON schema still documents the shape.
@@ -45,11 +63,24 @@ class BatchSubmitIn(RequestSchema):
     items: list[RawTransactionItem] = Field(description=f"1 to {MAX_BATCH_ITEMS} items")
 
 
+class RefundTarget(Schema):
+    """The payment a matched refund reverses."""
+
+    id: int
+    date: date
+    amount: Money
+    counterparty: str
+    category_name: str
+
+
 class TransactionOut(Schema):
     id: int
     channel_id: int
     channel_name: str
-    category_id: int
+    category_id: int = Field(
+        description="For a matched refund: the category of its payment (where it counts),"
+        " not the one it was submitted with"
+    )
     category_name: str
     parent_category_id: int
     parent_category_name: str
@@ -61,6 +92,14 @@ class TransactionOut(Schema):
     description: str
     note: str | None
     confirmed_duplicate: bool
+    refund_of: RefundTarget | None = Field(
+        description="The payment this refund is matched to; null for a payment and for an"
+        " unmatched refund"
+    )
+    refunded: Money = Field(
+        description="Total of the refunds matched to this payment, as a positive amount;"
+        ' "0.00" for a refund'
+    )
     created_at: datetime
 
 
@@ -69,7 +108,25 @@ class BatchAcceptedOut(Schema):
     transactions: list[TransactionOut]
 
 
+class TransactionStats(Schema):
+    """Figures for the list's filters, by effective attribution (a matched refund counts
+    in its payment's month, category and channel), like the summaries."""
+
+    count: int = Field(description="Payments whose net amount (after matched refunds) is above 0")
+    net_amount: Money = Field(description="Payments minus refunds")
+
+
 class TransactionPage(Schema):
+    items: list[TransactionOut]
+    total: int
+    page: int
+    page_size: int
+    stats: TransactionStats
+
+
+class RefundCandidatePage(Schema):
+    """Payments a refund can be matched to, best guesses first."""
+
     items: list[TransactionOut]
     total: int
     page: int
@@ -77,7 +134,33 @@ class TransactionPage(Schema):
 
 
 class TransactionUpdateIn(RequestSchema):
-    """Only category and note are editable. Omitted fields are left unchanged."""
+    """Category, note and (for a refund) the matched payment are editable. Omitted fields
+    are left unchanged."""
 
     category_id: int | None = None
     note: Annotated[str, StringConstraints(max_length=1000), NoNul] | None = None
+    refund_of_id: int | None = Field(
+        default=None,
+        description="Refunds only: the payment to match (or re-match) this refund to;"
+        " null removes the match",
+    )
+
+
+class PaymentOut(Schema):
+    """A stored payment, as much of it as finding a refund's original payment needs."""
+
+    id: int
+    channel_id: int
+    channel_name: str
+    date: date
+    amount: Money
+    counterparty: str
+    description: str
+    category_id: int
+    category_name: str
+    refunded: Money = Field(description="Total of the refunds already matched to it (positive)")
+    refundable: Money = Field(description="`amount - refunded`: what a new refund may not exceed")
+
+
+class PaymentSearchOut(Schema):
+    payments: list[PaymentOut] = Field(description="Newest first")
