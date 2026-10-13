@@ -26,6 +26,7 @@ AGENT_ALLOWED = {
     ("GET", f"{API}/channels"),
     ("GET", f"{API}/categories"),
     ("GET", f"{API}/budgets"),
+    ("GET", f"{API}/payments/search"),
     ("POST", f"{API}/channels/{{channel_id}}/transactions/batch"),
 }
 
@@ -204,9 +205,10 @@ def test_session_grants_access_everywhere(client, app):
         assert status not in {401, 403}, (method, path, status)
 
 
-def test_agent_token_reaches_only_the_four_agent_operations(agent, app, ledger):
-    """AC4, second half; R6: list channels, read categories and budgets, submit a batch.
-    Every other endpoint answers an agent token with 403."""
+def test_agent_token_reaches_only_the_agent_operations(agent, app, ledger):
+    """AC4, second half; R6: list channels, read categories and budgets, find payments
+    (refund matching), submit a batch. Every other endpoint answers an agent token with
+    403, refund candidates and editing a match included."""
     routes = [route for route in _routes(app) if route not in PUBLIC]
     assert set(routes) >= AGENT_ALLOWED
     for method, path in routes:
@@ -220,6 +222,8 @@ def test_agent_token_reaches_only_the_four_agent_operations(agent, app, ledger):
     assert agent.get(f"{API}/categories").status_code == 200
     assert agent.get(f"{API}/budgets").status_code == 200
     assert ledger.submit([ledger.item()], client=agent).status_code == 201
+    search = {"date_from": "2026-09-01", "date_to": "2026-09-30"}
+    assert len(agent.get(f"{API}/payments/search", params=search).json()["payments"]) == 1
 
 
 def test_token_wins_over_cookie(client, token):

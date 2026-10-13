@@ -7,11 +7,21 @@ import { formatDay } from "@/lib/date";
 import { formatMoney } from "@/lib/money";
 import { S } from "@/strings.zh";
 
-import { isRefund, pageRange } from "./model";
+import { isRefund, matchState, pageRange, paymentRefunds } from "./model";
 
 const T = S.transactions;
 
-function Chip({ tone, children, title }: { tone: "refund" | "muted"; children: React.ReactNode; title?: string }) {
+function Chip({
+  tone,
+  children,
+  title,
+  className,
+}: {
+  tone: "refund" | "muted" | "warning";
+  children: React.ReactNode;
+  title?: string;
+  className?: string;
+}) {
   return (
     <span
       title={title}
@@ -19,10 +29,64 @@ function Chip({ tone, children, title }: { tone: "refund" | "muted"; children: R
         "shrink-0 rounded-full px-1.5 text-[11px] leading-[1.125rem] font-medium",
         tone === "refund" && "bg-positive-soft text-positive",
         tone === "muted" && "border font-normal text-muted-foreground",
+        tone === "warning" && "bg-warning-soft text-warning-foreground",
+        className,
       )}
     >
       {children}
     </span>
+  );
+}
+
+/** A refund's match ("已匹配" / "未匹配"), or a payment's refunds ("已退 ¥X" / "已全额退款"). */
+function RefundChips({ transaction, currency }: { transaction: Schemas["TransactionOut"]; currency: string }) {
+  const state = matchState(transaction);
+  if (state === "matched" && transaction.refund_of) {
+    // The payment itself is named on its own line under the description (`Row`).
+    return (
+      <Chip tone="muted" title={T.matchedHint}>
+        {T.matchedShort}
+      </Chip>
+    );
+  }
+  if (state === "unmatched") {
+    return (
+      <Chip tone="warning" title={T.unmatchedHint}>
+        {T.unmatched}
+      </Chip>
+    );
+  }
+  const refunds = paymentRefunds(transaction);
+  if (refunds === null) return null;
+  return (
+    <Chip tone="muted" title={T.refundedHint}>
+      {refunds.full ? T.fullyRefunded : T.refunded(formatMoney(refunds.refunded, currency))}
+    </Chip>
+  );
+}
+
+/**
+ * "消费 N 笔 · 净支出 ¥X" for the current filters (`stats`), on the summaries' basis. It
+ * covers annual budget accounts too, unlike the dashboard's monthly actual, hence the note.
+ */
+export function StatsLine({
+  stats,
+  currency,
+  className,
+}: {
+  stats: Schemas["TransactionStats"];
+  currency: string;
+  className?: string;
+}) {
+  return (
+    <p
+      aria-label={T.statsLabel}
+      title={T.statsHint}
+      className={cn("num text-sm text-muted-foreground", className)}
+    >
+      {T.stats(stats.count, formatMoney(stats.net_amount, currency))}
+      <span className="ml-1 text-xs">（{T.statsAnnualNote}）</span>
+    </p>
   );
 }
 
@@ -60,6 +124,7 @@ function Row({
             {transaction.counterparty}
           </span>
           {refund ? <Chip tone="refund">{T.refund}</Chip> : null}
+          <RefundChips transaction={transaction} currency={currency} />
           {transaction.confirmed_duplicate ? (
             <Chip tone="muted" title={T.confirmedDuplicateHint}>
               {T.confirmedDuplicate}
@@ -69,6 +134,11 @@ function Row({
         {transaction.description ? (
           <div className="truncate text-xs text-muted-foreground" title={transaction.description}>
             {transaction.description}
+          </div>
+        ) : null}
+        {transaction.refund_of ? (
+          <div className="num truncate text-xs text-muted-foreground">
+            {T.matchedTo(formatDay(transaction.refund_of.date, now), transaction.refund_of.counterparty)}
           </div>
         ) : null}
         {/* Below `md` the date, category, channel and note fold in under the counterparty. */}

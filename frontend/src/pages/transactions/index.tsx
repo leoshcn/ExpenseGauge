@@ -23,7 +23,7 @@ import { S } from "@/strings.zh";
 import { DeleteTransactionDialog, EditTransactionDialog } from "./edit-dialog";
 import { Filters } from "./filters";
 import { awaitsLists, isFiltered, pageRange, readFilter } from "./model";
-import { TransactionTable } from "./transaction-table";
+import { StatsLine, TransactionTable } from "./transaction-table";
 
 const T = S.transactions;
 
@@ -43,9 +43,11 @@ function ListSkeleton() {
 
 /**
  * Every transaction, newest first, filtered by month, payment channel, budget account
- * and category. Only the category and the note can be changed; nothing can be created
- * here (agents submit). Filters and page live in the URL
- * (`?month&channel&budget_account&category&page`).
+ * and category, or only the refunds not matched to a payment. The category, the note and
+ * a refund's original payment can be changed; nothing can be created here (agents
+ * submit). Above the list, the consumption count and net amount of the filter, on the
+ * Dashboard's basis. Filters and page live in the URL
+ * (`?month&channel&budget_account&category&refund=unmatched&page`).
  */
 export function TransactionsPage() {
   const [now] = useState(() => new Date());
@@ -102,6 +104,7 @@ export function TransactionsPage() {
             channelId={filter.channelId}
             budgetAccountId={filter.budgetAccountId}
             categoryId={filter.categoryId}
+            refundStatus={filter.refundStatus}
             now={now}
             onChange={(next) => update({ ...next, page: null })}
             className="w-full sm:w-auto"
@@ -111,12 +114,16 @@ export function TransactionsPage() {
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={() => update({ month: null, channel: null, budget_account: null, category: null, page: null })}
+              onClick={() =>
+                update({ month: null, channel: null, budget_account: null, category: null, refund: null, page: null })
+              }
             >
               {T.filters.clear}
             </Button>
           ) : null}
         </div>
+
+        <StatsLine stats={list.data.stats} currency={currency} />
 
         {list.data.total === 0 ? (
           filtered ? (

@@ -62,7 +62,7 @@ def _authenticate(
             raise AppError(
                 403,
                 "TOKEN_SCOPE_FORBIDDEN",
-                "Agent 令牌只能读取付款渠道、分类和预算，以及提交流水",
+                "Agent 令牌只能读取付款渠道、分类和预算，查找支付，以及提交流水",
             )
         return Principal(api_token_id=token.id)
 
@@ -81,8 +81,9 @@ def require_session(request: Request, response: Response, db: DbSession) -> Prin
 
 
 def require_session_or_token(request: Request, response: Response, db: DbSession) -> Principal:
-    """Session or agent token. Only the four agent operations use this: GET /channels,
-    GET /categories, GET /budgets and POST /channels/{channel_id}/transactions/batch."""
+    """Session or agent token. Only the five agent operations use this: GET /channels,
+    GET /categories, GET /budgets, GET /payments/search and
+    POST /channels/{channel_id}/transactions/batch."""
     return _authenticate(request, response, db, allow_token=True)
 
 

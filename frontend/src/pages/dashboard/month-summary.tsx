@@ -132,6 +132,9 @@ export function MonthSummary({
       <div className="mt-5">
         <div className="text-xs text-muted-foreground">{T.summary.actual}</div>
         <div className="num text-display font-semibold">{money(detail.actual)}</div>
+        <p className="num mt-1 text-xs text-muted-foreground" title={T.summary.countHint}>
+          {T.summary.count(detail.count)}
+        </p>
         {/* "全部": annual accounts' spending is left out of the comparison above. */}
         {toCents(detail.annual_actual) > 0 ? (
           <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.annualExtraHint}>

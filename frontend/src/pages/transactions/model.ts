@@ -2,7 +2,7 @@
 
 import type { Schemas } from "@/api/client";
 import type { TransactionFilter } from "@/api/queries";
-import { toCents } from "@/lib/money";
+import { subtract, toCents } from "@/lib/money";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
 
 export const PAGE_SIZE = 50;
@@ -43,6 +43,7 @@ export function readFilter(params: URLSearchParams, lists: FilterLists): Transac
       lists.budgetAccounts?.map((account) => account.id),
     ),
     categoryId: knownId(params.get("category"), categoryIds),
+    refundStatus: params.get("refund") === "unmatched" ? "unmatched" : null,
     page: Number.isInteger(page) && page > 0 ? page : 1,
     pageSize: PAGE_SIZE,
   };
@@ -63,7 +64,8 @@ export function isFiltered(filter: TransactionFilter): boolean {
     filter.month !== null ||
     filter.channelId !== null ||
     filter.budgetAccountId !== null ||
-    filter.categoryId !== null
+    filter.categoryId !== null ||
+    filter.refundStatus !== null
   );
 }
 
@@ -104,21 +106,69 @@ export function pageRange(page: number, pageSize: number, total: number) {
   return { from, to, pages };
 }
 
-/** A refund is stored as a negative amount in the original expense's category. */
+/** A refund is stored as a negative amount; a payment as a positive one. */
 export function isRefund(amount: string): boolean {
   return toCents(amount) < 0;
 }
 
+/** The payment a refund is matched to, as shown before saving. */
+export type RefundTarget = Schemas["RefundTarget"];
+
+/** The refund's matching state; null for a payment. */
+export function matchState(transaction: Pick<Schemas["TransactionOut"], "amount" | "refund_of">) {
+  if (!isRefund(transaction.amount)) return null;
+  return transaction.refund_of === null ? "unmatched" : "matched";
+}
+
+/**
+ * What a payment's refunds amount to: nothing (null) without matched refunds, else the
+ * refunded total, the net amount left and whether it is fully refunded (net 0).
+ */
+export function paymentRefunds(transaction: Pick<Schemas["TransactionOut"], "amount" | "refunded">) {
+  if (isRefund(transaction.amount) || toCents(transaction.refunded) === 0) return null;
+  const net = subtract(transaction.amount, transaction.refunded);
+  return { refunded: transaction.refunded, net, full: toCents(net) === 0 };
+}
+
+/** A candidate payment as the refund's `refund_of` will show it once matched. */
+export function toRefundTarget(payment: Schemas["TransactionOut"]): RefundTarget {
+  return {
+    id: payment.id,
+    date: payment.date,
+    amount: payment.amount,
+    counterparty: payment.counterparty,
+    category_name: payment.category_name,
+  };
+}
+
+/**
+ * Whether the category select is editable. A matched refund's category follows its
+ * payment; a refund whose match is being removed gets its own category back on save,
+ * which this page does not know yet, so it is edited after saving.
+ */
+export function categoryEditable(
+  original: Pick<Schemas["TransactionOut"], "refund_of">,
+  refundOf: RefundTarget | null,
+): boolean {
+  return original.refund_of === null && refundOf === null;
+}
+
 /**
  * The PATCH body for an edit, holding only what changed, or null when nothing did.
- * The note is trimmed; an empty note is sent as `null`, which removes it.
+ * The note is trimmed; an empty note is sent as `null`, which removes it. `refundOf` is
+ * the refund's chosen payment (null: unmatched); the category is sent only while it is
+ * editable, never together with a match.
  */
 export function transactionChanges(
-  original: Pick<Schemas["TransactionOut"], "category_id" | "note">,
-  form: { categoryId: number; note: string },
+  original: Pick<Schemas["TransactionOut"], "category_id" | "note" | "refund_of">,
+  form: { categoryId: number; note: string; refundOf: RefundTarget | null },
 ): Schemas["TransactionUpdateIn"] | null {
   const changes: Schemas["TransactionUpdateIn"] = {};
-  if (form.categoryId !== original.category_id) changes.category_id = form.categoryId;
+  const refundOfId = form.refundOf?.id ?? null;
+  if (refundOfId !== (original.refund_of?.id ?? null)) changes.refund_of_id = refundOfId;
+  if (categoryEditable(original, form.refundOf) && form.categoryId !== original.category_id) {
+    changes.category_id = form.categoryId;
+  }
   const note = form.note.trim() === "" ? null : form.note.trim();
   if (note !== (original.note ?? null)) changes.note = note;
   return Object.keys(changes).length > 0 ? changes : null;

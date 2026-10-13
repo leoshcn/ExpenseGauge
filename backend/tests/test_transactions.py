@@ -191,6 +191,7 @@ def test_refund_reduces_the_category_actual(client, ledger):
         "name": "买菜",
         "budget": None,
         "actual": "149.75",
+        "count": 1,  # an unmatched refund changes no count
     }
     # The refund counts in the month of its own date.
     october = client.get(f"{API}/summary/months/2026-10").json()

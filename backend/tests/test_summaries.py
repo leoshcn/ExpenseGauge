@@ -36,6 +36,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
         "month": "2026-09",
         "budget": "1400.00",
         "actual": "828.80",
+        "count": 3,  # payments; the unmatched refund is not one
         "annual_actual": "0.00",
         "categories": [
             {
@@ -43,18 +44,21 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                 "name": "餐饮",
                 "budget": "1200.00",  # sum of budgeted children only
                 "actual": "740.00",
+                "count": 2,
                 "children": [
                     {
                         "category_id": ledger.groceries,
                         "name": "买菜",
                         "budget": "1200.00",
                         "actual": "480.00",
+                        "count": 1,
                     },
                     {
                         "category_id": ledger.dining,
                         "name": "外食",
                         "budget": None,
                         "actual": "260.00",
+                        "count": 1,
                     },
                 ],
             },
@@ -63,12 +67,14 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                 "name": "交通",
                 "budget": "200.00",
                 "actual": "88.80",
+                "count": 1,
                 "children": [
                     {
                         "category_id": ledger.metro,
                         "name": "地铁",
                         "budget": "200.00",
                         "actual": "88.80",
+                        "count": 1,
                     },
                 ],
             },
@@ -77,6 +83,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                 "name": "居家",
                 "budget": None,
                 "actual": "0.00",
+                "count": 0,
                 "children": [],
             },
         ],
@@ -386,6 +393,7 @@ def test_annual_account_year_to_date(client, ledger):
                 "name": "年度",
                 "budget": "30000.00",
                 "actual": "8000.00",
+                "count": 2,
                 "months": [
                     {"month": "2026-01", "actual": "6000.00"},
                     {"month": "2026-02", "actual": "0.00"},
@@ -397,12 +405,14 @@ def test_annual_account_year_to_date(client, ledger):
                         "name": "交通",
                         "budget": "10000.00",
                         "actual": "2000.00",
+                        "count": 1,
                         "children": [
                             {
                                 "category_id": travel,
                                 "name": "旅行",
                                 "budget": "10000.00",
                                 "actual": "2000.00",
+                                "count": 1,
                             }
                         ],
                     },
@@ -411,12 +421,14 @@ def test_annual_account_year_to_date(client, ledger):
                         "name": "年度开支",
                         "budget": "20000.00",
                         "actual": "6000.00",
+                        "count": 1,
                         "children": [
                             {
                                 "category_id": insurance,
                                 "name": "保险",
                                 "budget": "20000.00",
                                 "actual": "6000.00",
+                                "count": 1,
                             }
                         ],
                     },

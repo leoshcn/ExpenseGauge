@@ -1,4 +1,4 @@
-"""AC16 / R6: the four MCP tools over real HTTP at /mcp, with the official SDK client and
+"""AC16 / R6: the MCP tools over real HTTP at /mcp, with the official SDK client and
 a Bearer token, return the same results and rejections as the REST endpoints."""
 
 import asyncio
@@ -62,21 +62,102 @@ def call(url: str, token: str, name: str, arguments: dict):
     return run_mcp(url, token, calls)
 
 
-def test_exactly_four_tools(server_url, token):
+def test_exactly_five_tools(server_url, token):
     async def calls(mcp_client):
         return await mcp_client.list_tools()
 
     tools = {tool.name: tool for tool in run_mcp(f"{server_url}/mcp", token["token"], calls).tools}
-    assert set(tools) == {"list_channels", "list_categories", "get_budgets", "submit_transactions"}
+    assert set(tools) == {
+        "list_channels",
+        "list_categories",
+        "get_budgets",
+        "find_payments",
+        "submit_transactions",
+    }
+    assert set(tools["find_payments"].input_schema["properties"]) == {
+        "date_from",
+        "date_to",
+        "channel_id",
+        "counterparty",
+        "limit",
+    }
+    assert set(tools["find_payments"].input_schema["required"]) == {"date_from", "date_to"}
     assert set(tools["list_channels"].input_schema.get("properties", {})) == set()
     assert set(tools["list_categories"].input_schema.get("properties", {})) == set()
     assert set(tools["get_budgets"].input_schema["properties"]) == {"month", "budget_account_id"}
     submit = tools["submit_transactions"].input_schema
     assert set(submit["properties"]) == {"channel_id", "items"}
     item_schema = submit["properties"]["items"]["items"]
-    assert {"date", "amount", "counterparty", "category_id", "confirm_duplicate"} <= set(
-        item_schema["properties"]
+    assert {
+        "date",
+        "amount",
+        "counterparty",
+        "category_id",
+        "confirm_duplicate",
+        "refund_of_id",
+        "refund_of_index",
+    } <= set(item_schema["properties"])
+
+
+def test_find_payments_then_submit_a_matched_refund(server_url, client, token, ledger):
+    """AC6, AC7 over MCP: find_payments returns payments only, as REST does; a refund
+    submitted with the found id is stored matched; a bad match is the same per-item
+    feedback as over REST."""
+    url = f"{server_url}/mcp"
+    stored = ledger.submit(
+        [
+            ledger.item(date="2026-09-01", amount="100", counterparty="盒马"),
+            ledger.item(date="2026-09-02", amount="-5", counterparty="盒马"),
+        ]
     )
+    assert stored.status_code == 201
+    payment = stored.json()["transactions"][0]
+    arguments = {"date_from": "2026-09-01", "date_to": "2026-09-30", "counterparty": "盒马"}
+
+    found = call(url, token["token"], "find_payments", arguments)
+    assert found.is_error is False
+    rest = client.get(f"{API}/payments/search", params=arguments).json()
+    assert found.structured_content == rest
+    assert [p["id"] for p in rest["payments"]] == [payment["id"]]  # not the refund
+    assert rest["payments"][0]["refundable"] == "100.00"
+
+    refund = ledger.item(
+        date="2026-09-10", amount="-30", counterparty="盒马退款", refund_of_id=payment["id"]
+    )
+    accepted = call(
+        url,
+        token["token"],
+        "submit_transactions",
+        {"channel_id": ledger.channel, "items": [refund]},
+    )
+    assert accepted.structured_content["accepted"] is True
+    assert accepted.structured_content["transactions"][0]["refund_of"]["id"] == payment["id"]
+    again = call(url, token["token"], "find_payments", arguments).structured_content
+    assert (again["payments"][0]["refunded"], again["payments"][0]["refundable"]) == (
+        "30.00",
+        "70.00",
+    )
+
+    too_much = [
+        ledger.item(
+            date="2026-09-11", amount="-71", counterparty="超额", refund_of_id=payment["id"]
+        )
+    ]
+    rest_rejected = assert_envelope(ledger.submit(too_much), 409, "BATCH_REJECTED")
+    rejected = call(
+        url,
+        token["token"],
+        "submit_transactions",
+        {"channel_id": ledger.channel, "items": too_much},
+    )
+    assert rejected.structured_content == {"accepted": False, **rest_rejected}
+    assert rest_rejected["details"]["items"][0]["code"] == "REFUND_EXCEEDS_PAYMENT"
+
+    wide = {"date_from": "2025-01-01", "date_to": "2026-09-30"}
+    error = call(url, token["token"], "find_payments", wide)
+    assert error.is_error is True
+    rest_error = client.get(f"{API}/payments/search", params=wide)
+    assert error.structured_content == assert_envelope(rest_error, 422, "INVALID_DATE_RANGE")
 
 
 @pytest.mark.parametrize("path", ["/mcp", "/mcp/"])

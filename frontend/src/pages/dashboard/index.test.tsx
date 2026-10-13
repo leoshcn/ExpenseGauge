@@ -23,7 +23,8 @@ const food: Schemas["Level1Row"] = {
   name: "餐饮",
   budget: "6000.00",
   actual: "5000.00",
-  children: [{ category_id: 11, name: "买菜", budget: "6000.00", actual: "5000.00" }],
+  count: 42,
+  children: [{ category_id: 11, name: "买菜", budget: "6000.00", actual: "5000.00", count: 42 }],
 };
 
 /** "全部" leaves the annual account's 6000 out of `actual` and reports it apart. */
@@ -39,6 +40,7 @@ const annualAccount = (): Schemas["AnnualAccount"] => ({
   name: yearly.name,
   budget: "30000.00",
   actual: state.annualActual,
+  count: 2,
   months: [
     { month: "2026-01", actual: "6000.00" },
     { month: "2026-02", actual: "0.00" },
@@ -50,7 +52,8 @@ const annualAccount = (): Schemas["AnnualAccount"] => ({
       name: "出行",
       budget: "30000.00",
       actual: state.annualActual,
-      children: [{ category_id: 21, name: "旅行", budget: "30000.00", actual: state.annualActual }],
+      count: 2,
+      children: [{ category_id: 21, name: "旅行", budget: "30000.00", actual: state.annualActual, count: 2 }],
     },
   ],
 });
@@ -77,6 +80,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
         queryKey: actual.keys.monthDetail(scope, month),
         queryFn: async (): Promise<Schemas["MonthDetailOut"]> => ({
           ...monthTotal(month),
+          count: 42,
           budget_account_id: scope,
           currency: "CNY",
           categories: [food],
@@ -125,9 +129,11 @@ describe("DashboardPage", () => {
     const summary = await screen.findByRole("region", { name: "2026年10月" });
     expect(within(summary).getByText("¥5,000.00")).toBeInTheDocument();
     expect(within(summary).getByText("另有年度开支 ¥6,000.00")).toBeInTheDocument();
+    expect(within(summary).getByText("42 笔消费")).toBeInTheDocument();
 
     const card = screen.getByRole("heading", { name: "年度预算" }).closest("section")!;
     expect(within(card).getByText("¥8,000.00 / ¥30,000.00")).toBeInTheDocument();
+    expect(within(card).getByText("年初至今 2 笔消费")).toBeInTheDocument();
     expect(within(card).getByRole("meter", { name: "「年度」年度预算使用进度" })).toBeInTheDocument();
     expect(annualRequests).toEqual([{ scope: null, month: "2026-10" }]);
   });
@@ -153,6 +159,7 @@ describe("DashboardPage", () => {
     renderAt("/dashboard?scope=3&month=2026-03");
     const summary = await screen.findByRole("region", { name: "截至2026年3月" });
     expect(within(summary).getByText("¥8,000.00")).toBeInTheDocument();
+    expect(within(summary).getByText("年初至今 2 笔消费")).toBeInTheDocument();
     expect(within(summary).getByText("已用 27%")).toBeInTheDocument();
     expect(within(summary).getByText("全年已过 25%")).toBeInTheDocument();
     expect(within(summary).getByText("¥22,000.00")).toBeInTheDocument();

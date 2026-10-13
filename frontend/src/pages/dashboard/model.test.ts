@@ -19,6 +19,7 @@ const month = (
 const row = (id: number, name: string, actual: string): Schemas["Level1Row"] => ({
   category_id: id,
   name,
+  count: 0,
   budget: null,
   actual,
   children: [],

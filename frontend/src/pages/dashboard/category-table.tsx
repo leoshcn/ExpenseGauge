@@ -11,13 +11,13 @@ import { S } from "@/strings.zh";
 
 const T = S.dashboard.table;
 
-type RowData = { name: string; budget: string | null; actual: string };
+type RowData = { name: string; budget: string | null; actual: string; count: number };
 
 /** A tick on every meter (the year's time progress in an annual view). */
 type Marker = { at: number; label: string };
 
 /** What the table shows: a month's detail, or an annual account's year to date. */
-type TableData = Pick<Schemas["MonthDetailOut"], "currency" | "budget" | "actual" | "categories">;
+type TableData = Pick<Schemas["MonthDetailOut"], "currency" | "budget" | "actual" | "count" | "categories">;
 
 /** Budget, actual, remaining and meter for one row, at either level or for the total. */
 function Row({
@@ -126,7 +126,10 @@ function Row({
             {percent}
           </div>
         ) : null}
+        {/* Below `md` the count column folds in under the amount too. */}
+        <div className="mt-0.5 text-xs font-normal text-muted-foreground md:hidden">{T.countOf(row.count)}</div>
       </td>
+      <td className={cn("num hidden px-3 text-right text-muted-foreground md:table-cell", cell)}>{row.count}</td>
       <td className={cn("num hidden px-3 text-right md:table-cell", cell, over && "font-medium text-over")}>
         {remaining ?? <span className="text-muted-foreground">{S.common.none}</span>}
       </td>
@@ -155,6 +158,8 @@ function Row({
 /**
  * The selected month by level-1 category; each row opens to its level-2 rows.
  * Rows keep the API's order so a category stays in the same place from month to month.
+ * "笔数" is the consumption count (payments whose net amount after matched refunds is
+ * above zero); below `md` it moves under the amount.
  * `variant="year"` shows an annual account's year to date: annual budgets, actual since
  * January, and `marker` (the year's time progress) on every meter.
  */
@@ -207,6 +212,9 @@ export function CategoryTable({
               {headings.actual}
             </th>
             <th scope="col" className={cn(heading, "hidden text-right md:table-cell")}>
+              {T.count}
+            </th>
+            <th scope="col" className={cn(heading, "hidden text-right md:table-cell")}>
               {T.remaining}
             </th>
             <th scope="col" className={cn(heading, "hidden pr-5 text-left md:table-cell")}>
@@ -244,7 +252,7 @@ export function CategoryTable({
         </tbody>
         <tfoot>
           <Row
-            row={{ name: T.total, budget: detail.budget, actual: detail.actual }}
+            row={{ name: T.total, budget: detail.budget, actual: detail.actual, count: detail.count }}
             currency={detail.currency}
             kind="total"
             marker={marker}

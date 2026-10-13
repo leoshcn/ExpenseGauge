@@ -397,6 +397,97 @@ def test_0006_keeps_the_order_of_existing_categories(client):
         command.upgrade(config, "head")
 
 
+def test_0007_leaves_every_refund_unmatched_and_the_figures_unchanged(client):
+    """AC10 (R7): upgrading 0006 -> 0007 on a database with payments and refunds keeps
+    every row, leaves every refund unmatched and every month's figures as the 0006 sums
+    gave them. Only a refund may carry a match. The (lossy) downgrade drops the column."""
+
+    def old_sums() -> dict[tuple[str, int], str]:
+        """The pre-0007 rule: a refund counts in its own month and category."""
+        with get_engine().connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT to_char(date, 'YYYY-MM'), category_id, SUM(amount)::text"
+                    " FROM transactions GROUP BY 1, 2"
+                )
+            )
+            return {(month, category_id): total for month, category_id, total in rows}
+
+    def snapshot() -> list[tuple]:
+        with get_engine().connect() as connection:
+            rows = connection.execute(
+                text(
+                    "SELECT id, channel_id, category_id, date, amount, counterparty"
+                    " FROM transactions ORDER BY id"
+                )
+            )
+            return [tuple(row) for row in rows]
+
+    config = alembic_config()
+    get_engine().dispose()
+    try:
+        command.downgrade(config, "0006")
+        with get_engine().begin() as connection:
+            connection.execute(text("INSERT INTO app_settings (id, currency) VALUES (1, 'CNY')"))
+            connection.execute(
+                text("INSERT INTO budget_accounts (id, name, period) VALUES (1, '日常', 'month')")
+            )
+            connection.execute(text("INSERT INTO payment_channels (id, name) VALUES (1, '储蓄卡')"))
+            connection.execute(
+                text(
+                    "INSERT INTO categories (id, position, parent_id, name, budget_account_id)"
+                    " VALUES (1, 0, NULL, '餐饮', NULL), (2, 0, 1, '买菜', 1), (3, 1, 1, '外食', 1)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO transactions (id, channel_id, category_id, date, amount,"
+                    " counterparty, description, fingerprint) VALUES"
+                    " (1, 1, 2, '2026-08-20', 100, '盒马', '', 'a'),"
+                    " (2, 1, 3, '2026-09-03', -30, '盒马', '退款', 'b'),"
+                    " (3, 1, 3, '2026-09-05', 60, '海底捞', '', 'c'),"
+                    " (4, 1, 2, '2026-09-06', -100, '盒马', '退款', 'd')"
+                )
+            )
+            connection.execute(text("SELECT setval('transactions_id_seq', 4)"))
+        before_rows, before_sums = snapshot(), old_sums()
+
+        command.upgrade(config, "0007")
+        assert snapshot() == before_rows
+        with get_engine().connect() as connection:
+            assert (
+                connection.scalar(
+                    text("SELECT count(*) FROM transactions WHERE refund_of_id IS NOT NULL")
+                )
+                == 0
+            )
+        for month in ("2026-08", "2026-09"):
+            leaves = {
+                child["category_id"]: child["actual"]
+                for row in client.get(f"{API}/summary/months/{month}").json()["categories"]
+                for child in row["children"]
+            }
+            assert leaves == {c: before_sums.get((month, c), "0.00") for c in (2, 3)}
+        assert client.get(f"{API}/summary/months/2026-09").json()["count"] == 1
+
+        with pytest.raises(IntegrityError), get_engine().begin() as connection:
+            connection.execute(text("UPDATE transactions SET refund_of_id = 1 WHERE id = 3"))
+        matched = client.patch(f"{API}/transactions/2", json={"refund_of_id": 1})
+        assert matched.status_code == 200, matched.text
+        # ON DELETE RESTRICT backs up the service's 409.
+        with pytest.raises(IntegrityError), get_engine().begin() as connection:
+            connection.execute(text("DELETE FROM transactions WHERE id = 1"))
+
+        get_engine().dispose()
+        command.downgrade(config, "0006")
+        assert snapshot() == before_rows
+        with pytest.raises(ProgrammingError), get_engine().connect() as connection:
+            connection.execute(text("SELECT refund_of_id FROM transactions"))
+    finally:
+        get_engine().dispose()
+        command.upgrade(config, "head")
+
+
 def test_exported_openapi_document_is_current(app):
     """`backend/openapi.json` is the frontend's contract; regenerate it with
     `uv run python -m scripts.export_openapi` after changing the API."""

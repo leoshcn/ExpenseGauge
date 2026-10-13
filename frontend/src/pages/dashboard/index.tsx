@@ -172,7 +172,13 @@ function AnnualBody({
 
   const { currency, year } = annual.data;
   const marker = { at: yearProgress(month, now), label: T.annual.marker };
-  const table = { currency, budget: account.budget, actual: account.actual, categories: account.categories };
+  const table = {
+    currency,
+    budget: account.budget,
+    actual: account.actual,
+    count: account.count,
+    categories: account.categories,
+  };
 
   return (
     <div

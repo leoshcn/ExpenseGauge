@@ -76,6 +76,7 @@ export function AnnualCard({
                   T.card.figures(money(account.actual), money(account.budget))
                 )}
               </div>
+              <div className="num text-xs text-muted-foreground">{T.card.count(account.count)}</div>
               {used.state === "none" ? null : (
                 <div className="mt-2 flex items-center gap-2">
                   <BudgetMeter

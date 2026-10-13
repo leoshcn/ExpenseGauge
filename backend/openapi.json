@@ -32,6 +32,11 @@
             "title": "Categories",
             "type": "array"
           },
+          "count": {
+            "description": "Consumption count from January to the end of `through`",
+            "title": "Count",
+            "type": "integer"
+          },
           "months": {
             "description": "January to `through`, one entry per month",
             "items": {
@@ -50,6 +55,7 @@
           "name",
           "budget",
           "actual",
+          "count",
           "months",
           "categories"
         ],
@@ -189,6 +195,30 @@
                     }
                   ],
                   "title": "Note"
+                },
+                "refund_of_id": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Refunds only: id of the stored payment this refund reverses (from the payment search). Not together with `refund_of_index`",
+                  "title": "Refund Of Id"
+                },
+                "refund_of_index": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Refunds only: index, in this batch, of the payment item this refund reverses. Not together with `refund_of_id`",
+                  "title": "Refund Of Index"
                 }
               },
               "required": [
@@ -857,6 +887,11 @@
             "title": "Children",
             "type": "array"
           },
+          "count": {
+            "description": "Sum of the children's counts",
+            "title": "Count",
+            "type": "integer"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -867,6 +902,7 @@
           "name",
           "budget",
           "actual",
+          "count",
           "children"
         ],
         "title": "Level1Row",
@@ -894,6 +930,11 @@
             "title": "Category Id",
             "type": "integer"
           },
+          "count": {
+            "description": "Payments counted here whose net amount (after matched refunds) is above 0",
+            "title": "Count",
+            "type": "integer"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -903,7 +944,8 @@
           "category_id",
           "name",
           "budget",
-          "actual"
+          "actual",
+          "count"
         ],
         "title": "Level2Row",
         "type": "object"
@@ -935,7 +977,7 @@
             "type": "string"
           },
           "annual_actual": {
-            "description": "Actual of the annual budget accounts' categories in the month; they are in neither `actual` nor `categories`",
+            "description": "Actual of the annual budget accounts' categories in the month; they are in neither `actual`, `count` nor `categories`",
             "title": "Annual Actual",
             "type": "string"
           },
@@ -969,6 +1011,11 @@
             "title": "Categories",
             "type": "array"
           },
+          "count": {
+            "description": "Consumption count over the same categories as `actual`: payments of the month whose net amount (after matched refunds) is above 0",
+            "title": "Count",
+            "type": "integer"
+          },
           "currency": {
             "title": "Currency",
             "type": "string"
@@ -985,6 +1032,7 @@
           "month",
           "budget",
           "actual",
+          "count",
           "annual_actual",
           "categories"
         ],
@@ -1062,6 +1110,157 @@
           "months"
         ],
         "title": "MonthlySummaryOut",
+        "type": "object"
+      },
+      "PaymentOut": {
+        "description": "A stored payment, as much of it as finding a refund's original payment needs.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "channel_id": {
+            "title": "Channel Id",
+            "type": "integer"
+          },
+          "channel_name": {
+            "title": "Channel Name",
+            "type": "string"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "refundable": {
+            "description": "`amount - refunded`: what a new refund may not exceed",
+            "title": "Refundable",
+            "type": "string"
+          },
+          "refunded": {
+            "description": "Total of the refunds already matched to it (positive)",
+            "title": "Refunded",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "channel_id",
+          "channel_name",
+          "date",
+          "amount",
+          "counterparty",
+          "description",
+          "category_id",
+          "category_name",
+          "refunded",
+          "refundable"
+        ],
+        "title": "PaymentOut",
+        "type": "object"
+      },
+      "PaymentSearchOut": {
+        "properties": {
+          "payments": {
+            "description": "Newest first",
+            "items": {
+              "$ref": "#/components/schemas/PaymentOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          }
+        },
+        "required": [
+          "payments"
+        ],
+        "title": "PaymentSearchOut",
+        "type": "object"
+      },
+      "RefundCandidatePage": {
+        "description": "Payments a refund can be matched to, best guesses first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "RefundCandidatePage",
+        "type": "object"
+      },
+      "RefundTarget": {
+        "description": "The payment a matched refund reverses.",
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "counterparty": {
+            "title": "Counterparty",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "amount",
+          "counterparty",
+          "category_name"
+        ],
+        "title": "RefundTarget",
         "type": "object"
       },
       "SettingsOut": {
@@ -1252,6 +1451,7 @@
             "type": "string"
           },
           "category_id": {
+            "description": "For a matched refund: the category of its payment (where it counts), not the one it was submitted with",
             "title": "Category Id",
             "type": "integer"
           },
@@ -1311,6 +1511,22 @@
           "parent_category_name": {
             "title": "Parent Category Name",
             "type": "string"
+          },
+          "refund_of": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefundTarget"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The payment this refund is matched to; null for a payment and for an unmatched refund"
+          },
+          "refunded": {
+            "description": "Total of the refunds matched to this payment, as a positive amount; \"0.00\" for a refund",
+            "title": "Refunded",
+            "type": "string"
           }
         },
         "required": [
@@ -1329,6 +1545,8 @@
           "description",
           "note",
           "confirmed_duplicate",
+          "refund_of",
+          "refunded",
           "created_at"
         ],
         "title": "TransactionOut",
@@ -1351,6 +1569,9 @@
             "title": "Page Size",
             "type": "integer"
           },
+          "stats": {
+            "$ref": "#/components/schemas/TransactionStats"
+          },
           "total": {
             "title": "Total",
             "type": "integer"
@@ -1360,14 +1581,36 @@
           "items",
           "total",
           "page",
-          "page_size"
+          "page_size",
+          "stats"
         ],
         "title": "TransactionPage",
         "type": "object"
       },
+      "TransactionStats": {
+        "description": "Figures for the list's filters, by effective attribution (a matched refund counts\nin its payment's month, category and channel), like the summaries.",
+        "properties": {
+          "count": {
+            "description": "Payments whose net amount (after matched refunds) is above 0",
+            "title": "Count",
+            "type": "integer"
+          },
+          "net_amount": {
+            "description": "Payments minus refunds",
+            "title": "Net Amount",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "net_amount"
+        ],
+        "title": "TransactionStats",
+        "type": "object"
+      },
       "TransactionUpdateIn": {
         "additionalProperties": false,
-        "description": "Only category and note are editable. Omitted fields are left unchanged.",
+        "description": "Category, note and (for a refund) the matched payment are editable. Omitted fields\nare left unchanged.",
         "properties": {
           "category_id": {
             "anyOf": [
@@ -1391,6 +1634,18 @@
               }
             ],
             "title": "Note"
+          },
+          "refund_of_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Refunds only: the payment to match (or re-match) this refund to; null removes the match",
+            "title": "Refund Of Id"
           }
         },
         "title": "TransactionUpdateIn",
@@ -2380,6 +2635,112 @@
         ]
       }
     },
+    "/api/v1/payments/search": {
+      "get": {
+        "description": "Stored payments (never refunds) between two dates (inclusive, at most 366 days),\nto find the payment a refund reverses. Open to agent tokens; the MCP `find_payments`\ntool returns the same.",
+        "operationId": "search_payments_api_v1_payments_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channel Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "counterparty",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Counterparty"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentSearchOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Search Payments",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
     "/api/v1/settings": {
       "get": {
         "description": "Ledger settings. `currency` is null until onboarding sets it.",
@@ -2941,6 +3302,7 @@
     },
     "/api/v1/transactions": {
       "get": {
+        "description": "The ledger, newest first, with `stats` (consumption count and net amount) for the\nsame filters by effective attribution, as the summaries count.",
         "operationId": "list_transactions_api_v1_transactions_get",
         "parameters": [
           {
@@ -3009,6 +3371,25 @@
             }
           },
           {
+            "description": "`unmatched`: only refunds not matched to a payment",
+            "in": "query",
+            "name": "refund_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "const": "unmatched",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`unmatched`: only refunds not matched to a payment",
+              "title": "Refund Status"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -3072,6 +3453,7 @@
     },
     "/api/v1/transactions/{transaction_id}": {
       "delete": {
+        "description": "A payment that still has matched refunds is refused (409); a refund never is.",
         "operationId": "delete_transaction_api_v1_transactions__transaction_id__delete",
         "parameters": [
           {
@@ -3087,6 +3469,16 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "TRANSACTION_HAS_REFUNDS: a payment with matched refunds"
           },
           "422": {
             "content": {
@@ -3115,6 +3507,7 @@
         ]
       },
       "patch": {
+        "description": "Category and note; for a refund also `refund_of_id` (match, re-match, or null to\nremove the match). A matched refund's category follows its payment.",
         "operationId": "update_transaction_api_v1_transactions__transaction_id__patch",
         "parameters": [
           {
@@ -3170,6 +3563,156 @@
           }
         },
         "summary": "Update Transaction",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/{transaction_id}/refund-candidates": {
+      "get": {
+        "description": "Payments this refund may be matched to (dated on or before it, enough left to\nrefund): same channel and counterparty first, then newest first. `q` searches\ncounterparty and description.",
+        "operationId": "refund_candidates_api_v1_transactions__transaction_id__refund_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundCandidatePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Refund Candidates",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/{transaction_id}/refunds": {
+      "get": {
+        "description": "The refunds matched to this payment, oldest first (empty for a refund).",
+        "operationId": "list_refunds_api_v1_transactions__transaction_id__refunds_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transaction_id",
+            "required": true,
+            "schema": {
+              "title": "Transaction Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransactionOut"
+                  },
+                  "title": "Response List Refunds Api V1 Transactions  Transaction Id  Refunds Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Refunds",
         "tags": [
           "transactions"
         ]
