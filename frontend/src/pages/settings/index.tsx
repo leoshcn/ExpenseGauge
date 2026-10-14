@@ -8,11 +8,12 @@ import { useSearchState } from "@/hooks/use-search-state";
 import { S } from "@/strings.zh";
 
 import { AgentSection } from "./agent-section";
+import { AiSection } from "./ai-section";
 import { CategoriesSection } from "./categories-section";
 import { LedgerSection } from "./ledger-section";
 
 const T = S.settings;
-const TABS = ["ledger", "categories", "agent"] as const;
+const TABS = ["ledger", "categories", "agent", "ai"] as const;
 type Tab = (typeof TABS)[number];
 
 function isTab(value: string | null): value is Tab {
@@ -21,7 +22,8 @@ function isTab(value: string | null): value is Tab {
 
 /**
  * The ledger (base currency, budget accounts, payment channels), the global category
- * tree, and what an agent needs (tokens, endpoint, channel IDs), one tab each. The tab
+ * tree, what an agent needs (tokens, endpoint, channel IDs) and the AI service behind the
+ * Dashboard's insight card, one tab each. The tab
  * lives in the URL (`?tab=categories`), so other pages can link straight to it.
  */
 export function SettingsPage() {
@@ -52,6 +54,9 @@ export function SettingsPage() {
         <TabsContent value="agent">
           <AgentSection channels={channels.data} />
         </TabsContent>
+        <TabsContent value="ai">
+          <AiSection />
+        </TabsContent>
       </>
     );
   }
@@ -64,6 +69,7 @@ export function SettingsPage() {
           <TabsTrigger value="ledger">{T.tabs.ledger}</TabsTrigger>
           <TabsTrigger value="categories">{T.tabs.categories}</TabsTrigger>
           <TabsTrigger value="agent">{T.tabs.agent}</TabsTrigger>
+          <TabsTrigger value="ai">{T.tabs.ai}</TabsTrigger>
         </TabsList>
       </div>
       {content}

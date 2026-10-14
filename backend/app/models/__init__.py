@@ -1,3 +1,4 @@
+from app.models.ai import AiInsight, AiSettings
 from app.models.auth import ApiToken, User, UserSession
 from app.models.budget import Budget
 from app.models.budget_account import BudgetAccount
@@ -7,6 +8,8 @@ from app.models.settings import AppSettings
 from app.models.transaction import Transaction
 
 __all__ = [
+    "AiInsight",
+    "AiSettings",
     "ApiToken",
     "AppSettings",
     "Budget",

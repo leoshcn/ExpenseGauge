@@ -125,7 +125,8 @@ Line heights are taller than Latin defaults because Chinese glyphs fill the em b
 ## Layout
 
 - **From `lg` (1024 px)**: fixed 224 px sidebar; a three-column grid with the month summary
-  (1) beside the 12-month chart (2), then the category table (2) beside the share chart (1).
+  (1) beside the 12-month chart (2), then ("全部" only) the AI insight card across all three
+  columns, then the category table (2) beside the share chart (1).
 - **Below `lg`**: one column in reading order: summary, trend, table, share. A top bar and
   a bottom tab bar replace the sidebar.
 - **Below `md` (768 px)** the table folds: budget, remaining and meter move under the
@@ -222,6 +223,16 @@ with these meanings.
   level-1 row. The row being dragged is lifted with `bg-card` and `shadow-card`, the others
   slide to make room, and it can move only up and down inside its own list. A failed save
   puts the rows back and says so in an `--over-soft` strip at the top of the list.
+- **AI insight card** (Dashboard, "全部"): a sparkle icon in `--primary` beside the title;
+  the one-line summary in medium weight, then 本月 and 本年 points side by side from `md`.
+  Each point starts with an icon that carries its tone, never colour alone (a screen-reader
+  label names it): `warning` a triangle in `--warning-foreground`, `positive` a check in
+  `--positive`, `neutral` an info icon in `--muted-foreground`. "数据已更新，可重新生成" is a
+  chip on `--warning-soft`; a failed generation is an `--over-soft` strip above the kept
+  result. Model and time sit in muted text at the bottom.
+- **AI settings** (settings → AI 洞察): the API key is a password field whose placeholder
+  says whether a key is stored (with its last 4 characters); the data-sharing notice is a
+  `--warning-soft` panel above the buttons, like the one-time token warning.
 - **Copy buttons** confirm with a check mark in `--positive` for 2 s. Copying works over
   plain HTTP on a LAN too (`src/lib/clipboard.ts` falls back when the Clipboard API is
   missing).
