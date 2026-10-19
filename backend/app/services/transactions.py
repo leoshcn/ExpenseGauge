@@ -1,5 +1,6 @@
 """Transactions: all-or-nothing batch submission with per-item feedback, list, edit, delete,
-and refund matching (see `services/refunds.py` for the rules and the attribution).
+an agent's category changes, and refund matching (see `services/refunds.py` for the rules
+and the attribution).
 
 A batch comes from one payment channel. Categories are the global tree; a transaction's
 budget account is its category's, never stored on the transaction.
@@ -24,16 +25,22 @@ from app.months import add_months, parse_month
 from app.schemas.category import CategoryLeaf
 from app.schemas.transaction import (
     MAX_BATCH_ITEMS,
+    MAX_NOTE_LENGTH,
     MAX_PAYMENT_SEARCH_DAYS,
     MAX_PAYMENT_SEARCH_LIMIT,
+    MAX_RECATEGORIZE_ITEMS,
     BatchAcceptedOut,
     PaymentOut,
     PaymentSearchOut,
+    RecategorizeAcceptedOut,
+    RecategorizeItemIn,
     RefundCandidatePage,
     RefundTarget,
     TransactionItemIn,
+    TransactionKind,
     TransactionOut,
     TransactionPage,
+    TransactionSearchOut,
     TransactionStats,
     TransactionUpdateIn,
 )
@@ -177,6 +184,65 @@ def _field_errors(exc: ValidationError) -> list[dict[str, str]]:
     ]
 
 
+def _invalid_field(index: int, exc: ValidationError) -> dict[str, Any]:
+    errors = _field_errors(exc)
+    fields = "、".join(sorted({error["field"] for error in errors}))
+    return _rejected(index, "INVALID_FIELD", f"字段无效：{fields}", errors=errors)
+
+
+@dataclass(frozen=True)
+class _CategoryChoices:
+    """What a `CATEGORY_NOT_FOUND` / `CATEGORY_NOT_LEAF` item carries to help the agent."""
+
+    valid_categories: list[dict[str, Any]]
+    children_of: dict[int, list[CategoryLeaf]]
+
+
+def _category_choices(names: _Names) -> _CategoryChoices:
+    nodes = build_nodes(list(names.categories.values()), names.budget_accounts)
+    return _CategoryChoices(
+        valid_categories=[node.model_dump(mode="json") for node in nodes],
+        children_of={node.id: node.children for node in nodes},
+    )
+
+
+def _category_rejection(
+    index: int, category_id: int, names: _Names, choices: _CategoryChoices
+) -> dict[str, Any] | None:
+    """The rejection of an item whose category is not a level-2 category, or None."""
+    category = names.categories.get(category_id)
+    if category is None:
+        return _rejected(
+            index,
+            "CATEGORY_NOT_FOUND",
+            f"分类 {category_id} 不存在，请从 valid_categories 的二级分类中选择",
+            valid_categories=choices.valid_categories,
+        )
+    if category.parent_id is None:
+        children = choices.children_of[category.id]
+        return _rejected(
+            index,
+            "CATEGORY_NOT_LEAF",
+            f"“{category.name}”是一级分类，流水只能归入其下的二级分类",
+            parent={"id": category.id, "name": category.name},
+            children=[child.model_dump(mode="json") for child in children],
+        )
+    return None
+
+
+def _raise_if_rejected(db: Session, feedback: list[dict[str, Any] | None]) -> None:
+    """`BATCH_REJECTED` (409) carrying every item's feedback when any item is rejected."""
+    rejected_count = sum(1 for entry in feedback if entry and entry["status"] == "rejected")
+    if rejected_count:
+        db.rollback()  # releases the advisory lock and the row locks; nothing was written
+        raise AppError(
+            409,
+            "BATCH_REJECTED",
+            f"本批共 {len(feedback)} 条，其中 {rejected_count} 条被拒绝，未写入任何数据",
+            {"items": feedback},
+        )
+
+
 def _check_batch_refunds(
     db: Session,
     parsed: dict[int, tuple[TransactionItemIn, str]],
@@ -292,10 +358,7 @@ def submit_batch(
     lock_channel_transactions(db, channel_id)
 
     names = _load_names(db)
-    categories = names.categories
-    nodes = build_nodes(list(categories.values()), names.budget_accounts)
-    valid_categories = [node.model_dump(mode="json") for node in nodes]
-    children_of = {node.id: node.children for node in nodes}
+    choices = _category_choices(names)
 
     feedback: list[dict[str, Any] | None] = [None] * len(raw_items)
     parsed: dict[int, tuple[TransactionItemIn, str]] = {}
@@ -304,30 +367,11 @@ def submit_batch(
         try:
             item = TransactionItemIn.model_validate(raw)
         except ValidationError as exc:
-            errors = _field_errors(exc)
-            fields = "、".join(sorted({error["field"] for error in errors}))
-            feedback[index] = _rejected(
-                index, "INVALID_FIELD", f"字段无效：{fields}", errors=errors
-            )
+            feedback[index] = _invalid_field(index, exc)
             continue
-        category = categories.get(item.category_id)
-        if category is None:
-            feedback[index] = _rejected(
-                index,
-                "CATEGORY_NOT_FOUND",
-                f"分类 {item.category_id} 不存在，请从 valid_categories 的二级分类中选择",
-                valid_categories=valid_categories,
-            )
-            continue
-        if category.parent_id is None:
-            children: list[CategoryLeaf] = children_of[category.id]
-            feedback[index] = _rejected(
-                index,
-                "CATEGORY_NOT_LEAF",
-                f"“{category.name}”是一级分类，流水只能归入其下的二级分类",
-                parent={"id": category.id, "name": category.name},
-                children=[child.model_dump(mode="json") for child in children],
-            )
+        rejection = _category_rejection(index, item.category_id, names, choices)
+        if rejection is not None:
+            feedback[index] = rejection
             continue
         fingerprint = compute_fingerprint(
             channel_id, item.date, item.amount, item.counterparty, item.description
@@ -377,15 +421,7 @@ def submit_batch(
 
     _check_batch_refunds(db, parsed, feedback)
 
-    rejected_count = sum(1 for entry in feedback if entry and entry["status"] == "rejected")
-    if rejected_count:
-        db.rollback()  # releases the advisory lock and the row locks; nothing was written
-        raise AppError(
-            409,
-            "BATCH_REJECTED",
-            f"本批共 {len(raw_items)} 条，其中 {rejected_count} 条被拒绝，未写入任何数据",
-            {"items": feedback},
-        )
+    _raise_if_rejected(db, feedback)
 
     inserted: dict[int, Transaction] = {}
     for index in sorted(parsed):
@@ -680,22 +716,7 @@ def search_payments(
     """Stored payments only (never refunds), for an agent looking for a refund's original
     payment: the dates are inclusive and span at most `MAX_PAYMENT_SEARCH_DAYS` days;
     `counterparty` matches anywhere, ignoring case. Newest first."""
-    if date_from > date_to or (date_to - date_from).days >= MAX_PAYMENT_SEARCH_DAYS:
-        raise invalid(
-            "INVALID_DATE_RANGE",
-            f"日期范围无效：date_from 不能晚于 date_to，且最多跨 {MAX_PAYMENT_SEARCH_DAYS} 天",
-            {
-                "date_from": date_from.isoformat(),
-                "date_to": date_to.isoformat(),
-                "max_days": MAX_PAYMENT_SEARCH_DAYS,
-            },
-        )
-    if not 1 <= limit <= MAX_PAYMENT_SEARCH_LIMIT:
-        raise invalid(
-            "INVALID_LIMIT",
-            f"limit 须在 1 到 {MAX_PAYMENT_SEARCH_LIMIT} 之间",
-            {"limit": limit, "max_limit": MAX_PAYMENT_SEARCH_LIMIT},
-        )
+    _check_search_bounds(date_from, date_to, limit)
     conditions = [
         Transaction.amount > 0,
         Transaction.date >= date_from,
@@ -736,3 +757,183 @@ def search_payments(
             )
         )
     return PaymentSearchOut(payments=payments)
+
+
+def _check_search_bounds(date_from: date, date_to: date, limit: int) -> None:
+    """What both agent searches allow: `MAX_PAYMENT_SEARCH_DAYS` days at most (both ends
+    counted) and 1 to `MAX_PAYMENT_SEARCH_LIMIT` rows."""
+    if date_from > date_to or (date_to - date_from).days >= MAX_PAYMENT_SEARCH_DAYS:
+        raise invalid(
+            "INVALID_DATE_RANGE",
+            f"日期范围无效：date_from 不能晚于 date_to，且最多跨 {MAX_PAYMENT_SEARCH_DAYS} 天",
+            {
+                "date_from": date_from.isoformat(),
+                "date_to": date_to.isoformat(),
+                "max_days": MAX_PAYMENT_SEARCH_DAYS,
+            },
+        )
+    if not 1 <= limit <= MAX_PAYMENT_SEARCH_LIMIT:
+        raise invalid(
+            "INVALID_LIMIT",
+            f"limit 须在 1 到 {MAX_PAYMENT_SEARCH_LIMIT} 之间",
+            {"limit": limit, "max_limit": MAX_PAYMENT_SEARCH_LIMIT},
+        )
+
+
+def search_transactions(
+    db: Session,
+    date_from: date,
+    date_to: date,
+    channel_id: int | None = None,
+    category_id: int | None = None,
+    q: str | None = None,
+    kind: TransactionKind | None = None,
+    limit: int = 20,
+) -> TransactionSearchOut:
+    """Stored payments and refunds, for an agent looking for transactions to recategorize.
+    Same date and limit bounds as `search_payments`. A level-1 `category_id` matches all of
+    its level-2 children; a matched refund is found by its payment's category, the one it
+    counts in (as `list_transactions` does). `q` matches counterparty or description
+    anywhere, ignoring case. Newest first."""
+    _check_search_bounds(date_from, date_to, limit)
+    names = _load_names(db)
+    conditions = [Transaction.date >= date_from, Transaction.date <= date_to]
+    if channel_id is not None:
+        get_channel(db, channel_id, status_code=422)
+        conditions.append(Transaction.channel_id == channel_id)
+    if category_id is not None:
+        conditions.append(effective_category.in_(_leaf_ids(names.categories, category_id)))
+    text = (q or "").strip()
+    if text:
+        pattern = _contains(text)
+        conditions.append(
+            or_(
+                Transaction.counterparty.ilike(pattern, escape="\\"),
+                Transaction.description.ilike(pattern, escape="\\"),
+            )
+        )
+    if kind == "payment":
+        conditions.append(Transaction.amount > 0)
+    elif kind == "refund":
+        conditions.append(Transaction.amount < 0)
+    rows = list(
+        db.scalars(
+            join_payment(select(Transaction))
+            .where(*conditions)
+            .order_by(Transaction.date.desc(), Transaction.id.desc())
+            .limit(limit)
+        )
+    )
+    return TransactionSearchOut(transactions=_outputs(db, rows, names))
+
+
+def _change_line(old: Category, new: Category, names: _Names, reason: str) -> str:
+    """The line an agent's category change appends to the note."""
+
+    def path(category: Category) -> str:
+        return f"{names.categories[category.parent_id].name}/{category.name}"
+
+    return f"[Agent 改分类] {path(old)} → {path(new)}：{reason}"
+
+
+def recategorize(db: Session, raw_items: list[Any]) -> RecategorizeAcceptedOut:
+    """An agent's category changes: every item or none.
+
+    Each item moves one stored transaction to another level-2 category and appends a line
+    with the old and new category and the agent's reason to its note; nothing else
+    changes. Raises `BATCH_REJECTED` (409) with one feedback entry per item when any item
+    is rejected. The transactions are locked (`FOR UPDATE`) from the checks to the commit.
+    """
+    if not isinstance(raw_items, list) or not 1 <= len(raw_items) <= MAX_RECATEGORIZE_ITEMS:
+        raise invalid(
+            "INVALID_BATCH_SIZE",
+            f"每批需包含 1 到 {MAX_RECATEGORIZE_ITEMS} 条修改",
+            {"max_items": MAX_RECATEGORIZE_ITEMS},
+        )
+    names = _load_names(db)
+    choices = _category_choices(names)
+    feedback: list[dict[str, Any] | None] = [None] * len(raw_items)
+    parsed: dict[int, RecategorizeItemIn] = {}
+    first_index: dict[int, int] = {}
+    for index, raw in enumerate(raw_items):
+        try:
+            item = RecategorizeItemIn.model_validate(raw)
+        except ValidationError as exc:
+            feedback[index] = _invalid_field(index, exc)
+            continue
+        earlier = first_index.setdefault(item.transaction_id, index)
+        if earlier != index:
+            feedback[index] = _rejected(
+                index,
+                "DUPLICATE_TRANSACTION",
+                f"与本批第 {earlier} 条（index={earlier}）是同一笔流水，每笔每批只能改一次",
+                transaction_id=item.transaction_id,
+                duplicate_of_index=earlier,
+            )
+            continue
+        parsed[index] = item
+
+    locked = lock_transactions(db, {item.transaction_id for item in parsed.values()})
+    notes: dict[int, str] = {}
+    for index, item in parsed.items():
+        transaction = locked.get(item.transaction_id)
+        if transaction is None:
+            feedback[index] = _rejected(
+                index,
+                "TRANSACTION_NOT_FOUND",
+                f"流水 {item.transaction_id} 不存在",
+                transaction_id=item.transaction_id,
+            )
+            continue
+        rejection = _category_rejection(index, item.category_id, names, choices)
+        if rejection is not None:
+            feedback[index] = rejection
+            continue
+        if transaction.refund_of_id is not None:
+            feedback[index] = _rejected(
+                index,
+                "REFUND_CATEGORY_FOLLOWS_PAYMENT",
+                "已匹配的退款分类跟随原支付，不能单独修改",
+                category_id=item.category_id,
+                refund_of_id=transaction.refund_of_id,
+            )
+            continue
+        if transaction.category_id == item.category_id:
+            feedback[index] = _rejected(
+                index,
+                "CATEGORY_UNCHANGED",
+                "流水已在该分类下，无需修改",
+                category_id=item.category_id,
+            )
+            continue
+        line = _change_line(
+            names.categories[transaction.category_id],
+            names.categories[item.category_id],
+            names,
+            item.reason,
+        )
+        note = f"{transaction.note}\n{line}" if transaction.note else line
+        if len(note) > MAX_NOTE_LENGTH:
+            feedback[index] = _rejected(
+                index,
+                "NOTE_TOO_LONG",
+                f"追加原因后备注将超过 {MAX_NOTE_LENGTH} 字，请缩短原因",
+                max_length=MAX_NOTE_LENGTH,
+                length=len(note),
+            )
+            continue
+        notes[index] = note
+        feedback[index] = {"index": index, "status": "ok"}
+
+    _raise_if_rejected(db, feedback)
+
+    changed = []
+    for index, item in parsed.items():
+        transaction = locked[item.transaction_id]
+        transaction.category_id = item.category_id
+        transaction.note = notes[index]
+        changed.append(transaction)
+    db.flush()
+    result = RecategorizeAcceptedOut(transactions=_outputs(db, changed, names))
+    db.commit()
+    return result

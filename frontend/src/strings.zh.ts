@@ -552,7 +552,7 @@ export const S = {
       connection: {
         title: "连接信息",
         description:
-          "把以下信息交给您的 AI 助手（例如 Hermes Agent）。助手通过 MCP 读取付款渠道、分类和预算，并按渠道提交流水；也可以直接调用 REST 接口。",
+          "把以下信息交给您的 AI 助手（例如 Hermes Agent）。助手通过 MCP 读取付款渠道、分类和预算，按渠道提交流水，并可在您确认后修改已有流水的分类；也可以直接调用 REST 接口。",
         endpoint: "MCP 地址",
         auth: "认证方式",
         authValue: "Authorization: Bearer <访问令牌>",
@@ -567,7 +567,7 @@ export const S = {
       tokens: {
         title: "访问令牌",
         description:
-          "令牌只能读取付款渠道、分类和预算，并提交流水；不能查看已有流水，也不能修改或删除任何数据。每个助手使用一个单独的令牌，便于单独撤销。",
+          "令牌只能读取付款渠道、分类和预算，查找和提交流水，以及修改已有流水的分类（每次修改的原因会追加到该流水的备注里）；不能修改流水的其他内容，也不能删除任何数据。每个助手使用一个单独的令牌，便于单独撤销。",
         name: "令牌名称",
         namePlaceholder: "例如：Hermes 家里电脑",
         create: "创建令牌",

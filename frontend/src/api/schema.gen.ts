@@ -542,6 +542,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/recategorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recategorize
+         * @description All-or-nothing category changes, each with a reason appended to the transaction's
+         *     note. Open to agent tokens; the MCP `recategorize_transactions` tool does the same.
+         */
+        post: operations["recategorize_api_v1_transactions_recategorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Transactions
+         * @description Stored payments and refunds between two dates (inclusive, at most 366 days), to find
+         *     transactions to recategorize. A level-1 `category_id` matches its level-2 children; `q`
+         *     searches counterparty and description. Open to agent tokens; the MCP
+         *     `find_transactions` tool returns the same.
+         */
+        get: operations["search_transactions_api_v1_transactions_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions/{transaction_id}": {
         parameters: {
             query?: never;
@@ -1224,6 +1268,37 @@ export interface components {
              */
             payments: components["schemas"]["PaymentOut"][];
         };
+        /** RecategorizeAcceptedOut */
+        RecategorizeAcceptedOut: {
+            /**
+             * Accepted
+             * @default true
+             */
+            accepted: boolean;
+            /** Transactions */
+            transactions: components["schemas"]["TransactionOut"][];
+        };
+        /** RecategorizeIn */
+        RecategorizeIn: {
+            /**
+             * Items
+             * @description 1 to 100 items
+             */
+            items: {
+                /**
+                 * Category Id
+                 * @description The new level-2 category
+                 */
+                category_id: number;
+                /**
+                 * Reason
+                 * @description Why the category is changed; appended to the transaction's note
+                 */
+                reason: string;
+                /** Transaction Id */
+                transaction_id: number;
+            }[];
+        };
         /**
          * RefundCandidatePage
          * @description Payments a refund can be matched to, best guesses first.
@@ -1385,6 +1460,14 @@ export interface components {
             stats: components["schemas"]["TransactionStats"];
             /** Total */
             total: number;
+        };
+        /** TransactionSearchOut */
+        TransactionSearchOut: {
+            /**
+             * Transactions
+             * @description Newest first
+             */
+            transactions: components["schemas"]["TransactionOut"][];
         };
         /**
          * TransactionStats
@@ -2857,6 +2940,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    recategorize_api_v1_transactions_recategorize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecategorizeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecategorizeAcceptedOut"];
+                };
+            };
+            /** @description BATCH_REJECTED: nothing changed; details.items has one entry per item */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    search_transactions_api_v1_transactions_search_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+                channel_id?: number | null;
+                category_id?: number | null;
+                q?: string | null;
+                kind?: ("payment" | "refund") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionSearchOut"];
                 };
             };
             /** @description Validation error */

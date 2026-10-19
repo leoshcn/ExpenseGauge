@@ -72,7 +72,7 @@ The frontend build inside `docker compose build` needs roughly 1 GB of free memo
 3. Follow [`docs/agent-guide.md`](docs/agent-guide.md): workflow, tools, reason codes,
    the single-use `confirm_duplicate` rule and refund matching.
 
-The agent's five MCP tools and their REST equivalents (the only operations an agent token
+The agent's seven MCP tools and their REST equivalents (the only operations an agent token
 may call; everything else needs the signed-in user):
 
 | MCP tool | REST |
@@ -81,7 +81,9 @@ may call; everything else needs the signed-in user):
 | `list_categories` | `GET /api/v1/categories` |
 | `get_budgets` | `GET /api/v1/budgets` |
 | `find_payments` | `GET /api/v1/payments/search` (stored payments only, to match a refund) |
+| `find_transactions` | `GET /api/v1/transactions/search` (payments and refunds, to recategorize) |
 | `submit_transactions` | `POST /api/v1/channels/{channel_id}/transactions/batch` |
+| `recategorize_transactions` | `POST /api/v1/transactions/recategorize` (category only; each change's reason is appended to the note) |
 
 Refund matching in the web UI uses `GET /api/v1/transactions` (`refund_status=unmatched`,
 `stats`), `GET /api/v1/transactions/{id}/refund-candidates` and `PATCH
@@ -178,7 +180,7 @@ docker compose restart                    # restart everything; data is kept
 | `backend/` | FastAPI app: REST under `/api/v1`, MCP Streamable HTTP under `/mcp` |
 | `backend/openapi.json` | Exported API contract, the input for the frontend's typed client |
 | `frontend/` | React web UI; `frontend/README.md` has the commands to run it with demo data |
-| `docs/agent-guide.md` | How an AI agent connects, the five tools and their feedback |
+| `docs/agent-guide.md` | How an AI agent connects, the seven tools and their feedback |
 | `docker-compose.yml`, `backend/Dockerfile`, `frontend/Dockerfile`, `frontend/nginx.conf` | Deployment |
 
 ## Backend development

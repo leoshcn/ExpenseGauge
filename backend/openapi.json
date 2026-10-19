@@ -1415,6 +1415,71 @@
         "title": "PaymentSearchOut",
         "type": "object"
       },
+      "RecategorizeAcceptedOut": {
+        "properties": {
+          "accepted": {
+            "default": true,
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "RecategorizeAcceptedOut",
+        "type": "object"
+      },
+      "RecategorizeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "1 to 100 items",
+            "items": {
+              "additionalProperties": false,
+              "description": "One category change by an agent. Validated per item by the service, like a batch\nitem, so a bad field is reported as an `INVALID_FIELD` item.",
+              "properties": {
+                "category_id": {
+                  "description": "The new level-2 category",
+                  "title": "Category Id",
+                  "type": "integer"
+                },
+                "reason": {
+                  "description": "Why the category is changed; appended to the transaction's note",
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "title": "Reason",
+                  "type": "string"
+                },
+                "transaction_id": {
+                  "title": "Transaction Id",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "transaction_id",
+                "category_id",
+                "reason"
+              ],
+              "title": "RecategorizeItemIn",
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecategorizeIn",
+        "type": "object"
+      },
       "RefundCandidatePage": {
         "description": "Payments a refund can be matched to, best guesses first.",
         "properties": {
@@ -1804,6 +1869,23 @@
           "stats"
         ],
         "title": "TransactionPage",
+        "type": "object"
+      },
+      "TransactionSearchOut": {
+        "properties": {
+          "transactions": {
+            "description": "Newest first",
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "TransactionSearchOut",
         "type": "object"
       },
       "TransactionStats": {
@@ -3905,6 +3987,211 @@
           }
         },
         "summary": "List Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/recategorize": {
+      "post": {
+        "description": "All-or-nothing category changes, each with a reason appended to the transaction's\nnote. Open to agent tokens; the MCP `recategorize_transactions` tool does the same.",
+        "operationId": "recategorize_api_v1_transactions_recategorize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecategorizeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecategorizeAcceptedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "BATCH_REJECTED: nothing changed; details.items has one entry per item"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Recategorize",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/search": {
+      "get": {
+        "description": "Stored payments and refunds between two dates (inclusive, at most 366 days), to find\ntransactions to recategorize. A level-1 `category_id` matches its level-2 children; `q`\nsearches counterparty and description. Open to agent tokens; the MCP\n`find_transactions` tool returns the same.",
+        "operationId": "search_transactions_api_v1_transactions_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channel Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "payment",
+                    "refund"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionSearchOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Search Transactions",
         "tags": [
           "transactions"
         ]

@@ -54,13 +54,17 @@ transactions. The agent is the bookkeeper in front of it:
 8. **Read the feedback.** If the batch is rejected nothing was stored; fix or confirm the
    rejected items with the user and submit the batch again.
 9. Optionally read the month's budgets (`get_budgets`) to tell the user how a category
-   stands against its budget. Apart from `find_payments` (stored payments only, to match
-   refunds) the agent cannot read stored transactions or actual spending; the user sees
-   those on the Dashboard.
+   stands against its budget. The agent can find stored transactions (`find_payments` to
+   match refunds, `find_transactions` to recategorize) but cannot read actual spending;
+   the user sees that on the Dashboard.
+10. **Recategorize** stored transactions when the user asks for it or confirms it:
+    find them with `find_transactions`, then `recategorize_transactions` with a reason
+    for each. The reason is appended to the transaction's note for the user to read.
 
-The agent can never change or delete an existing record (a stored match included), edit
-budgets, categories, channels or budget accounts, or read user information. Corrections
-are made by the user in the web UI (Transactions page).
+Apart from a stored transaction's category, the agent can never change or delete an
+existing record (a stored match included), edit budgets, categories, channels or budget
+accounts, or read user information. Other corrections are made by the user in the web UI
+(Transactions page).
 
 ### How a matched refund counts
 
@@ -104,10 +108,13 @@ mcp_servers:
   `Authorization: "Bearer ${EXPENSEGAUGE_TOKEN}"`.
 - Hermes registers the tools as `mcp_expensegauge_list_channels`,
   `mcp_expensegauge_list_categories`, `mcp_expensegauge_get_budgets`,
-  `mcp_expensegauge_find_payments` and `mcp_expensegauge_submit_transactions`.
+  `mcp_expensegauge_find_payments`, `mcp_expensegauge_find_transactions`,
+  `mcp_expensegauge_submit_transactions` and `mcp_expensegauge_recategorize_transactions`.
 - After editing the file, restart Hermes or run `/reload-mcp` in a session.
 - Optional keys: `enabled: false` to switch the server off, and `tools.include` /
-  `tools.exclude` to filter tools (all five are needed for the workflow above).
+  `tools.exclude` to filter tools (the workflow above needs all seven; exclude
+  `find_transactions` and `recategorize_transactions` to keep the agent from changing
+  stored categories).
 
 These keys were re-checked on 2026-10-10 against
 <https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp> (section "HTTP
@@ -320,6 +327,46 @@ Rejected (**nothing stored**, one entry per item, in item order):
 `"status": "ok"` on a rejected batch means "this item would have been accepted"; it was
 **not** stored either.
 
+### `find_transactions(date_from: str, date_to: str, channel_id: int | None = None, category_id: int | None = None, q: str | None = None, kind: str | None = None, limit: int = 20)`
+
+Stored **payments and refunds** dated from `date_from` to `date_to` (same bounds as
+`find_payments`: at most 366 days, both ends counted), newest first. Use it to find the
+transactions to recategorize.
+
+- `channel_id`: only that channel's transactions.
+- `category_id`: a level-2 category, or a level-1 category for all of its children. A
+  matched refund is found under its payment's category (the one it counts in).
+- `q`: matched anywhere in the counterparty or the description, ignoring case.
+- `kind`: `"payment"` or `"refund"`; omitted, both.
+- `limit`: 1 to 50.
+
+Returns `{"transactions": [...]}`, each in the same shape as `submit_transactions`
+returns (`id`, `category_*`, `parent_category_*`, `note`, `refund_of`, ...). A refund with
+a non-null `refund_of` is matched to a payment and cannot be recategorized on its own.
+
+### `recategorize_transactions(items: list[item])`
+
+Changes the category of 1 to 100 stored transactions. **All or nothing.** Call it only
+when the user asked for the change or confirmed it. Each item:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `transaction_id` | int | yes | from `find_transactions` |
+| `category_id` | int | yes | the new level-2 category |
+| `reason` | string, 1-200 | yes | why the category is changed, in words the user will understand; leading and trailing whitespace is trimmed |
+
+Each change appends one line to the transaction's note, after a line break when the
+note is not empty; the existing note is kept:
+
+```
+[Agent 改分类] 餐饮/买菜 → 交通/打车：实为滴滴打车，不是买菜
+```
+
+Nothing else of the transaction changes. A payment's matched refunds follow it to the new
+category. The result is `{"accepted": true, "transactions": [...]}` with the changed
+transactions; a rejected call is `{"accepted": false, "code": "BATCH_REJECTED", ...}` with
+one entry per item, as for `submit_transactions`, and **nothing is changed**.
+
 ## Reason codes and what to do
 
 ### Per item, inside `BATCH_REJECTED`
@@ -334,6 +381,17 @@ Rejected (**nothing stored**, one entry per item, in item order):
 | `INVALID_REFUND_TARGET` | `refund_of_id` or `refund_of_index` | The match is not possible: the item is not a refund, the target does not exist, is a refund or the item itself, is dated after the refund, or (for `refund_of_index`) the referenced item is itself rejected. Check with `find_payments` / the batch; if the right payment cannot be found, ask the user, or drop the field to store the refund unmatched. |
 | `REFUND_EXCEEDS_PAYMENT` | `payment_amount`, `refunded`, `refundable`, and the reference | The payment's matched refunds (stored ones plus earlier refunds of this batch pointing at it) would exceed its amount. It is probably the wrong payment: look again, or ask the user. |
 
+`recategorize_transactions` uses `INVALID_FIELD` (e.g. a missing or blank `reason`),
+`CATEGORY_NOT_FOUND` and `CATEGORY_NOT_LEAF` as above, and also:
+
+| Code | Extra fields | What the agent should do |
+|---|---|---|
+| `DUPLICATE_TRANSACTION` | `transaction_id`, `duplicate_of_index` | The same transaction appears twice in one call. Keep one item. |
+| `TRANSACTION_NOT_FOUND` | `transaction_id` | No such transaction (perhaps the user deleted it). Search again with `find_transactions`. |
+| `REFUND_CATEGORY_FOLLOWS_PAYMENT` | `category_id`, `refund_of_id` | A matched refund counts in its payment's category. Recategorize the payment instead (its refunds follow), or tell the user. |
+| `CATEGORY_UNCHANGED` | `category_id` | The transaction is already in that category. Drop the item. |
+| `NOTE_TOO_LONG` | `max_length`, `length` | The note would exceed 1000 characters. Shorten the reason; if it still does not fit, ask the user to tidy the note on the Transactions page. |
+
 Duplicate detection: two transactions are "the same" when **channel**, date, amount (to
 the cent), counterparty and description match after normalization (Unicode NFKC, trimmed,
 whitespace collapsed, case-insensitive). The note and category do not count. The same
@@ -345,13 +403,14 @@ a statement under its own channel.
 | Code | HTTP | Meaning / action |
 |---|---|---|
 | `INVALID_TOKEN` | 401 | Token missing, unknown or revoked. Stop and ask the user for a new token. |
-| `TOKEN_SCOPE_FORBIDDEN` | 403 | REST only: an agent token was used on an endpoint other than the five agent operations. Do not retry. |
-| `CHANNEL_NOT_FOUND` | 404 / 422 | Wrong `channel_id` (422 when it is a `find_payments` filter). Call `list_channels` and ask the user which channel the statement belongs to. |
-| `INVALID_DATE_RANGE` | 422 | `find_payments`: `date_from` after `date_to`, or a range of more than 366 days (both ends counted). Narrow the range. |
-| `INVALID_LIMIT` | 422 | `find_payments`: `limit` is not 1 to 50. |
+| `TOKEN_SCOPE_FORBIDDEN` | 403 | REST only: an agent token was used on an endpoint other than the seven agent operations. Do not retry. |
+| `CHANNEL_NOT_FOUND` | 404 / 422 | Wrong `channel_id` (422 when it is a search filter). Call `list_channels` and ask the user which channel the statement belongs to. |
+| `CATEGORY_NOT_FOUND` | 422 | `find_transactions` with a `category_id` that does not exist. Use an id from `list_categories`. |
+| `INVALID_DATE_RANGE` | 422 | `find_payments` / `find_transactions`: `date_from` after `date_to`, or a range of more than 366 days (both ends counted). Narrow the range. |
+| `INVALID_LIMIT` | 422 | `find_payments` / `find_transactions`: `limit` is not 1 to 50. |
 | `BUDGET_ACCOUNT_NOT_FOUND` | 422 | `get_budgets` with a `budget_account_id` that does not exist. Use an id from `list_categories` (`budget_account.id`) or omit it. |
 | `SETTINGS_NOT_INITIALIZED` | 409 | `get_budgets` before the user finished the first-time setup (no base currency yet). Ask the user to finish setup in the web UI. |
-| `INVALID_BATCH_SIZE` | 422 | `items` empty or more than 500. Split the batch. |
+| `INVALID_BATCH_SIZE` | 422 | `items` empty or more than 500 (100 for `recategorize_transactions`). Split the batch. |
 | `INVALID_MONTH` | 422 | `month` is not `YYYY-MM`. |
 | `VALIDATION_ERROR` | 422 | REST only: the request body or a parameter itself is malformed (`details.errors`). |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | REST only: send `Content-Type: application/json`. |
@@ -380,8 +439,10 @@ a normal result with `accepted: false`, so read `details.items`.
 6. **Re-running is safe without flags.** Resubmitting an already stored batch without
    flags stores nothing and returns `SUSPECTED_DUPLICATE` for each item. There is no silent
    "already present, skip": drop those items and submit the rest.
-7. **No corrections through the agent.** A wrongly stored transaction is fixed (category,
-   note) or deleted by the user on the Transactions page. Its channel cannot be changed.
+7. **Only the category can be corrected through the agent**, and only when the user asked
+   for it or confirmed it, always with a reason (`recategorize_transactions`). Anything
+   else of a stored transaction (note, refund match) is fixed or deleted by the user on
+   the Transactions page. Its channel, date and amount cannot be changed.
 8. **Refunds** are negative amounts. Name the payment each one reverses: `refund_of_index`
    when that payment is in the same batch, otherwise `find_payments` then `refund_of_id`.
    Never guess: if no payment fits (or several do and you cannot tell), ask the user; if
@@ -402,9 +463,11 @@ payloads. Use them with the same `Authorization: Bearer eg_...` header and
 | `list_categories()` | `GET /categories` |
 | `get_budgets(month, budget_account_id)` | `GET /budgets?month=YYYY-MM&budget_account_id=<id>` (both optional) |
 | `find_payments(date_from, date_to, channel_id, counterparty, limit)` | `GET /payments/search?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&channel_id=<id>&counterparty=<text>&limit=<n>` |
+| `find_transactions(date_from, date_to, channel_id, category_id, q, kind, limit)` | `GET /transactions/search?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&channel_id=<id>&category_id=<id>&q=<text>&kind=payment\|refund&limit=<n>` |
 | `submit_transactions(channel_id, items)` | `POST /channels/{channel_id}/transactions/batch` with body `{"items": [...]}` |
+| `recategorize_transactions(items)` | `POST /transactions/recategorize` with body `{"items": [...]}` |
 
-Differences on REST: success is `201` with `{"accepted": true, "transactions": [...]}`;
+Differences on REST: success is `201` (`200` for `recategorize`) with `{"accepted": true, "transactions": [...]}`;
 a rejected batch is HTTP `409` with the envelope
 `{"code": "BATCH_REJECTED", "message", "details": {"items": [...]}}` (no `accepted` key);
 other errors use the HTTP statuses in the table above. Every other endpoint answers an

@@ -62,7 +62,9 @@ def call(url: str, token: str, name: str, arguments: dict):
     return run_mcp(url, token, calls)
 
 
-def test_exactly_five_tools(server_url, token):
+def test_exactly_seven_tools(server_url, token):
+    """AC7 (10-19-agent-recategorize): seven tools."""
+
     async def calls(mcp_client):
         return await mcp_client.list_tools()
 
@@ -72,7 +74,25 @@ def test_exactly_five_tools(server_url, token):
         "list_categories",
         "get_budgets",
         "find_payments",
+        "find_transactions",
         "submit_transactions",
+        "recategorize_transactions",
+    }
+    assert set(tools["find_transactions"].input_schema["properties"]) == {
+        "date_from",
+        "date_to",
+        "channel_id",
+        "category_id",
+        "q",
+        "kind",
+        "limit",
+    }
+    recategorize = tools["recategorize_transactions"].input_schema
+    assert set(recategorize["properties"]) == {"items"}
+    assert set(recategorize["properties"]["items"]["items"]["properties"]) == {
+        "transaction_id",
+        "category_id",
+        "reason",
     }
     assert set(tools["find_payments"].input_schema["properties"]) == {
         "date_from",
@@ -157,6 +177,47 @@ def test_find_payments_then_submit_a_matched_refund(server_url, client, token, l
     error = call(url, token["token"], "find_payments", wide)
     assert error.is_error is True
     rest_error = client.get(f"{API}/payments/search", params=wide)
+    assert error.structured_content == assert_envelope(rest_error, 422, "INVALID_DATE_RANGE")
+
+
+def test_find_then_recategorize(server_url, client, token, ledger):
+    """AC1, AC2, AC3 over MCP (10-19-agent-recategorize): the same results and per-item
+    feedback as over REST."""
+    url = f"{server_url}/mcp"
+    stored = ledger.submit([ledger.item(counterparty="滴滴", note="出差")])
+    assert stored.status_code == 201
+    taxi = stored.json()["transactions"][0]
+    arguments = {"date_from": "2026-09-01", "date_to": "2026-09-30", "q": "滴滴"}
+
+    found = call(url, token["token"], "find_transactions", arguments)
+    assert found.is_error is False
+    rest = client.get(f"{API}/transactions/search", params=arguments).json()
+    assert found.structured_content == rest
+    assert [t["id"] for t in rest["transactions"]] == [taxi["id"]]
+
+    unchanged = [{"transaction_id": taxi["id"], "category_id": ledger.groceries, "reason": "x"}]
+    rest_rejected = assert_envelope(
+        client.post(f"{API}/transactions/recategorize", json={"items": unchanged}),
+        409,
+        "BATCH_REJECTED",
+    )
+    rejected = call(url, token["token"], "recategorize_transactions", {"items": unchanged})
+    assert rejected.structured_content == {"accepted": False, **rest_rejected}
+    assert rest_rejected["details"]["items"][0]["code"] == "CATEGORY_UNCHANGED"
+
+    items = [{"transaction_id": taxi["id"], "category_id": ledger.metro, "reason": "打车"}]
+    accepted = call(url, token["token"], "recategorize_transactions", {"items": items})
+    assert accepted.is_error is False
+    changed = accepted.structured_content["transactions"][0]
+    assert (changed["category_id"], changed["note"]) == (
+        ledger.metro,
+        "出差\n[Agent 改分类] 餐饮/买菜 → 交通/地铁：打车",
+    )
+
+    wide = {"date_from": "2025-01-01", "date_to": "2026-09-30"}
+    error = call(url, token["token"], "find_transactions", wide)
+    assert error.is_error is True
+    rest_error = client.get(f"{API}/transactions/search", params=wide)
     assert error.structured_content == assert_envelope(rest_error, 422, "INVALID_DATE_RANGE")
 
 
