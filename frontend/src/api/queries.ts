@@ -40,6 +40,8 @@ export const keys = {
   insight: (month: string) => ["ledger", "summary", "insight", month] as const,
   transactions: ["ledger", "transactions"] as const,
   transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
+  /** Every tag in use (under `transactions`, so edits refresh it). */
+  tags: ["ledger", "transactions", "tags"] as const,
   /** Payments a refund may be matched to (under `transactions`, so edits refresh them). */
   refundCandidates: (transactionId: number, q: string, page: number) =>
     ["ledger", "transactions", "refund-candidates", transactionId, q, page] as const,
@@ -47,6 +49,22 @@ export const keys = {
   refunds: (transactionId: number) => ["ledger", "transactions", "refunds", transactionId] as const,
   budgets: ["ledger", "budgets"] as const,
   budgetsAt: (scope: BudgetScope, month: string) => ["ledger", "budgets", scopeKey(scope), month] as const,
+  /**
+   * Scheduled expenses and their status (under `ledger`: a new, edited or deleted
+   * transaction can pay or unpay one, and a category change renames them).
+   */
+  schedules: ["ledger", "schedules"] as const,
+  scheduleList: ["ledger", "schedules", "list"] as const,
+  scheduleStatus: (scope: BudgetScope, month: string) =>
+    ["ledger", "schedules", "status", scopeKey(scope), month] as const,
+  scheduleSuggestions: ["ledger", "schedules", "suggestions"] as const,
+  /** Report figures (under `ledger`: every change to the ledger can move them). */
+  reportSummary: (groupBy: ReportGroupBy, from: string, to: string, scope: BudgetScope) =>
+    ["ledger", "reports", "summary", groupBy, from, to, scopeKey(scope)] as const,
+  reportDaily: (from: string, to: string, scope: BudgetScope) =>
+    ["ledger", "reports", "daily", from, to, scopeKey(scope)] as const,
+  /** Saved custom reports (settings only, not figures). */
+  savedReports: ["saved-reports"] as const,
   tokens: ["tokens"] as const,
   /** The AI service for insights (the API key is never part of it). */
   aiSettings: ["ai-settings"] as const,
@@ -60,9 +78,22 @@ export type TransactionFilter = {
   categoryId: number | null;
   /** `"unmatched"`: only refunds without an original payment. */
   refundStatus: RefundStatus | null;
+  /** Text in the counterparty, description or note. */
+  q: string | null;
+  /** Absolute amount bounds, as money strings. */
+  amountMin: string | null;
+  amountMax: string | null;
+  /** Inclusive `YYYY-MM-DD` bounds of the row's own date. */
+  dateFrom: string | null;
+  dateTo: string | null;
+  /** Any of these tags (without `#`); empty = not filtered. */
+  tags: string[];
   page: number;
   pageSize: number;
 };
+
+/** How a custom report groups, as the API declares it. */
+export type ReportGroupBy = Schemas["ReportOut"]["group_by"];
 
 /** The `refund_status` list filter, as the API declares it. */
 export type RefundStatus = NonNullable<
@@ -163,6 +194,12 @@ export const transactionPageQuery = (filter: TransactionFilter) =>
               budget_account_id: filter.budgetAccountId,
               category_id: filter.categoryId,
               refund_status: filter.refundStatus,
+              q: filter.q,
+              amount_min: filter.amountMin,
+              amount_max: filter.amountMax,
+              date_from: filter.dateFrom,
+              date_to: filter.dateTo,
+              tag: filter.tags.length > 0 ? filter.tags : null,
               page: filter.page,
               page_size: filter.pageSize,
             },
@@ -171,6 +208,12 @@ export const transactionPageQuery = (filter: TransactionFilter) =>
       ),
   });
 
+/** Every `#tag` written in a note, most used first. */
+export const tagsQuery = queryOptions({
+  queryKey: keys.tags,
+  queryFn: () => unwrap(api.GET("/api/v1/transactions/tags")),
+});
+
 /** The budget in force for each level-2 category (of the scope) in `month`. */
 export const budgetsQuery = (scope: BudgetScope, month: string) =>
   queryOptions({
@@ -178,6 +221,55 @@ export const budgetsQuery = (scope: BudgetScope, month: string) =>
     queryFn: () =>
       unwrap(api.GET("/api/v1/budgets", { params: { query: { month, budget_account_id: scope } } })),
   });
+
+/** Every scheduled expense, active ones first. */
+export const schedulesQuery = queryOptions({
+  queryKey: keys.scheduleList,
+  queryFn: () => unwrap(api.GET("/api/v1/schedules")),
+});
+
+/** The schedules due in `month` (of the scope) with their status, and the current month's forecast. */
+export const scheduleStatusQuery = (scope: BudgetScope, month: string) =>
+  queryOptions({
+    queryKey: keys.scheduleStatus(scope, month),
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/schedules/status", { params: { query: { month, budget_account_id: scope } } })),
+  });
+
+/** Recent payments that look recurring and no schedule covers yet. */
+export const scheduleSuggestionsQuery = queryOptions({
+  queryKey: keys.scheduleSuggestions,
+  queryFn: () => unwrap(api.GET("/api/v1/schedules/suggestions")),
+});
+
+/** Net amount and consumption count per group and month, inclusive. */
+export const reportSummaryQuery = (groupBy: ReportGroupBy, from: string, to: string, scope: BudgetScope) =>
+  queryOptions({
+    queryKey: keys.reportSummary(groupBy, from, to, scope),
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/reports/summary", {
+          params: { query: { group_by: groupBy, from_month: from, to_month: to, budget_account_id: scope } },
+        }),
+      ),
+  });
+
+/** Net amount per day and the monthly budget per month; "全部" = monthly budget accounts. */
+export const reportDailyQuery = (from: string, to: string, scope: BudgetScope) =>
+  queryOptions({
+    queryKey: keys.reportDaily(from, to, scope),
+    queryFn: () =>
+      unwrap(
+        api.GET("/api/v1/reports/daily", {
+          params: { query: { from_month: from, to_month: to, budget_account_id: scope } },
+        }),
+      ),
+  });
+
+export const savedReportsQuery = queryOptions({
+  queryKey: keys.savedReports,
+  queryFn: () => unwrap(api.GET("/api/v1/reports/saved")),
+});
 
 export const tokensQuery = queryOptions({
   queryKey: keys.tokens,
@@ -302,10 +394,50 @@ export const deleteTransaction = (transactionId: number) =>
     }),
   );
 
+/**
+ * Category and/or note of several transactions, all or none (409 `BATCH_REJECTED` with
+ * one entry per item). Nothing is appended to the note.
+ */
+export const bulkUpdateTransactions = (items: Schemas["BulkUpdateItemIn"][]) =>
+  unwrap(api.POST("/api/v1/transactions/bulk-update", { body: { items } }));
+
+/** Deletes all of `ids` or none; each can be restored for a week. */
+export const bulkDeleteTransactions = (ids: number[]) =>
+  unwrap(api.POST("/api/v1/transactions/bulk-delete", { body: { ids } }));
+
+/** Undoes deletes (409 `RESTORE_CONFLICT` says why one cannot come back). */
+export const restoreTransactions = (ids: number[]) =>
+  unwrap(api.POST("/api/v1/transactions/restore", { body: { ids } }));
+
+/** Writes `#from_tag` as `#to_tag` in every note; answers with the notes as they were. */
+export const renameTag = (body: Schemas["TagRenameIn"]) =>
+  unwrap(api.POST("/api/v1/transactions/tags/rename", { body }));
+
 /** Sets each item from `effective_from` on; an `amount` of null clears that budget. */
 export const putBudgets = (body: Schemas["BudgetsPutIn"]) => unwrap(api.PUT("/api/v1/budgets", { body }));
 
 export const createToken = (body: Schemas["TokenCreateIn"]) => unwrap(api.POST("/api/v1/tokens", { body }));
+
+/** Saves a custom report's settings under a new name (409 `REPORT_NAME_TAKEN`). */
+export const saveReport = (body: Schemas["SavedReportIn"]) => unwrap(api.POST("/api/v1/reports/saved", { body }));
+
+/** Renames and/or overwrites a saved report's settings. */
+export const updateSavedReport = (reportId: number, body: Schemas["SavedReportUpdateIn"]) =>
+  unwrap(api.PATCH("/api/v1/reports/saved/{report_id}", { params: { path: { report_id: reportId } }, body }));
+
+export const deleteSavedReport = (reportId: number) =>
+  unwrap(api.DELETE("/api/v1/reports/saved/{report_id}", { params: { path: { report_id: reportId } } }));
+
+/** A level-2 category; `month_of_year` for a yearly schedule only. */
+export const createSchedule = (body: Schemas["ScheduleCreateIn"]) =>
+  unwrap(api.POST("/api/v1/schedules", { body }));
+
+/** Only the fields present change; switching to monthly drops `month_of_year`. */
+export const updateSchedule = (scheduleId: number, body: Schemas["ScheduleUpdateIn"]) =>
+  unwrap(api.PATCH("/api/v1/schedules/{schedule_id}", { params: { path: { schedule_id: scheduleId } }, body }));
+
+export const deleteSchedule = (scheduleId: number) =>
+  unwrap(api.DELETE("/api/v1/schedules/{schedule_id}", { params: { path: { schedule_id: scheduleId } } }));
 
 /** `api_key` omitted keeps the stored key, a string replaces it, `null` clears it. */
 export const updateAiSettings = (body: Schemas["AiSettingsUpdateIn"]) =>

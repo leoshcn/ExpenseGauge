@@ -13,3 +13,8 @@ window.matchMedia ??= (query: string) =>
     addEventListener: () => {},
     removeEventListener: () => {},
   }) as unknown as MediaQueryList;
+
+// jsdom has no pointer capture; sonner's toasts call it when pressed.
+Element.prototype.setPointerCapture ??= () => {};
+Element.prototype.releasePointerCapture ??= () => {};
+Element.prototype.hasPointerCapture ??= () => false;

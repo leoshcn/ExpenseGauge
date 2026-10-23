@@ -357,6 +357,174 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Daily
+         * @description Net amount per day and the monthly budget per month; without a budget account,
+         *     the monthly budget accounts only (the dashboard's "全部").
+         */
+        get: operations["report_daily_api_v1_reports_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Saved Reports */
+        get: operations["list_saved_reports_api_v1_reports_saved_get"];
+        put?: never;
+        /** Save Report */
+        post: operations["save_report_api_v1_reports_saved_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/saved/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Saved Report */
+        delete: operations["delete_saved_report_api_v1_reports_saved__report_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Saved Report
+         * @description Rename and/or overwrite the settings.
+         */
+        patch: operations["update_saved_report_api_v1_reports_saved__report_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Summary
+         * @description Net amount and consumption count per group (level-1 or level-2 category,
+         *     counterparty, channel or tag) and per month, inclusive, at most 60 months. A matched
+         *     refund counts with its payment; with tags, a transaction is in each of its tags.
+         */
+        get: operations["report_summary_api_v1_reports_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedules
+         * @description Recurring expenses the user expects, active ones first.
+         */
+        get: operations["list_schedules_api_v1_schedules_get"];
+        put?: never;
+        /**
+         * Create Schedule
+         * @description A level-2 category; `month_of_year` for a yearly schedule only.
+         */
+        post: operations["create_schedule_api_v1_schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedule Status
+         * @description The schedules due in `month`: paid (with the matching payment), pending or overdue;
+         *     and, for the current month, the forecast of the month's spending.
+         */
+        get: operations["schedule_status_api_v1_schedules_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedule Suggestions
+         * @description Payments of the last months that look recurring and no schedule covers yet.
+         */
+        get: operations["schedule_suggestions_api_v1_schedules_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Schedule */
+        delete: operations["delete_schedule_api_v1_schedules__schedule_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Schedule
+         * @description Partial update; switching to monthly drops `month_of_year`.
+         */
+        patch: operations["update_schedule_api_v1_schedules__schedule_id__patch"];
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -542,6 +710,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Delete
+         * @description Deletes all of `ids` or none; each can be restored for a week.
+         */
+        post: operations["bulk_delete_api_v1_transactions_bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/bulk-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Update
+         * @description The user's category and note changes to several transactions, all or none.
+         */
+        post: operations["bulk_update_api_v1_transactions_bulk_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions/recategorize": {
         parameters: {
             query?: never;
@@ -557,6 +765,26 @@ export interface paths {
          *     note. Open to agent tokens; the MCP `recategorize_transactions` tool does the same.
          */
         post: operations["recategorize_api_v1_transactions_recategorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore
+         * @description Undoes deletes: puts the transactions back under their own ids, all or none.
+         */
+        post: operations["restore_api_v1_transactions_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -580,6 +808,46 @@ export interface paths {
         get: operations["search_transactions_api_v1_transactions_search_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tags
+         * @description Every `#tag` written in a note, most used first.
+         */
+        get: operations["list_tags_api_v1_transactions_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/tags/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Tag
+         * @description Writes `#from_tag` as `#to_tag` in every note; returns the notes as they were.
+         */
+        post: operations["rename_tag_api_v1_transactions_tags_rename_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -869,6 +1137,11 @@ export interface components {
             budget_account_id: number;
             /** Budget Account Name */
             budget_account_name: string;
+            /**
+             * Carry In
+             * @description What the earlier months leave for `month` (negative: overspent); null unless rollover has started by `month`
+             */
+            carry_in: string | null;
             /** Category Id */
             category_id: number;
             /** Category Name */
@@ -888,6 +1161,21 @@ export interface components {
              * @enum {string}
              */
             period: "month" | "year";
+            /**
+             * Reference Avg3
+             * @description Average actual of the 3 months before `month`; null for annual lines
+             */
+            reference_avg3: string | null;
+            /**
+             * Reference Last
+             * @description Actual of the month before `month` (monthly), or of the previous calendar year (annual), as the summaries count
+             */
+            reference_last: string;
+            /**
+             * Rollover From
+             * @description When the category's rollover started; null without rollover
+             */
+            rollover_from: string | null;
         };
         /** BudgetsOut */
         BudgetsOut: {
@@ -912,6 +1200,32 @@ export interface components {
             effective_from: string;
             /** Items */
             items: components["schemas"]["BudgetItemIn"][];
+        };
+        /** BulkUpdateIn */
+        BulkUpdateIn: {
+            /** Items */
+            items: components["schemas"]["BulkUpdateItemIn"][];
+        };
+        /**
+         * BulkUpdateItemIn
+         * @description One transaction's new category and/or note. Fields absent are unchanged; `note: null`
+         *     removes the note. Nothing is appended to the note (unlike an agent's recategorize).
+         */
+        BulkUpdateItemIn: {
+            /** Category Id */
+            category_id?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Transaction Id */
+            transaction_id: number;
+        };
+        /** BulkUpdateOut */
+        BulkUpdateOut: {
+            /**
+             * Transactions
+             * @description In the order of the request
+             */
+            transactions: components["schemas"]["TransactionOut"][];
         };
         /** CategoryCreateIn */
         CategoryCreateIn: {
@@ -940,6 +1254,11 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /**
+             * Rollover From
+             * @description The month from which what is left of its budget carries over, or null
+             */
+            rollover_from: string | null;
         };
         /**
          * CategoryNode
@@ -985,6 +1304,11 @@ export interface components {
             name: string;
             /** Parent Id */
             parent_id: number | null;
+            /**
+             * Rollover From
+             * @description Level 2: the month its rollover starts, or null (no rollover)
+             */
+            rollover_from: string | null;
         };
         /** CategoryTree */
         CategoryTree: {
@@ -1018,6 +1342,11 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string;
+            /**
+             * Rollover From
+             * @description Level 2 in a monthly budget account: carry what is left of the budget (or overspent) into the next month from this month on; null turns it off
+             */
+            rollover_from?: string | null;
         };
         /** ChannelCreateIn */
         ChannelCreateIn: {
@@ -1045,6 +1374,31 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** DailyAmount */
+        DailyAmount: {
+            /** Amount */
+            amount: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /** DailyOut */
+        DailyOut: {
+            /**
+             * Budgets
+             * @description The scope's monthly budget per month
+             */
+            budgets: components["schemas"]["MonthBudget"][];
+            /** Currency */
+            currency: string;
+            /**
+             * Days
+             * @description Days with any spending, in order
+             */
+            days: components["schemas"]["DailyAmount"][];
         };
         /**
          * ErrorEnvelope
@@ -1143,6 +1497,11 @@ export interface components {
              * @description null means no budget
              */
             budget: string | null;
+            /**
+             * Carry In
+             * @description Rollover categories only: what the earlier months left (negative: overspent). Available = carry_in + (budget or 0) - actual
+             */
+            carry_in?: string | null;
             /** Category Id */
             category_id: number;
             /**
@@ -1159,6 +1518,13 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** MonthBudget */
+        MonthBudget: {
+            /** Budget */
+            budget: string | null;
+            /** Month */
+            month: string;
         };
         /** MonthDetailOut */
         MonthDetailOut: {
@@ -1190,6 +1556,11 @@ export interface components {
             currency: string;
             /** Month */
             month: string;
+            /**
+             * Rollover Available
+             * @description Sum of the rollover categories' available amounts; null when there is none. Not part of `budget`: level-1 rows and the month total ignore carry-ins
+             */
+            rollover_available: string | null;
         };
         /** MonthTotal */
         MonthTotal: {
@@ -1222,6 +1593,16 @@ export interface components {
             currency: string;
             /** Months */
             months: components["schemas"]["MonthTotal"][];
+        };
+        /** NoteChange */
+        NoteChange: {
+            /**
+             * Note Before
+             * @description The note before the rename, to undo it
+             */
+            note_before: string;
+            /** Transaction Id */
+            transaction_id: number;
         };
         /**
          * PaymentOut
@@ -1332,6 +1713,323 @@ export interface components {
             /** Id */
             id: number;
         };
+        /** ReportGroup */
+        ReportGroup: {
+            /**
+             * Amount
+             * @description Net amount (payments minus refunds) in the range
+             */
+            amount: string;
+            /**
+             * Count
+             * @description Consumption count: payments whose net amount is above 0
+             */
+            count: number;
+            /**
+             * Key
+             * @description Category or channel id, the counterparty, or the tag; null is the group of transactions without a tag
+             */
+            key: string | null;
+            /**
+             * Label
+             * @description What to show; null for the no-tag group
+             */
+            label: string | null;
+            /**
+             * Months
+             * @description Net amount per month of `months`
+             */
+            months: string[];
+        };
+        /** ReportOut */
+        ReportOut: {
+            /** Currency */
+            currency: string;
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+            /**
+             * Groups
+             * @description Largest amount first
+             */
+            groups: components["schemas"]["ReportGroup"][];
+            /** Months */
+            months: string[];
+            /**
+             * Overlapping
+             * @description Some transaction has several tags and is in several groups
+             */
+            overlapping: boolean;
+            /** @description Of the transactions themselves: with tags, not the sum of the groups */
+            total: components["schemas"]["ReportTotal"];
+        };
+        /** ReportRange */
+        ReportRange: {
+            /**
+             * From Month
+             * @description Custom ranges only
+             */
+            from_month?: string | null;
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "this_month" | "last_3" | "last_6" | "last_12" | "this_year" | "custom";
+            /**
+             * To Month
+             * @description Custom ranges only
+             */
+            to_month?: string | null;
+        };
+        /** ReportTotal */
+        ReportTotal: {
+            /** Amount */
+            amount: string;
+            /** Count */
+            count: number;
+            /** Months */
+            months: string[];
+        };
+        /** RestoreOut */
+        RestoreOut: {
+            /**
+             * Transactions
+             * @description The restored rows, by id
+             */
+            transactions: components["schemas"]["TransactionOut"][];
+        };
+        /**
+         * SavedReportConfig
+         * @description What a saved custom report remembers; the figures are computed when it is opened.
+         */
+        SavedReportConfig: {
+            /** Budget Account Id */
+            budget_account_id?: number | null;
+            /**
+             * Chart
+             * @enum {string}
+             */
+            chart: "table" | "bar" | "line" | "donut";
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "total" | "monthly";
+            range: components["schemas"]["ReportRange"];
+        };
+        /** SavedReportIn */
+        SavedReportIn: {
+            config: components["schemas"]["SavedReportConfig"];
+            /** Name */
+            name: string;
+        };
+        /** SavedReportOut */
+        SavedReportOut: {
+            config: components["schemas"]["SavedReportConfig"];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** SavedReportUpdateIn */
+        SavedReportUpdateIn: {
+            config?: components["schemas"]["SavedReportConfig"] | null;
+            /** Name */
+            name?: string | null;
+        };
+        /** ScheduleCreateIn */
+        ScheduleCreateIn: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Amount */
+            amount: number | string;
+            /**
+             * Approximate
+             * @description Within 7.5% of `amount`
+             * @default false
+             */
+            approximate: boolean;
+            /**
+             * Category Id
+             * @description A level-2 category
+             */
+            category_id: number;
+            /**
+             * Day
+             * @description Day of the month, or -1 for the last day
+             */
+            day: number;
+            /**
+             * Frequency
+             * @default month
+             * @enum {string}
+             */
+            frequency: "month" | "year";
+            /**
+             * Keyword
+             * @description Matched in a payment's counterparty or description
+             */
+            keyword: string;
+            /**
+             * Month Of Year
+             * @description Required for `frequency: year`, refused otherwise
+             */
+            month_of_year?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Start Month
+             * @description Default: the current month
+             */
+            start_month?: string | null;
+        };
+        /** ScheduleForecast */
+        ScheduleForecast: {
+            /**
+             * Actual
+             * @description The month's actual, as the month detail of the scope
+             */
+            actual: string;
+            /**
+             * Outstanding
+             * @description Expected amounts of the pending and overdue schedules of monthly budget accounts in the scope
+             */
+            outstanding: string;
+            /**
+             * Projected
+             * @description `actual + outstanding`
+             */
+            projected: string;
+        };
+        /** ScheduleOut */
+        ScheduleOut: {
+            /** Active */
+            active: boolean;
+            /** Amount */
+            amount: string;
+            /** Approximate */
+            approximate: boolean;
+            /** Budget Account Id */
+            budget_account_id: number;
+            /** Budget Account Name */
+            budget_account_name: string;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Day */
+            day: number;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "month" | "year";
+            /** Id */
+            id: number;
+            /** Keyword */
+            keyword: string;
+            /** Month Of Year */
+            month_of_year: number | null;
+            /** Name */
+            name: string;
+            /** Parent Category Name */
+            parent_category_name: string;
+            /** Start Month */
+            start_month: string;
+        };
+        /** ScheduleStatusItem */
+        ScheduleStatusItem: {
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            schedule: components["schemas"]["ScheduleOut"];
+            /**
+             * Status
+             * @description `paid`: a matching payment was found; `pending`: not yet, and the due date is less than 3 days ago; `overdue`: none 3 days after the due date
+             * @enum {string}
+             */
+            status: "paid" | "pending" | "overdue";
+            /** @description The matching payment, when paid */
+            transaction: components["schemas"]["TransactionOut"] | null;
+        };
+        /** ScheduleStatusOut */
+        ScheduleStatusOut: {
+            /** @description Only for the current month */
+            forecast: components["schemas"]["ScheduleForecast"] | null;
+            /**
+             * Items
+             * @description Overdue first, then by due date
+             */
+            items: components["schemas"]["ScheduleStatusItem"][];
+            /** Month */
+            month: string;
+        };
+        /** ScheduleSuggestion */
+        ScheduleSuggestion: {
+            /** Amount */
+            amount: string;
+            /** Approximate */
+            approximate: boolean;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Day */
+            day: number;
+            /** Keyword */
+            keyword: string;
+            /**
+             * Months
+             * @description How many of the recent months it was paid in
+             */
+            months: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ScheduleUpdateIn
+         * @description Partial update: fields left out keep their value.
+         */
+        ScheduleUpdateIn: {
+            /** Active */
+            active?: boolean;
+            /** Amount */
+            amount?: number | string;
+            /** Approximate */
+            approximate?: boolean;
+            /** Category Id */
+            category_id?: number;
+            /**
+             * Day
+             * @description Day of the month, or -1 for the last day
+             */
+            day?: number;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency?: "month" | "year";
+            /** Keyword */
+            keyword?: string;
+            /** Month Of Year */
+            month_of_year?: number | null;
+            /** Name */
+            name?: string;
+            /** Start Month */
+            start_month?: string;
+        };
         /** SettingsOut */
         SettingsOut: {
             /**
@@ -1352,6 +2050,31 @@ export interface components {
         SetupStatus: {
             /** User Exists */
             user_exists: boolean;
+        };
+        /** TagCount */
+        TagCount: {
+            /**
+             * Count
+             * @description Transactions whose note has the tag
+             */
+            count: number;
+            /**
+             * Tag
+             * @description Without the `#`
+             */
+            tag: string;
+        };
+        /** TagRenameIn */
+        TagRenameIn: {
+            /** From Tag */
+            from_tag: string;
+            /** To Tag */
+            to_tag: string;
+        };
+        /** TagRenameOut */
+        TagRenameOut: {
+            /** Changed */
+            changed: components["schemas"]["NoteChange"][];
         };
         /** TokenCreateIn */
         TokenCreateIn: {
@@ -1394,6 +2117,11 @@ export interface components {
             name: string;
             /** Revoked At */
             revoked_at: string | null;
+        };
+        /** TransactionIdsIn */
+        TransactionIdsIn: {
+            /** Ids */
+            ids: number[];
         };
         /** TransactionOut */
         TransactionOut: {
@@ -2511,6 +3239,494 @@ export interface operations {
             };
         };
     };
+    report_daily_api_v1_reports_daily_get: {
+        parameters: {
+            query: {
+                from_month: string;
+                to_month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_saved_reports_api_v1_reports_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    save_report_api_v1_reports_saved_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_saved_report_api_v1_reports_saved__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_saved_report_api_v1_reports_saved__report_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedReportUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    report_summary_api_v1_reports_summary_get: {
+        parameters: {
+            query: {
+                group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+                from_month: string;
+                to_month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_schedules_api_v1_schedules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_schedule_api_v1_schedules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    schedule_status_api_v1_schedules_status_get: {
+        parameters: {
+            query: {
+                month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleStatusOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    schedule_suggestions_api_v1_schedules_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSuggestion"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_schedule_api_v1_schedules__schedule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_schedule_api_v1_schedules__schedule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     get_settings_api_v1_settings_get: {
         parameters: {
             query?: never;
@@ -2924,6 +4140,18 @@ export interface operations {
                 category_id?: number | null;
                 /** @description `unmatched`: only refunds not matched to a payment */
                 refund_status?: "unmatched" | null;
+                /** @description Text in the row's own counterparty, description or note */
+                q?: string | null;
+                /** @description Absolute amount at least this */
+                amount_min?: number | string | null;
+                /** @description Absolute amount at most this */
+                amount_max?: number | string | null;
+                /** @description Own date on or after */
+                date_from?: string | null;
+                /** @description Own date on or before */
+                date_to?: string | null;
+                /** @description Tags (without `#`), any of; a matched refund has its payment's */
+                tag?: string[] | null;
                 page?: number;
                 page_size?: number;
             };
@@ -2940,6 +4168,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    bulk_delete_api_v1_transactions_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIdsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description TRANSACTION_HAS_REFUNDS: a payment's matched refunds are not included */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    bulk_update_api_v1_transactions_bulk_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateOut"];
+                };
+            };
+            /** @description BATCH_REJECTED: nothing changed; details.items has one entry per item */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
             /** @description Validation error */
@@ -3013,6 +4341,57 @@ export interface operations {
             };
         };
     };
+    restore_api_v1_transactions_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIdsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreOut"];
+                };
+            };
+            /** @description RESTORE_CONFLICT: nothing restored; details.items says why per id */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     search_transactions_api_v1_transactions_search_get: {
         parameters: {
             query: {
@@ -3037,6 +4416,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionSearchOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_tags_api_v1_transactions_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCount"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    rename_tag_api_v1_transactions_tags_rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRenameOut"];
                 };
             };
             /** @description Validation error */

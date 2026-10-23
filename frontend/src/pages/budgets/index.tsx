@@ -11,13 +11,14 @@ import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMonthHotkeys } from "@/hooks/use-hotkey";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { formatMonth } from "@/lib/date";
 import { addMonths, isMonth, monthOf, parseMonth } from "@/lib/month";
 import { S } from "@/strings.zh";
 
 import { BudgetTable } from "./budget-table";
-import { type BudgetDraft, budgetChanges, draftAfterSave, groupLines } from "./model";
+import { type BudgetDraft, budgetChanges, draftAfterSave, fillFromReference, groupLines } from "./model";
 
 const T = S.budgets;
 
@@ -264,6 +265,11 @@ function BudgetsBody({
           if (!save.isPending) save.reset();
           setDraft({ ...draft, [id]: text });
         }}
+        onFill={(kind) => {
+          setSaved(null);
+          if (!save.isPending) save.reset();
+          setDraft(fillFromReference(lines, draft, kind));
+        }}
         className={cn("transition-opacity", budgets.isPlaceholderData && "opacity-60")}
       />
       <SaveBar
@@ -297,6 +303,8 @@ export function BudgetsPage() {
   const current = monthOf(now);
   const requested = params.get("month");
   const month = isMonth(requested) ? requested : current;
+  const onMonthChange = (next: string) => update({ month: next === current ? null : next });
+  useMonthHotkeys({ month, current, onChange: onMonthChange });
 
   return (
     <div className="space-y-5">
@@ -323,7 +331,7 @@ export function BudgetsPage() {
           scope={scope}
           month={month}
           current={current}
-          onMonthChange={(next) => update({ month: next === current ? null : next })}
+          onMonthChange={onMonthChange}
         />
       ) : (
         <BudgetsSkeleton />

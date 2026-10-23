@@ -5,6 +5,7 @@
  */
 
 import type { Schemas } from "@/api/client";
+import { evaluate, isExpression } from "@/lib/expr";
 import { fromCents, toCents } from "@/lib/money";
 
 /** Input texts the user has typed, by level-2 category id. Untouched rows are absent. */
@@ -16,15 +17,22 @@ export type ParsedAmount = { valid: true; amount: string | null } | { valid: fal
 const AMOUNT = /^(\d{1,12})(?:\.(\d{0,2}))?$/;
 
 /**
- * "" -> no budget (null); "1,200.5" -> "1200.50"; "0" -> "0.00". Spaces and thousands
- * separators are ignored, full-width digits and point are accepted. Negative amounts,
- * more than two decimals and anything else are invalid.
+ * "" -> no budget (null); "1,200.5" -> "1200.50"; "0" -> "0.00"; "1800*1.1" -> "1980.00".
+ * Spaces and thousands separators are ignored, full-width digits and point are accepted.
+ * A calculation (`lib/expr.ts`) is evaluated and rounded to cents. Negative amounts,
+ * more than two decimals, malformed calculations and anything else are invalid.
  */
 export function parseBudgetInput(text: string): ParsedAmount {
   const cleaned = text
     .replace(/[０-９．]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/[\s,，]/g, "");
   if (cleaned === "") return { valid: true, amount: null };
+  if (isExpression(cleaned)) {
+    const result = evaluate(cleaned);
+    return result.ok && toCents(result.value) >= 0 && AMOUNT.test(result.value)
+      ? { valid: true, amount: result.value }
+      : { valid: false };
+  }
   const match = AMOUNT.exec(cleaned);
   if (!match) return { valid: false };
   const [, whole = "0", fraction = ""] = match;
@@ -146,4 +154,31 @@ export function groupLines(
       return line ? [line] : [];
     }),
   }));
+}
+
+/** Which reference a "fill all" uses: the 3-month average, or last month (last year). */
+export type ReferenceKind = "avg3" | "last";
+
+/** A money string rounded half up to whole units, as an input text: "96.67" -> "97". */
+export function roundToUnit(amount: string): string {
+  const cents = toCents(amount);
+  return String(Math.round(Math.max(cents, 0) / 100));
+}
+
+/**
+ * The draft after "fill all" with a reference: every line whose reference is above zero
+ * gets it, rounded to whole units; others keep what they had. The 3-month average does not
+ * exist for annual lines, which then keep theirs too.
+ */
+export function fillFromReference(
+  lines: readonly Schemas["BudgetLine"][],
+  draft: BudgetDraft,
+  kind: ReferenceKind,
+): BudgetDraft {
+  const next: Record<number, string> = { ...draft };
+  for (const line of lines) {
+    const value = kind === "avg3" ? line.reference_avg3 : line.reference_last;
+    if (value !== null && toCents(value) > 0) next[line.category_id] = roundToUnit(value);
+  }
+  return next;
 }

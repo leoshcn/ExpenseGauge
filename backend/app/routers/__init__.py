@@ -12,6 +12,8 @@ from app.routers import (
     categories,
     channels,
     insights,
+    reports,
+    schedules,
     settings,
     summaries,
     transactions,
@@ -43,5 +45,7 @@ for module in (
     summaries,
     ai,
     insights,
+    schedules,
+    reports,
 ):
     api_router.include_router(module.router)

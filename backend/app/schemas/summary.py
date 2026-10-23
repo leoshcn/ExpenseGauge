@@ -31,6 +31,11 @@ class Level2Row(Schema):
     count: int = Field(
         description="Payments counted here whose net amount (after matched refunds) is above 0"
     )
+    carry_in: Money | None = Field(
+        default=None,
+        description="Rollover categories only: what the earlier months left (negative:"
+        " overspent). Available = carry_in + (budget or 0) - actual",
+    )
 
 
 class Level1Row(Schema):
@@ -57,6 +62,10 @@ class MonthDetailOut(Schema):
     annual_actual: Money = Field(
         description="Actual of the annual budget accounts' categories in the month; they are"
         " in neither `actual`, `count` nor `categories`"
+    )
+    rollover_available: Money | None = Field(
+        description="Sum of the rollover categories' available amounts; null when there is"
+        " none. Not part of `budget`: level-1 rows and the month total ignore carry-ins"
     )
     categories: list[Level1Row]
 

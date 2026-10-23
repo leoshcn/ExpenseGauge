@@ -1,10 +1,12 @@
+from datetime import date
 from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic.json_schema import SkipJsonSchema
 
+from app.months import format_month
 from app.schemas.budget_account import BudgetAccountOut
-from app.schemas.common import Description, Money, Name, RequestSchema, Schema
+from app.schemas.common import Description, Money, Month, Name, RequestSchema, Schema
 
 
 class CategoryCreateIn(RequestSchema):
@@ -38,11 +40,18 @@ class CategoryUpdateIn(RequestSchema):
         description="Only with a `budget_account_id` of the other period, and then required:"
         " the new budget; null means no budget",
     )
+    rollover_from: Month | None = Field(
+        default=None,
+        description="Level 2 in a monthly budget account: carry what is left of the budget"
+        " (or overspent) into the next month from this month on; null turns it off",
+    )
 
     @model_validator(mode="after")
     def _check_fields(self) -> Self:
         if not self.model_fields_set:
-            raise ValueError("at least one of name, description, budget_account_id is required")
+            raise ValueError(
+                "at least one of name, description, budget_account_id, rollover_from is required"
+            )
         for field in ("name", "budget_account_id"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be null")
@@ -68,6 +77,14 @@ class CategoryOut(Schema):
     name: str
     description: str | None
     budget_account_id: int | None = Field(description="Set on level 2, null on level 1")
+    rollover_from: Month | None = Field(
+        description="Level 2: the month its rollover starts, or null (no rollover)"
+    )
+
+    @field_validator("rollover_from", mode="before")
+    @classmethod
+    def _month(cls, value: date | str | None) -> str | None:
+        return format_month(value) if isinstance(value, date) else value
 
 
 class CategoryLeaf(Schema):
@@ -78,6 +95,9 @@ class CategoryLeaf(Schema):
     name: str
     description: str | None
     budget_account: BudgetAccountOut
+    rollover_from: Month | None = Field(
+        description="The month from which what is left of its budget carries over, or null"
+    )
 
 
 class CategoryNode(Schema):

@@ -36,6 +36,7 @@ from app.services.budget_accounts import budget_accounts_by_id, get_budget_accou
 from app.services.budgets import BudgetHistory, load_history
 from app.services.categories import load_categories
 from app.services.refunds import NO_TOTALS, Totals, effective_totals, sum_totals
+from app.services.rollover import carry_ins
 from app.services.settings import require_currency
 
 DEFAULT_MONTHS = 12
@@ -148,6 +149,7 @@ def get_month_detail(
             db, category_ids=monthly_ids + annual_ids, start=start, end=add_months(start, 1)
         ).items()
     }
+    carries = carry_ins(db, [c for c in categories if c.id not in annual_set], history, start)
 
     rows: dict[int, Level1Row] = {c.id: _level1_row(c) for c in categories if c.parent_id is None}
     annual_parents: set[int] = set()
@@ -165,12 +167,14 @@ def get_month_detail(
                 budget=history.amount(c.id, start),
                 actual=total.amount,
                 count=total.count,
+                carry_in=carries.get(c.id),
             )
         )
     for row in rows.values():
         _sum_children(row)
 
     level1 = [row for row in rows.values() if row.children or row.category_id not in annual_parents]
+    rolling = [child for row in level1 for child in row.children if child.carry_in is not None]
     return MonthDetailOut(
         budget_account_id=budget_account_id,
         currency=currency,
@@ -179,6 +183,11 @@ def get_month_detail(
         actual=sum((row.actual for row in level1), ZERO),
         count=sum(row.count for row in level1),
         annual_actual=sum((totals.get(leaf_id, NO_TOTALS).amount for leaf_id in annual_ids), ZERO),
+        rollover_available=sum(
+            (child.carry_in + (child.budget or ZERO) - child.actual for child in rolling), ZERO
+        )
+        if rolling
+        else None,
         categories=level1,
     )
 

@@ -83,6 +83,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
           count: 42,
           budget_account_id: scope,
           currency: "CNY",
+          rollover_available: null,
           categories: [food],
         }),
       }),
@@ -93,6 +94,11 @@ vi.mock("@/api/queries", async (importOriginal) => {
           annualRequests.push({ scope, month });
           return { currency: "CNY", year: Number(month.slice(0, 4)), through: month, accounts: [annualAccount()] };
         },
+      }),
+    scheduleStatusQuery: (scope: BudgetScope, month: string) =>
+      queryOptions({
+        queryKey: actual.keys.scheduleStatus(scope, month),
+        queryFn: async (): Promise<Schemas["ScheduleStatusOut"]> => ({ month, items: [], forecast: null }),
       }),
     insightQuery: (month: string) =>
       queryOptions({

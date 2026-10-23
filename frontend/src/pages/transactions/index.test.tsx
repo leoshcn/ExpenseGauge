@@ -17,8 +17,8 @@ const tree: Schemas["CategoryTree"] = {
       id: 1,
       name: "餐饮",
       children: [
-        { id: 11, name: "买菜", description: null, budget_account: daily },
-        { id: 12, name: "外食", description: null, budget_account: daily },
+        { id: 11, name: "买菜", description: null, budget_account: daily, rollover_from: null },
+        { id: 12, name: "外食", description: null, budget_account: daily, rollover_from: null },
       ],
     },
   ],
@@ -99,6 +99,13 @@ const updateTransaction = vi.fn(async (id: number, body: Schemas["TransactionUpd
   ...body,
 }));
 const deleteTransaction = vi.fn<(id: number) => Promise<undefined>>(async () => undefined);
+const bulkDeleteTransactions = vi.fn<(ids: number[]) => Promise<undefined>>(async () => undefined);
+const restoreTransactions = vi.fn(async (ids: number[]) => ({
+  transactions: rows.filter((row) => ids.includes(row.id)),
+}));
+const bulkUpdateTransactions = vi.fn(async (items: Schemas["BulkUpdateItemIn"][]) => ({
+  transactions: items.map((item) => ({ ...rows.find((row) => row.id === item.transaction_id)! })),
+}));
 
 vi.mock("@/api/queries", async (importOriginal) => {
   const actual = await importOriginal<typeof Queries>();
@@ -134,12 +141,20 @@ vi.mock("@/api/queries", async (importOriginal) => {
         queryFn: async (): Promise<Schemas["TransactionOut"][]> =>
           transactionId === payment.id ? [matchedRefund] : [],
       }),
+    tagsQuery: queryOptions({
+      queryKey: actual.keys.tags,
+      queryFn: async (): Promise<Schemas["TagCount"][]> => [{ tag: "国庆", count: 2 }],
+    }),
     updateTransaction,
     deleteTransaction,
+    bulkDeleteTransactions,
+    restoreTransactions,
+    bulkUpdateTransactions,
   };
 });
 
 const { TransactionsPage } = await import("./index");
+const { Toaster } = await import("@/components/ui/sonner");
 
 function renderAt(url: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -147,6 +162,7 @@ function renderAt(url: string) {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[url]}>
         <TransactionsPage />
+        <Toaster />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -177,6 +193,79 @@ describe("TransactionsPage", () => {
     updateTransaction.mockClear();
     deleteTransaction.mockReset();
     deleteTransaction.mockImplementation(async () => undefined);
+    bulkDeleteTransactions.mockClear();
+    restoreTransactions.mockClear();
+    bulkUpdateTransactions.mockClear();
+  });
+
+  it("searches after a pause and shows the count, consumption count and net", async () => {
+    const user = userEvent.setup();
+    rows = [transaction];
+    renderAt("/transactions");
+    await user.type(await screen.findByRole("searchbox", { name: "搜索" }), "盒马");
+    await waitFor(() => expect(requested.at(-1)).toMatchObject({ q: "盒马", page: 1 }));
+    expect(screen.getByLabelText("筛选结果统计")).toHaveTextContent("共 1 条 · 消费 3 笔 · 净支出 ¥1,234.00");
+  });
+
+  it("groups rows by day with the day's net and filters by a tag from a note", async () => {
+    const user = userEvent.setup();
+    rows = [
+      { ...transaction, note: "和家人 #国庆" },
+      { ...transaction, id: 101, counterparty: "地铁", amount: "4.00" },
+      { ...transaction, id: 102, date: "2026-10-02", counterparty: "早餐", amount: "8.00" },
+    ];
+    renderAt("/transactions");
+    const day = await screen.findByRole("rowheader", { name: /10月3日/ });
+    expect(day).toHaveTextContent("2 笔");
+    expect(day).toHaveTextContent("净额 ¥39.50");
+    await user.click(screen.getAllByRole("button", { name: "#国庆" })[0]!);
+    await waitFor(() => expect(requested.at(-1)).toMatchObject({ tags: ["国庆"] }));
+  });
+
+  it("deletes the selected rows and brings them back from the toast", async () => {
+    const user = userEvent.setup();
+    rows = [transaction, matchedRefund];
+    renderAt("/transactions");
+    await user.click(await screen.findByRole("checkbox", { name: "选择「盒马鲜生」" }));
+    await user.click(screen.getByRole("checkbox", { name: "选择「京东退款」" }));
+    const bar = screen.getByRole("region", { name: "批量操作" });
+    expect(bar).toHaveTextContent("已选 2 条 · 合计 ¥5.50");
+
+    await user.click(within(bar).getByRole("button", { name: "删除" }));
+    const confirm = await screen.findByRole("alertdialog");
+    await user.click(within(confirm).getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(bulkDeleteTransactions).toHaveBeenCalledWith([100, 200]));
+    expect(screen.queryByRole("region", { name: "批量操作" })).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "撤销" }));
+    await waitFor(() => expect(restoreTransactions).toHaveBeenCalledWith([100, 200]));
+  });
+
+  it("selects a range with Shift and says which matched refunds a category change skips", async () => {
+    const user = userEvent.setup();
+    rows = [transaction, matchedRefund, { ...transaction, id: 102, counterparty: "早餐" }];
+    renderAt("/transactions");
+    await user.click(await screen.findByRole("checkbox", { name: "选择「盒马鲜生」" }));
+    await user.keyboard("{Shift>}");
+    await user.click(screen.getByRole("checkbox", { name: "选择「早餐」" }));
+    await user.keyboard("{/Shift}");
+    expect(screen.getByRole("checkbox", { name: "选择「京东退款」" })).toBeChecked();
+    await user.click(within(screen.getByRole("region", { name: "批量操作" })).getByRole("button", { name: "改分类" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("其中 1 条是已匹配的退款，分类跟随原支付，将被跳过。")).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading")).toHaveTextContent("把 2 条流水改到");
+  });
+
+  it("undoes a single delete with Ctrl+Z", async () => {
+    const user = userEvent.setup();
+    rows = [transaction];
+    renderAt("/transactions");
+    await user.click(await screen.findByRole("button", { name: "删除「盒马鲜生」" }));
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "删除" }));
+    await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(100));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    await user.keyboard("{Control>}z{/Control}");
+    await waitFor(() => expect(restoreTransactions).toHaveBeenCalledWith([100]));
   });
 
   it("drops ids from the URL that do not exist before asking the API", async () => {

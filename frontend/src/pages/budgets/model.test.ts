@@ -11,6 +11,8 @@ import {
   parseBudgetInput,
   rowState,
   sameBudget,
+  fillFromReference,
+  roundToUnit,
   sumBudgets,
   sumByPeriod,
 } from "./model";
@@ -25,6 +27,10 @@ const line = (category_id: number, amount: string | null, parent_id = 1): Schema
   period: "month",
   amount,
   effective_from: amount === null ? null : "2026-07",
+  reference_last: "0.00",
+  reference_avg3: "0.00",
+  rollover_from: null,
+  carry_in: null,
 });
 
 const daily = { id: 1, name: "日常", period: "month" as const };
@@ -57,6 +63,14 @@ describe("parseBudgetInput", () => {
       expect(parseBudgetInput(text)).toEqual({ valid: false });
     }
     expect(parseBudgetInput("999999999999.99")).toEqual({ valid: true, amount: "999999999999.99" });
+  });
+
+  it("evaluates calculations and rejects malformed or negative ones", () => {
+    expect(parseBudgetInput("1800*1.1")).toEqual({ valid: true, amount: "1980.00" });
+    expect(parseBudgetInput("(300+250)/2")).toEqual({ valid: true, amount: "275.00" });
+    for (const text of ["12+", "100-200", "1/0", "999999999999*10"]) {
+      expect(parseBudgetInput(text)).toEqual({ valid: false });
+    }
   });
 });
 
@@ -143,13 +157,13 @@ describe("groupLines", () => {
     const tree: Schemas["CategoryTree"] = {
       budget_account_id: null,
       categories: [
-        { id: 2, name: "交通", children: [{ id: 21, name: "地铁", description: null, budget_account: daily }] },
+        { id: 2, name: "交通", children: [{ id: 21, name: "地铁", description: null, budget_account: daily, rollover_from: null }] },
         {
           id: 1,
           name: "餐饮",
           children: [
-            { id: 12, name: "外卖", description: null, budget_account: daily },
-            { id: 11, name: "买菜", description: null, budget_account: daily },
+            { id: 12, name: "外卖", description: null, budget_account: daily, rollover_from: null },
+            { id: 11, name: "买菜", description: null, budget_account: daily, rollover_from: null },
           ],
         },
         { id: 3, name: "空的", children: [] },
@@ -186,5 +200,21 @@ describe("sumByPeriod", () => {
     const lines = [line(11, "500.00"), annual(21, "12000.00"), annual(22, null)];
     expect(sumByPeriod(lines, { 22: "3000" })).toEqual({ month: "500.00", year: "15000.00" });
     expect(sumByPeriod([annual(21, null)], {})).toEqual({ month: undefined, year: null });
+  });
+});
+
+describe("roundToUnit and fillFromReference", () => {
+  it("rounds half up to whole units and never below zero", () => {
+    expect(roundToUnit("96.67")).toBe("97");
+    expect(roundToUnit("96.49")).toBe("96");
+    expect(roundToUnit("-20.00")).toBe("0");
+  });
+
+  it("fills only lines with spending, and leaves annual lines out of the 3-month average", () => {
+    const monthly = { ...line(11, "500.00"), reference_last: "300.00", reference_avg3: "250.40" };
+    const idle = { ...line(12, "100.00"), reference_last: "0.00", reference_avg3: "0.00" };
+    const annual = { ...line(13, null), period: "year" as const, reference_last: "6000.00", reference_avg3: null };
+    expect(fillFromReference([monthly, idle, annual], { 12: "90" }, "avg3")).toEqual({ 11: "250", 12: "90" });
+    expect(fillFromReference([monthly, idle, annual], {}, "last")).toEqual({ 11: "300", 13: "6000" });
   });
 });

@@ -1,17 +1,18 @@
 import { cn } from "cn";
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 import { Fragment, useState } from "react";
 
 import type { Schemas } from "@/api/client";
 import { BudgetMeter } from "@/components/budget-meter";
 import { Button } from "@/components/ui/button";
-import { usage, usagePercent } from "@/lib/budget";
-import { absolute, formatMoney } from "@/lib/money";
+import { rolloverBudget, usage, usagePercent } from "@/lib/budget";
+import { absolute, formatMoney, signedMoney } from "@/lib/money";
 import { S } from "@/strings.zh";
 
 const T = S.dashboard.table;
 
-type RowData = { name: string; budget: string | null; actual: string; count: number };
+/** `carry_in` is set on a rollover category's row (level 2, monthly view). */
+type RowData = { name: string; budget: string | null; actual: string; count: number; carry_in?: string | null };
 
 /** A tick on every meter (the year's time progress in an annual view). */
 type Marker = { at: number; label: string };
@@ -35,7 +36,9 @@ function Row({
   onToggle?: () => void;
   marker?: Marker;
 }) {
-  const used = usage(row.budget, row.actual);
+  const carryIn = row.carry_in ?? null;
+  // A rollover category is measured against what it has this month: carry-in + budget.
+  const used = usage(carryIn === null ? row.budget : rolloverBudget(carryIn, row.budget), row.actual);
   const money = (value: string) => formatMoney(value, currency);
   const over = used.state === "over";
   const percent = usagePercent(used);
@@ -44,7 +47,10 @@ function Row({
       ? null
       : over
         ? T.overBy(money(absolute(used.remaining)))
-        : money(used.remaining);
+        : carryIn !== null
+          ? T.availableOf(money(used.remaining))
+          : money(used.remaining);
+  const carryLine = carryIn === null ? null : T.carryIn(signedMoney(carryIn, currency));
   const meterLabel = T.progressLabel(row.name);
   const cell = kind === "child" ? "py-2" : "py-3";
 
@@ -85,6 +91,12 @@ function Row({
             </button>
           ) : null}
           <span className={cn("min-w-0 truncate", kind !== "child" && "font-medium")}>{row.name}</span>
+          {carryIn !== null ? (
+            <span title={T.rollover} className="shrink-0 text-muted-foreground">
+              <RefreshCwIcon className="size-3" aria-hidden="true" />
+              <span className="sr-only">{T.rollover}</span>
+            </span>
+          ) : null}
           {over && kind !== "total" ? (
             <span className="shrink-0 rounded-full bg-over-soft px-1.5 text-[11px] leading-[1.125rem] font-medium text-over">
               {T.over}
@@ -104,10 +116,13 @@ function Row({
               />
             </div>
           )}
-          <div className={cn("num text-xs text-muted-foreground", over && "text-over")}>
-            {row.budget === null || remaining === null
+          <div className={cn("num text-xs text-muted-foreground", over && "text-over", remaining !== null && "amount")}>
+            {remaining === null
               ? T.noBudget
-              : `${T.budgetOf(money(row.budget))} · ${over ? remaining : T.remainingOf(remaining)}`}
+              : `${row.budget === null ? T.noBudget : T.budgetOf(money(row.budget))} · ${
+                  over || carryIn !== null ? remaining : T.remainingOf(remaining)
+                }`}
+            {carryLine ? <span className="ml-1">（{carryLine}）</span> : null}
           </div>
         </div>
       </th>
@@ -115,11 +130,11 @@ function Row({
         {row.budget === null ? (
           <span className="text-xs text-muted-foreground">{T.noBudget}</span>
         ) : (
-          money(row.budget)
+          <span className="amount">{money(row.budget)}</span>
         )}
       </td>
       <td className={cn("num px-4 text-right align-top font-medium whitespace-nowrap max-md:w-px sm:px-5 md:px-3 md:align-middle", cell)}>
-        {money(row.actual)}
+        <span className="amount">{money(row.actual)}</span>
         {/* Below `md` the percentage sits under the amount, level with the meter. */}
         {percent ? (
           <div className={cn("mt-1.5 text-xs font-normal text-muted-foreground md:hidden", over && "font-medium text-over")}>
@@ -131,7 +146,16 @@ function Row({
       </td>
       <td className={cn("num hidden px-3 text-right text-muted-foreground md:table-cell", cell)}>{row.count}</td>
       <td className={cn("num hidden px-3 text-right md:table-cell", cell, over && "font-medium text-over")}>
-        {remaining ?? <span className="text-muted-foreground">{S.common.none}</span>}
+        {remaining === null ? (
+          <span className="text-muted-foreground">{S.common.none}</span>
+        ) : (
+          <span className="amount">{remaining}</span>
+        )}
+        {carryLine ? (
+          <div className="amount text-xs font-normal text-muted-foreground" title={T.carryInHint}>
+            {carryLine}
+          </div>
+        ) : null}
       </td>
       <td className={cn("hidden w-[22%] min-w-40 py-3 pr-5 pl-3 md:table-cell", cell)}>
         {used.state === "none" ? (

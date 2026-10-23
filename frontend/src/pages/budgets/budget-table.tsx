@@ -3,15 +3,19 @@ import { XIcon } from "lucide-react";
 import { useId } from "react";
 
 import type { Schemas } from "@/api/client";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatMonth } from "@/lib/date";
-import { currencySymbol, formatMoney } from "@/lib/money";
+import { isExpression } from "@/lib/expr";
+import { currencySymbol, formatMoney, signedMoney } from "@/lib/money";
 import { S } from "@/strings.zh";
 
 import {
   type BudgetDraft,
   type BudgetGroup,
   inputText,
+  type ReferenceKind,
+  roundToUnit,
   rowState,
   sumByPeriod,
 } from "./model";
@@ -37,7 +41,11 @@ function PeriodFigure({
   money: (value: string) => string;
 }) {
   const figure = (value: string | null) =>
-    value === null ? <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span> : money(value);
+    value === null ? (
+      <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span>
+    ) : (
+      <span className="amount">{money(value)}</span>
+    );
   if (sums.year === undefined) return figure(sums.month ?? null);
   const parts = (["month", "year"] as const).filter((period) => sums[period] !== undefined);
   return (
@@ -58,11 +66,11 @@ function InForce({ line, money }: { line: Schemas["BudgetLine"]; money: (v: stri
   const since = line.effective_from ? formatMonth(line.effective_from) : null;
   return (
     <>
-      <div className="num">
-        <span>{money(line.amount)}</span>
+      <span className="num">
+        <span className="amount">{money(line.amount)}</span>
         <Per period={line.period} />
-      </div>
-      {since ? <div className="num text-xs whitespace-nowrap text-muted-foreground">{T.since(since)}</div> : null}
+      </span>
+      {since ? <span className="num ml-1.5 text-xs whitespace-nowrap text-muted-foreground">{T.since(since)}</span> : null}
     </>
   );
 }
@@ -102,6 +110,15 @@ function AmountInput({
             id={id}
             value={text}
             onChange={(event) => onChange(event.target.value)}
+            // A calculation ("1800*1.1") is replaced by its result once the user is done.
+            onBlur={() => {
+              if (parsed.valid && parsed.amount !== null && isExpression(text)) onChange(parsed.amount);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && parsed.valid && parsed.amount !== null && isExpression(text)) {
+                onChange(parsed.amount);
+              }
+            }}
             inputMode="decimal"
             autoComplete="off"
             placeholder={T.noBudget}
@@ -109,7 +126,7 @@ function AmountInput({
             aria-invalid={parsed.valid ? undefined : true}
             aria-describedby={note ? `${id}-note` : undefined}
             className={cn(
-              "num bg-card pr-8 pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
+              "num amount bg-card pr-8 pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
               currencySymbol(currency).length > 1 && "pl-10 sm:pl-11",
               changed && parsed.valid && "border-primary",
             )}
@@ -138,7 +155,7 @@ function AmountInput({
       {note ? (
         <p
           id={`${id}-note`}
-          className={cn("num mr-8 text-right text-xs sm:mr-9", parsed.valid ? "text-muted-foreground" : "text-over")}
+          className={cn("num mr-8 text-right text-xs sm:mr-9", parsed.valid ? "amount text-muted-foreground" : "text-over")}
         >
           {note}
         </p>
@@ -148,8 +165,50 @@ function AmountInput({
 }
 
 /**
- * Level-2 categories grouped under level-1, with the amount in force for the chosen month
- * and an input each. Level-1 rows and the total are computed from the inputs, never typed.
+ * What the category spent before the chosen month, each a button that copies the amount,
+ * rounded to whole units, into the input: last month (last year for an annual budget) and
+ * the average of the last 3 months.
+ */
+function References({
+  line,
+  money,
+  onPick,
+}: {
+  line: Schemas["BudgetLine"];
+  money: (value: string) => string;
+  onPick: (text: string) => void;
+}) {
+  const refs =
+    line.period === "year"
+      ? [{ label: T.reference.lastYear, value: line.reference_last }]
+      : [
+          { label: T.reference.lastMonth, value: line.reference_last },
+          { label: T.reference.avg3, value: line.reference_avg3 },
+        ];
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      {refs.map((ref) =>
+        ref.value === null ? null : (
+          <button
+            key={ref.label}
+            type="button"
+            onClick={() => onPick(roundToUnit(ref.value!))}
+            title={T.reference.use(ref.label)}
+            aria-label={T.reference.useFor(line.category_name, ref.label, money(ref.value))}
+            className="num rounded px-1 text-xs whitespace-nowrap text-muted-foreground outline-none hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {ref.label} <span className="amount">{money(ref.value)}</span>
+          </button>
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * Level-2 categories grouped under level-1, with the amount in force for the chosen month,
+ * what each spent before (click to fill in) and an input each. Level-1 rows and the total
+ * are computed from the inputs, never typed. A rollover category also shows its carry-in.
  */
 export function BudgetTable({
   groups,
@@ -158,6 +217,7 @@ export function BudgetTable({
   year,
   showBudgetAccount = false,
   onChange,
+  onFill,
   className,
 }: {
   groups: readonly BudgetGroup[];
@@ -168,6 +228,8 @@ export function BudgetTable({
   /** Name each row's budget account (the "全部" view, where rows of several are mixed). */
   showBudgetAccount?: boolean;
   onChange: (categoryId: number, text: string) => void;
+  /** Fills every input that has spending with that reference (not saved yet). */
+  onFill: (kind: ReferenceKind) => void;
   className?: string;
 }) {
   const money = (value: string) => formatMoney(value, currency);
@@ -178,9 +240,19 @@ export function BudgetTable({
 
   return (
     <section className={cn("overflow-hidden rounded-xl border bg-card shadow-card", className)}>
-      <div className="px-4 py-4 sm:px-5">
-        <h2 className="text-base font-semibold">{T.listTitle}</h2>
-        <p className="text-xs text-muted-foreground">{T.subtotalHint}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-4 sm:px-5">
+        <div>
+          <h2 className="text-base font-semibold">{T.listTitle}</h2>
+          <p className="text-xs text-muted-foreground">{T.subtotalHint}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => onFill("avg3")} title={T.reference.fillHint}>
+            {T.reference.fillAvg3}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onFill("last")} title={T.reference.fillHint}>
+            {T.reference.fillLast}
+          </Button>
+        </div>
       </div>
       <table className="w-full border-collapse">
         <thead>
@@ -189,7 +261,7 @@ export function BudgetTable({
               {T.columns.category}
             </th>
             <th scope="col" className={cn(heading, "hidden text-right md:table-cell")}>
-              {T.columns.current}
+              {T.columns.reference}
             </th>
             <th scope="col" className={cn(heading, "pr-4 text-right sm:pr-5")}>
               {T.columns.amount}
@@ -250,18 +322,20 @@ export function BudgetTable({
                         {line.period === "year" ? (
                           <div className="mt-0.5 text-xs text-accent-foreground">{T.annualHint(year)}</div>
                         ) : null}
-                        <div className="mt-0.5 text-xs text-muted-foreground md:hidden">
-                          {line.amount === null ? (
-                            T.noBudget
-                          ) : (
-                            <InForce line={line} money={money} />
-                          )}
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                          {line.amount === null ? T.noBudget : <InForce line={line} money={money} />}
+                        </div>
+                        {line.carry_in !== null ? (
+                          <div className="num amount mt-0.5 text-xs text-accent-foreground" title={S.dashboard.table.carryInHint}>
+                            {T.carryIn(signedMoney(line.carry_in, currency))}
+                          </div>
+                        ) : null}
+                        <div className="mt-1 md:hidden">
+                          <References line={line} money={money} onPick={(text) => onChange(line.category_id, text)} />
                         </div>
                       </th>
                       <td className="hidden px-3 py-3 text-right align-top md:table-cell">
-                        <div className="pt-1">
-                          <InForce line={line} money={money} />
-                        </div>
+                        <References line={line} money={money} onPick={(text) => onChange(line.category_id, text)} />
                       </td>
                       <td className="py-3 pr-2 pl-1 align-top sm:pr-3">
                         <AmountInput

@@ -12,9 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useRestoreFocus } from "@/hooks/use-restore-focus";
+import { isMonth, monthOf } from "@/lib/month";
 import { S } from "@/strings.zh";
 
 import {
@@ -69,6 +71,11 @@ export function CategoryDialog({
   const [budgetText, setBudgetText] = useState("");
   const [noBudget, setNoBudget] = useState(false);
   const [budgetError, setBudgetError] = useState<string>();
+  // Rollover (editing only, monthly budget accounts only).
+  const rolloverId = useId();
+  const [currentMonth] = useState(() => monthOf(new Date()));
+  const [rollover, setRollover] = useState(initial?.rolloverFrom != null);
+  const [rolloverMonth, setRolloverMonth] = useState(initial?.rolloverFrom ?? currentMonth);
   const submit = useMutation({
     mutationFn: ({ fields, changes }: { fields: CategoryFields; changes: Schemas["CategoryUpdateIn"] }) =>
       onSubmit(fields, changes),
@@ -87,7 +94,14 @@ export function CategoryDialog({
 
   function handle(event: React.FormEvent) {
     event.preventDefault();
-    const fields = categoryFields(name, description, account);
+    // Moving to an annual budget account turns rollover off on the server.
+    const rolloverFrom = rollover && toPeriod === "month" && isMonth(rolloverMonth) ? rolloverMonth : null;
+    const fields = categoryFields(
+      name,
+      description,
+      account,
+      toPeriod === "month" ? rolloverFrom : (initial?.rolloverFrom ?? null),
+    );
     const reset = periodChange ? budgetReset(budgetText, noBudget) : null;
     setError(fields.name ? undefined : S.common.nameRequired);
     setBudgetError(
@@ -164,6 +178,37 @@ export function CategoryDialog({
                 />
                 {R.none}
               </label>
+            </div>
+          ) : null}
+          {initial !== undefined && toPeriod === "month" ? (
+            <div className="space-y-2 rounded-lg border p-3">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={rollover}
+                  onChange={(event) => setRollover(event.target.checked)}
+                  className="accent-primary"
+                  aria-describedby={`${rolloverId}-hint`}
+                />
+                {T.rollover.label}
+              </label>
+              <p id={`${rolloverId}-hint`} className="text-xs text-muted-foreground">
+                {T.rollover.hint}
+              </p>
+              {rollover ? (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor={rolloverId} className="text-xs text-muted-foreground">
+                    {T.rollover.from}
+                  </Label>
+                  <Input
+                    id={rolloverId}
+                    type="month"
+                    value={rolloverMonth}
+                    onChange={(event) => setRolloverMonth(event.target.value)}
+                    className="num w-40"
+                  />
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="space-y-1.5">

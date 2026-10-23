@@ -1,4 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { cn } from "cn";
 import { Trash2Icon } from "lucide-react";
 import { useId, useState } from "react";
@@ -6,9 +6,10 @@ import { useId, useState } from "react";
 import { errorMessage, type Schemas } from "@/api/client";
 import {
   deleteTransaction,
-  keys,
   refundCandidatesQuery,
   refundsQuery,
+  restoreTransactions,
+  tagsQuery,
   updateTransaction,
 } from "@/api/queries";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -37,6 +38,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useRestoreFocus } from "@/hooks/use-restore-focus";
 import { formatDay } from "@/lib/date";
 import { formatMoney, subtract } from "@/lib/money";
+import { tagAtCaret } from "@/lib/tags";
 import { S } from "@/strings.zh";
 
 import {
@@ -45,26 +47,89 @@ import {
   isRefund,
   paymentRefunds,
   type RefundTarget,
+  reverseChanges,
   toRefundTarget,
   transactionChanges,
 } from "./model";
+import { useInvalidateLedger, useOfferUndo } from "./undo";
 
 const T = S.transactions;
 const NOTE_MAX = 1000;
 
+const SUGGESTIONS = 6;
+
 /**
- * Everything that shows a transaction's figures changes when one is edited, matched or
- * deleted (a match moves a refund into its payment's month and category).
+ * The note field: while the caret is in a `#tag`, the tags already in use that contain
+ * what was typed are offered; Enter or a click completes the first / the chosen one.
  */
-function useInvalidate() {
-  const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: keys.transactions }),
-      // Also the Dashboard queries not on screen (every scope: a new category can move the
-      // amount to another budget account), so going back never shows stale figures.
-      queryClient.invalidateQueries({ queryKey: keys.summaries, refetchType: "all" }),
-    ]);
+function NoteField({
+  id,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const tags = useQuery(tagsQuery);
+  const [caret, setCaret] = useState<number | null>(null);
+  const typing = caret === null ? null : tagAtCaret(value, caret);
+  const suggestions =
+    typing === null
+      ? []
+      : (tags.data ?? [])
+          .map((tag) => tag.tag)
+          .filter((tag) => tag !== typing.query && tag.includes(typing.query))
+          .slice(0, SUGGESTIONS);
+
+  function complete(tag: string) {
+    if (typing === null || caret === null) return;
+    const next = `${value.slice(0, typing.start)}#${tag} ${value.slice(caret)}`;
+    onChange(next);
+    setCaret(typing.start + tag.length + 2);
+  }
+
+  return (
+    <>
+      <Textarea
+        id={id}
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setCaret(event.target.selectionStart);
+        }}
+        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+        onBlur={() => setTimeout(() => setCaret(null), 150)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && suggestions.length > 0) {
+            event.preventDefault();
+            complete(suggestions[0]!);
+          }
+        }}
+        placeholder={placeholder}
+        maxLength={NOTE_MAX}
+        rows={2}
+        aria-describedby={suggestions.length > 0 ? `${id}-tags` : undefined}
+      />
+      {suggestions.length > 0 ? (
+        <div id={`${id}-tags`} role="group" aria-label={T.tagSuggestions} className="flex flex-wrap gap-1.5">
+          {suggestions.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => complete(tag)}
+              className="rounded-full bg-accent px-2 text-xs leading-6 font-medium text-accent-foreground hover:bg-primary hover:text-primary-foreground"
+            >
+              {T.tag(tag)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 function ReadOnlyFacts({
@@ -84,7 +149,7 @@ function ReadOnlyFacts({
       <dd className="min-w-0 font-medium break-words">{transaction.counterparty}</dd>
       <dt className="text-muted-foreground">{D.amount}</dt>
       <dd className={cn("num font-medium", refund && "text-positive")}>
-        {formatMoney(transaction.amount, currency)}
+        <span className="amount">{formatMoney(transaction.amount, currency)}</span>
         {refund ? (
           <span className="ml-2 rounded-full bg-positive-soft px-1.5 text-[11px] leading-[1.125rem] font-medium text-positive">
             {T.refund}
@@ -151,13 +216,13 @@ function CandidatePicker({
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{payment.counterparty}</span>
-                  <span className="num shrink-0 font-medium">{money(payment.amount)}</span>
+                  <span className="num amount shrink-0 font-medium">{money(payment.amount)}</span>
                 </div>
                 <div className="num mt-0.5 flex justify-between gap-3 text-xs text-muted-foreground">
                   <span className="min-w-0 truncate">
                     {formatDay(payment.date, now)} · {payment.channel_name} · {payment.category_name}
                   </span>
-                  <span className="shrink-0">{C.refundable(money(subtract(payment.amount, payment.refunded)))}</span>
+                  <span className="amount shrink-0">{C.refundable(money(subtract(payment.amount, payment.refunded)))}</span>
                 </div>
               </button>
             </li>
@@ -237,7 +302,7 @@ function RefundOfField({
       ) : refundOf ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
           <div className="min-w-0">
-            <div className="num min-w-0 font-medium break-words">
+            <div className="num amount min-w-0 font-medium break-words">
               {D.refundOfSummary(
                 formatDay(refundOf.date, now),
                 refundOf.counterparty,
@@ -288,7 +353,7 @@ function PaymentRefunds({
     <section aria-label={D.refunds} className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-sm leading-none font-medium">{D.refunds}</div>
-        <div className="num text-xs text-muted-foreground">
+        <div className="num amount text-xs text-muted-foreground">
           {D.refundedTotal(money(totals.refunded))} · {totals.full ? T.fullyRefunded : D.net(money(totals.net))}
         </div>
       </div>
@@ -306,7 +371,7 @@ function PaymentRefunds({
                 <span className="num text-muted-foreground">{formatDay(refund.date, now)} </span>
                 {refund.counterparty}
               </span>
-              <span className="num shrink-0 font-medium text-positive">{money(refund.amount)}</span>
+              <span className="num amount shrink-0 font-medium text-positive">{money(refund.amount)}</span>
             </li>
           ))}
         </ul>
@@ -345,7 +410,8 @@ export function EditTransactionDialog({
   const [category, setCategory] = useState(transaction.category_id);
   const [note, setNote] = useState(transaction.note ?? "");
   const [refundOf, setRefundOf] = useState<RefundTarget | null>(transaction.refund_of);
-  const invalidate = useInvalidate();
+  const invalidate = useInvalidateLedger();
+  const offerUndo = useOfferUndo();
   const changes = transactionChanges(transaction, { categoryId: category, note, refundOf });
   const editable = categoryEditable(transaction, refundOf);
   const budgetAccount = budgetAccountOf(tree, category)?.name ?? transaction.budget_account_name;
@@ -355,8 +421,10 @@ export function EditTransactionDialog({
 
   const save = useMutation({
     mutationFn: (body: Schemas["TransactionUpdateIn"]) => updateTransaction(transaction.id, body),
-    onSuccess: async () => {
+    onSuccess: async (_, body) => {
       await invalidate();
+      const reverse = reverseChanges(transaction, body);
+      offerUndo(T.undo.edited, () => updateTransaction(transaction.id, reverse));
       onClose();
     },
   });
@@ -424,14 +492,7 @@ export function EditTransactionDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={noteId}>{D.note}</Label>
-            <Textarea
-              id={noteId}
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder={D.notePlaceholder}
-              maxLength={NOTE_MAX}
-              rows={2}
-            />
+            <NoteField id={noteId} value={note} onChange={setNote} placeholder={D.notePlaceholder} />
           </div>
           <FormError message={save.isError ? errorMessage(save.error) : null} />
           <DialogFooter className="sm:justify-between">
@@ -473,11 +534,13 @@ export function DeleteTransactionDialog({
   onClose: () => void;
 }) {
   const D = T.deleteDialog;
-  const invalidate = useInvalidate();
+  const invalidate = useInvalidateLedger();
+  const offerUndo = useOfferUndo();
   const remove = useMutation({
     mutationFn: () => deleteTransaction(transaction.id),
     onSuccess: async () => {
       await invalidate();
+      offerUndo(T.undo.deleted(1), () => restoreTransactions([transaction.id]));
       onClose();
     },
   });

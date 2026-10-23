@@ -14,6 +14,7 @@ const detail: Schemas["MonthDetailOut"] = {
   actual: "3599.80",
   count: 17,
   annual_actual: "0.00",
+  rollover_available: null,
   categories: [
     {
       category_id: 1,
@@ -101,6 +102,31 @@ describe("CategoryTable", () => {
     expect(within(rowOf("合计")).getByRole("cell", { name: "17" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "展开「餐饮」的二级分类" }));
     expect(within(rowOf("礼物人情")).getByText("0 笔")).toBeInTheDocument();
+  });
+
+  it("measures a rollover category against carry-in plus budget", async () => {
+    const user = userEvent.setup();
+    const rolling: Schemas["MonthDetailOut"] = {
+      ...detail,
+      categories: [
+        {
+          ...detail.categories[0]!,
+          budget: "500.00",
+          actual: "550.00",
+          children: [{ category_id: 11, name: "外食", budget: "500.00", actual: "550.00", count: 3, carry_in: "100.00" }],
+        },
+      ],
+    };
+    render(<CategoryTable detail={rolling} />);
+    // The level-1 row ignores the carry-in: 550 of 500 is over.
+    expect(within(rowOf("餐饮")).getAllByText("超支").length).toBeGreaterThan(0);
+    await user.click(screen.getByRole("button", { name: "展开「餐饮」的二级分类" }));
+    const row = within(rowOf("外食"));
+    expect(row.getByText("结余结转")).toBeInTheDocument();
+    expect(row.getAllByText("可用 ¥50.00").length).toBeGreaterThan(0);
+    expect(row.getAllByText(/含上月 \+¥100\.00/).length).toBeGreaterThan(0);
+    expect(row.queryByText("超支")).not.toBeInTheDocument();
+    expect(row.getAllByText("92%").length).toBeGreaterThan(0); // 550 / 600: near the budget
   });
 
   it("expands and collapses everything", async () => {

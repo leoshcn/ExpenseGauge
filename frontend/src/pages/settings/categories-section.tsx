@@ -35,6 +35,7 @@ import { ErrorState } from "@/components/error-state";
 import { NameDialog } from "@/components/name-dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatMonth } from "@/lib/date";
 import { S } from "@/strings.zh";
 
 import { CategoryDialog } from "./category-dialog";
@@ -50,7 +51,14 @@ const MODIFIERS = [restrictToVerticalAxis, restrictToParentElement];
 /** Level 1 has a name only; level 2 also has a description and a budget account. */
 type Target =
   | { id: number; name: string; level: 1 }
-  | { id: number; name: string; level: 2; description: string | null; budgetAccountId: number };
+  | {
+      id: number;
+      name: string;
+      level: 2;
+      description: string | null;
+      budgetAccountId: number;
+      rolloverFrom: string | null;
+    };
 type Dialog =
   | { kind: "add-parent" }
   | { kind: "add-child"; parent: Target }
@@ -247,6 +255,14 @@ function ChildItem({
             <span className="sr-only">{T.budgetAccount}：</span>
             {child.budget_account.name}
           </span>
+          {child.rollover_from ? (
+            <span
+              className="num rounded-full bg-accent px-1.5 text-[11px] leading-[1.125rem] text-accent-foreground"
+              title={T.rollover.hint}
+            >
+              {T.rollover.chip(formatMonth(child.rollover_from))}
+            </span>
+          ) : null}
         </p>
         {child.description ? (
           <p className="line-clamp-2 text-xs break-words whitespace-pre-line text-muted-foreground">
@@ -261,6 +277,7 @@ function ChildItem({
           level: 2,
           description: child.description,
           budgetAccountId: child.budget_account.id,
+          rolloverFrom: child.rollover_from,
         }}
         onDialog={onDialog}
       />
@@ -460,6 +477,7 @@ export function CategoriesSection({
             name: dialog.target.name,
             description: dialog.target.description,
             budgetAccountId: dialog.target.budgetAccountId,
+            rolloverFrom: dialog.target.rolloverFrom,
           }}
           budgetAccounts={budgetAccounts}
           submitLabel={S.common.save}

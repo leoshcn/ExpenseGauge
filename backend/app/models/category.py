@@ -1,4 +1,6 @@
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, text
+from datetime import date
+
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -40,6 +42,11 @@ class Category(Base):
             "parent_id IS NULL OR budget_account_id IS NOT NULL",
             name="ck_categories_level2_budget_account",
         ),
+        CheckConstraint(
+            "rollover_from IS NULL OR"
+            " (parent_id IS NOT NULL AND EXTRACT(DAY FROM rollover_from) = 1)",
+            name="ck_categories_rollover_from",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -54,3 +61,7 @@ class Category(Base):
     budget_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("budget_accounts.id", ondelete="RESTRICT"), index=True
     )
+    # Level 2 in a monthly budget account only: from this month (first day) on, what is
+    # left of the budget (or overspent) carries into the next month
+    # (`services/rollover.py`). NULL = no rollover.
+    rollover_from: Mapped[date | None] = mapped_column(Date)

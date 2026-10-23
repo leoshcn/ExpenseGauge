@@ -3,6 +3,7 @@
 import type { CollisionDetection } from "@dnd-kit/core";
 
 import type { Schemas } from "@/api/client";
+import { toCents } from "@/lib/money";
 import { parseBudgetInput } from "@/pages/budgets/model";
 
 /** Path of the MCP server, served by the same origin as the app (nginx, or the Vite proxy). */
@@ -26,12 +27,25 @@ export function hermesConfig(endpoint: string, token: string): string {
 /** Longest description of a level-2 category (`categories.description VARCHAR(500)`). */
 export const CATEGORY_DESCRIPTION_MAX = 500;
 
-/** A level-2 category's editable fields as the API stores them. */
-export type CategoryFields = { name: string; description: string | null; budgetAccountId: number };
+/**
+ * A level-2 category's editable fields as the API stores them. `rolloverFrom` is the
+ * month its rollover starts (`YYYY-MM`), or null.
+ */
+export type CategoryFields = {
+  name: string;
+  description: string | null;
+  budgetAccountId: number;
+  rolloverFrom: string | null;
+};
 
 /** The form's values as the API stores them: trimmed, a blank description as `null`. */
-export function categoryFields(name: string, description: string, budgetAccountId: number): CategoryFields {
-  return { name: name.trim(), description: description.trim() || null, budgetAccountId };
+export function categoryFields(
+  name: string,
+  description: string,
+  budgetAccountId: number,
+  rolloverFrom: string | null = null,
+): CategoryFields {
+  return { name: name.trim(), description: description.trim() || null, budgetAccountId, rolloverFrom };
 }
 
 /** The body that creates a level-2 category under `parentId`. */
@@ -53,6 +67,7 @@ export function categoryChanges(
   if (next.name !== initial.name) changes.name = next.name;
   if (next.description !== initial.description) changes.description = next.description;
   if (next.budgetAccountId !== initial.budgetAccountId) changes.budget_account_id = next.budgetAccountId;
+  if (next.rolloverFrom !== initial.rolloverFrom) changes.rollover_from = next.rolloverFrom;
   return Object.keys(changes).length > 0 ? changes : null;
 }
 
@@ -202,4 +217,89 @@ export function aiSettingsBody(form: AiForm): Schemas["AiSettingsUpdateIn"] {
   if (form.clearKey) body.api_key = null;
   else if (key) body.api_key = key;
   return body;
+}
+
+/** The schedule dialog's fields, as typed. */
+export type ScheduleForm = {
+  name: string;
+  keyword: string;
+  categoryId: number | null;
+  amount: string;
+  approximate: boolean;
+  frequency: Schemas["ScheduleCreateIn"]["frequency"] & string;
+  /** 1-31, or -1 for the last day. */
+  day: number;
+  monthOfYear: number;
+  startMonth: string;
+  active: boolean;
+};
+
+export type ScheduleFormErrors = Partial<Record<"name" | "keyword" | "category" | "amount", true>>;
+
+/** The form for an existing schedule, or a new one starting `month`. */
+export function scheduleForm(month: string, schedule?: Schemas["ScheduleOut"]): ScheduleForm {
+  return {
+    name: schedule?.name ?? "",
+    keyword: schedule?.keyword ?? "",
+    categoryId: schedule?.category_id ?? null,
+    amount: schedule?.amount ?? "",
+    approximate: schedule?.approximate ?? false,
+    frequency: schedule?.frequency ?? "month",
+    day: schedule?.day ?? 1,
+    monthOfYear: schedule?.month_of_year ?? 1,
+    startMonth: schedule?.start_month ?? month,
+    active: schedule?.active ?? true,
+  };
+}
+
+/**
+ * The create body for the form, or what is missing. The amount may be a calculation
+ * (`parseBudgetInput`) and must be above zero; `month_of_year` only for a yearly schedule.
+ */
+export function scheduleBody(
+  form: ScheduleForm,
+): { valid: true; body: Schemas["ScheduleCreateIn"] } | { valid: false; errors: ScheduleFormErrors } {
+  const errors: ScheduleFormErrors = {};
+  const amount = parseBudgetInput(form.amount);
+  if (form.name.trim() === "") errors.name = true;
+  if (form.keyword.trim() === "") errors.keyword = true;
+  if (form.categoryId === null) errors.category = true;
+  if (!amount.valid || amount.amount === null || toCents(amount.amount) <= 0) errors.amount = true;
+  if (Object.keys(errors).length > 0 || form.categoryId === null || !amount.valid || amount.amount === null) {
+    return { valid: false, errors };
+  }
+  return {
+    valid: true,
+    body: {
+      name: form.name.trim(),
+      keyword: form.keyword.trim(),
+      category_id: form.categoryId,
+      amount: amount.amount,
+      approximate: form.approximate,
+      frequency: form.frequency,
+      day: form.day,
+      month_of_year: form.frequency === "year" ? form.monthOfYear : null,
+      start_month: form.startMonth,
+      active: form.active,
+    },
+  };
+}
+
+/** The PATCH body with what differs from the stored schedule, or null. */
+export function scheduleChanges(
+  initial: Schemas["ScheduleOut"],
+  body: Schemas["ScheduleCreateIn"],
+): Schemas["ScheduleUpdateIn"] | null {
+  const changes: Schemas["ScheduleUpdateIn"] = {};
+  if (body.name !== initial.name) changes.name = body.name;
+  if (body.keyword !== initial.keyword) changes.keyword = body.keyword;
+  if (body.category_id !== initial.category_id) changes.category_id = body.category_id;
+  if (toCents(String(body.amount)) !== toCents(initial.amount)) changes.amount = body.amount;
+  if (body.approximate !== initial.approximate) changes.approximate = body.approximate;
+  if (body.frequency !== initial.frequency) changes.frequency = body.frequency;
+  if (body.day !== initial.day) changes.day = body.day;
+  if ((body.month_of_year ?? null) !== initial.month_of_year) changes.month_of_year = body.month_of_year ?? null;
+  if (body.start_month && body.start_month !== initial.start_month) changes.start_month = body.start_month;
+  if (body.active !== undefined && body.active !== initial.active) changes.active = body.active;
+  return Object.keys(changes).length > 0 ? changes : null;
 }

@@ -10,12 +10,13 @@ A payment's net amount is its amount plus its matched refunds; it is a "consumpt
 (counted) while that is above zero.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Date, Select, Subquery, cast, func, select
+from sqlalchemy import ColumnElement, Date, Select, Subquery, case, cast, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.db import MAX_ID
@@ -29,6 +30,8 @@ payment = aliased(Transaction, name="payment")
 effective_date = func.coalesce(payment.date, Transaction.date)
 effective_category = func.coalesce(payment.category_id, Transaction.category_id)
 effective_channel = func.coalesce(payment.channel_id, Transaction.channel_id)
+# A matched refund's note is its payment's (which may be NULL), for tags.
+effective_note = case((Transaction.refund_of_id.is_not(None), payment.note), else_=Transaction.note)
 
 
 def join_payment(statement: Select) -> Select:
@@ -72,11 +75,14 @@ def effective_totals(
     end: date | None = None,
     channel_id: int | None = None,
     unmatched_refunds_only: bool = False,
+    extra_conditions: Sequence[ColumnElement[bool]] = (),
 ) -> dict[tuple[date, int], Totals]:
     """Net amount and consumption count per (first day of month, level-2 category), by
     effective attribution. `start` is inclusive and `end` exclusive; a filter left None
     does not restrict. With `unmatched_refunds_only` only those refunds are added up, and
-    nothing is counted (a refund is never a consumption)."""
+    nothing is counted (a refund is never a consumption). `extra_conditions` (the
+    transaction list's text, amount and tag filters) must use only `Transaction`'s own
+    columns: they apply to every row added up and to the payments counted."""
     month = cast(func.date_trunc("month", effective_date), Date)
     conditions = []
     if category_ids is not None:
@@ -89,6 +95,7 @@ def effective_totals(
         conditions.append(effective_channel == channel_id)
     if unmatched_refunds_only:
         conditions += [Transaction.amount < 0, Transaction.refund_of_id.is_(None)]
+    conditions += extra_conditions
     amounts = db.execute(
         join_payment(select(month, effective_category, func.sum(Transaction.amount)))
         .where(*conditions)
@@ -115,6 +122,7 @@ def effective_totals(
         conditions.append(Transaction.date < end)
     if channel_id is not None:
         conditions.append(Transaction.channel_id == channel_id)
+    conditions += extra_conditions
     counts = db.execute(
         select(own_month, Transaction.category_id, func.count())
         .select_from(Transaction)

@@ -5,15 +5,17 @@ import { ErrorState } from "@/components/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSearchState } from "@/hooks/use-search-state";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 import { S } from "@/strings.zh";
 
 import { AgentSection } from "./agent-section";
 import { AiSection } from "./ai-section";
 import { CategoriesSection } from "./categories-section";
 import { LedgerSection } from "./ledger-section";
+import { SchedulesSection } from "./schedules-section";
 
 const T = S.settings;
-const TABS = ["ledger", "categories", "agent", "ai"] as const;
+const TABS = ["ledger", "categories", "schedules", "agent", "ai"] as const;
 type Tab = (typeof TABS)[number];
 
 function isTab(value: string | null): value is Tab {
@@ -51,6 +53,9 @@ export function SettingsPage() {
         <TabsContent value="categories">
           <CategoriesSection budgetAccounts={budgetAccounts.data} />
         </TabsContent>
+        <TabsContent value="schedules">
+          <SchedulesSection currency={settings.data.currency ?? DEFAULT_CURRENCY} />
+        </TabsContent>
         <TabsContent value="agent">
           <AgentSection channels={channels.data} />
         </TabsContent>
@@ -68,6 +73,7 @@ export function SettingsPage() {
         <TabsList aria-label={T.tabs.label} className="max-sm:w-full">
           <TabsTrigger value="ledger">{T.tabs.ledger}</TabsTrigger>
           <TabsTrigger value="categories">{T.tabs.categories}</TabsTrigger>
+          <TabsTrigger value="schedules">{T.tabs.schedules}</TabsTrigger>
           <TabsTrigger value="agent">{T.tabs.agent}</TabsTrigger>
           <TabsTrigger value="ai">{T.tabs.ai}</TabsTrigger>
         </TabsList>

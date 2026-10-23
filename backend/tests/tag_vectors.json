@@ -1,0 +1,20 @@
+[
+  {"note": null, "tags": []},
+  {"note": "", "tags": []},
+  {"note": "国庆聚餐", "tags": []},
+  {"note": "#国庆2026", "tags": ["国庆2026"]},
+  {"note": "和家人 #国庆2026 #聚餐", "tags": ["国庆2026", "聚餐"]},
+  {"note": "#a#b", "tags": ["a", "b"]},
+  {"note": "#国庆，很开心", "tags": ["国庆"]},
+  {"note": "（#出差）报销", "tags": ["出差"]},
+  {"note": "##not-a-tag", "tags": []},
+  {"note": "price ## 3 #real", "tags": ["real"]},
+  {"note": "#Trip #trip #Trip", "tags": ["Trip", "trip"]},
+  {"note": "abc#inline", "tags": ["inline"]},
+  {"note": "# 空", "tags": []},
+  {"note": "#dashed-entry #under_score #dot.ted", "tags": ["dashed-entry", "under_score", "dot.ted"]},
+  {"note": "第一行 #甲\n第二行#乙", "tags": ["甲", "乙"]},
+  {"note": "全角空格#甲　乙", "tags": ["甲"]},
+  {"note": "#12345678901234567890123456789012345678901234567890", "tags": ["12345678901234567890123456789012345678901234567890"]},
+  {"note": "#123456789012345678901234567890123456789012345678901", "tags": []}
+]

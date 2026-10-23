@@ -5,20 +5,30 @@ from fastapi import APIRouter, Query
 
 from app.deps import AnyPrincipal, DbSession, SessionPrincipal
 from app.errors import ErrorEnvelope
-from app.schemas.common import Month
+from app.schemas.common import Money, Month
 from app.schemas.transaction import (
+    MAX_SEARCH_TEXT,
     BatchAcceptedOut,
     BatchSubmitIn,
+    BulkUpdateIn,
+    BulkUpdateOut,
     PaymentSearchOut,
     RecategorizeAcceptedOut,
     RecategorizeIn,
     RefundCandidatePage,
+    RestoreOut,
+    TagCount,
+    TagRenameIn,
+    TagRenameOut,
+    TransactionIdsIn,
     TransactionKind,
     TransactionOut,
     TransactionPage,
     TransactionSearchOut,
     TransactionUpdateIn,
 )
+from app.services import tags as tag_service
+from app.services import transaction_trash as trash_service
 from app.services import transactions as transaction_service
 
 router = APIRouter(tags=["transactions"])
@@ -54,6 +64,25 @@ def list_transactions(
         transaction_service.RefundStatus | None,
         Query(description="`unmatched`: only refunds not matched to a payment"),
     ] = None,
+    q: Annotated[
+        str | None,
+        Query(
+            max_length=MAX_SEARCH_TEXT,
+            description="Text in the row's own counterparty, description or note",
+        ),
+    ] = None,
+    amount_min: Annotated[
+        Money | None, Query(ge=0, description="Absolute amount at least this")
+    ] = None,
+    amount_max: Annotated[
+        Money | None, Query(ge=0, description="Absolute amount at most this")
+    ] = None,
+    date_from: Annotated[date | None, Query(description="Own date on or after")] = None,
+    date_to: Annotated[date | None, Query(description="Own date on or before")] = None,
+    tag: Annotated[
+        list[str] | None,
+        Query(description="Tags (without `#`), any of; a matched refund has its payment's"),
+    ] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ):
@@ -66,9 +95,72 @@ def list_transactions(
         budget_account_id=budget_account_id,
         category_id=category_id,
         refund_status=refund_status,
+        q=q,
+        amount_min=amount_min,
+        amount_max=amount_max,
+        date_from=date_from,
+        date_to=date_to,
+        tags=tag,
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/transactions/tags", response_model=list[TagCount])
+def list_tags(principal: SessionPrincipal, db: DbSession):
+    """Every `#tag` written in a note, most used first."""
+    return tag_service.list_tags(db)
+
+
+@router.post("/transactions/tags/rename", response_model=TagRenameOut)
+def rename_tag(payload: TagRenameIn, principal: SessionPrincipal, db: DbSession):
+    """Writes `#from_tag` as `#to_tag` in every note; returns the notes as they were."""
+    return tag_service.rename_tag(db, payload.from_tag, payload.to_tag)
+
+
+@router.post(
+    "/transactions/bulk-update",
+    response_model=BulkUpdateOut,
+    responses={
+        409: {
+            "model": ErrorEnvelope,
+            "description": "BATCH_REJECTED: nothing changed; details.items has one entry per item",
+        }
+    },
+)
+def bulk_update(payload: BulkUpdateIn, principal: SessionPrincipal, db: DbSession):
+    """The user's category and note changes to several transactions, all or none."""
+    return transaction_service.bulk_update(db, payload.items)
+
+
+@router.post(
+    "/transactions/bulk-delete",
+    status_code=204,
+    responses={
+        409: {
+            "model": ErrorEnvelope,
+            "description": "TRANSACTION_HAS_REFUNDS: a payment's matched refunds are not included",
+        }
+    },
+)
+def bulk_delete(payload: TransactionIdsIn, principal: SessionPrincipal, db: DbSession):
+    """Deletes all of `ids` or none; each can be restored for a week."""
+    trash_service.bulk_delete(db, payload.ids)
+
+
+@router.post(
+    "/transactions/restore",
+    response_model=RestoreOut,
+    responses={
+        409: {
+            "model": ErrorEnvelope,
+            "description": "RESTORE_CONFLICT: nothing restored; details.items says why per id",
+        }
+    },
+)
+def restore(payload: TransactionIdsIn, principal: SessionPrincipal, db: DbSession):
+    """Undoes deletes: puts the transactions back under their own ids, all or none."""
+    return trash_service.restore(db, payload.ids)
 
 
 @router.get("/transactions/search", response_model=TransactionSearchOut)

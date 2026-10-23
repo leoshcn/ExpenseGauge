@@ -34,6 +34,10 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "period": "month",
             "amount": "1500.00",
             "effective_from": "2026-03",
+            "reference_last": "0.00",
+            "reference_avg3": "0.00",
+            "rollover_from": None,
+            "carry_in": None,
         },
         {
             "category_id": ledger.dining,
@@ -45,6 +49,10 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "period": "month",
             "amount": None,  # no budget
             "effective_from": None,
+            "reference_last": "0.00",
+            "reference_avg3": "0.00",
+            "rollover_from": None,
+            "carry_in": None,
         },
         {
             "category_id": ledger.metro,
@@ -56,6 +64,10 @@ def test_get_budgets_lists_every_level2_category(client, agent, ledger):
             "period": "month",
             "amount": "0.00",  # zero is a real budget, not "no budget"
             "effective_from": "2026-03",
+            "reference_last": "0.00",
+            "reference_avg3": "0.00",
+            "rollover_from": None,
+            "carry_in": None,
         },
     ]
     # Month defaults to the current month.
@@ -160,6 +172,10 @@ def test_clearing_a_budget_applies_from_the_chosen_month(client, agent, ledger):
         "period": "month",
         "amount": None,
         "effective_from": None,
+        "reference_last": "0.00",
+        "reference_avg3": "0.00",
+        "rollover_from": None,
+        "carry_in": None,
     }
     assert _lines(client, ledger, "2026-06")[ledger.groceries] == no_budget
     assert _lines(client, ledger, "2027-03")[ledger.groceries] == no_budget

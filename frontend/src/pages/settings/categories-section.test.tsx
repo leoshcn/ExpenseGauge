@@ -19,14 +19,14 @@ const tree: Schemas["CategoryTree"] = {
       id: 10,
       name: "餐饮",
       children: [
-        { id: 11, name: "超市", description: "线下商超、便利店\n不含外卖", budget_account: daily },
-        { id: 12, name: "外食", description: null, budget_account: daily },
+        { id: 11, name: "超市", description: "线下商超、便利店\n不含外卖", budget_account: daily, rollover_from: null },
+        { id: 12, name: "外食", description: null, budget_account: daily, rollover_from: null },
       ],
     },
     {
       id: 20,
       name: "居住",
-      children: [{ id: 21, name: "房租", description: null, budget_account: fixed }],
+      children: [{ id: 21, name: "房租", description: null, budget_account: fixed, rollover_from: null }],
     },
   ],
 };
@@ -43,6 +43,7 @@ const categoryOut = (id: number, body: { name?: string; description?: string | n
   name: body.name ?? "",
   description: body.description ?? null,
   budget_account_id: body.budget_account_id ?? 1,
+  rollover_from: null,
 });
 
 vi.mock("@/api/queries", async (importOriginal) => {

@@ -6,6 +6,7 @@ import { BudgetsPage } from "@/pages/budgets";
 import { DashboardPage } from "@/pages/dashboard";
 import { LoginPage } from "@/pages/login";
 import { OnboardingPage } from "@/pages/onboarding";
+import { ReportsPage } from "@/pages/reports";
 import { SettingsPage } from "@/pages/settings";
 import { SetupPage } from "@/pages/setup";
 import { TransactionsPage } from "@/pages/transactions";
@@ -32,6 +33,7 @@ export function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>

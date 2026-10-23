@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -60,3 +62,17 @@ class Transaction(Base):
         ForeignKey("transactions.id", ondelete="RESTRICT"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DeletedTransaction(Base):
+    """A deleted transaction, kept so the user can undo the delete: every column of the row
+    as JSON (`services/transaction_trash.py::snapshot`), under its original id. Rows older
+    than a week are purged on the next delete; restoring removes the row."""
+
+    __tablename__ = "deleted_transactions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )

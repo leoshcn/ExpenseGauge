@@ -17,6 +17,9 @@ import {
   movedOrder,
   periodOf,
   reorderTree,
+  scheduleBody,
+  scheduleChanges,
+  scheduleForm,
 } from "./model";
 
 describe("categoryFields / categoryChanges", () => {
@@ -25,18 +28,24 @@ describe("categoryFields / categoryChanges", () => {
       name: "超市",
       description: "线下商超\n不含外卖",
       budgetAccountId: 1,
+      rolloverFrom: null,
     });
-    expect(categoryFields("超市", "   ", 2)).toEqual({ name: "超市", description: null, budgetAccountId: 2 });
+    expect(categoryFields("超市", "   ", 2)).toEqual({ name: "超市", description: null, budgetAccountId: 2, rolloverFrom: null });
   });
 
   it("returns only what changed as the PATCH body, or null", () => {
-    const initial = { name: "超市", description: "线下商超", budgetAccountId: 1 };
+    const initial = { name: "超市", description: "线下商超", budgetAccountId: 1, rolloverFrom: null };
     expect(categoryChanges(initial, { ...initial })).toBeNull();
     expect(categoryChanges(initial, { ...initial, name: "商超" })).toEqual({ name: "商超" });
     expect(categoryChanges(initial, { ...initial, description: null })).toEqual({ description: null });
     expect(categoryChanges(initial, { ...initial, budgetAccountId: 2 })).toEqual({ budget_account_id: 2 });
+    expect(categoryChanges(initial, { ...initial, rolloverFrom: "2026-10" })).toEqual({ rollover_from: "2026-10" });
+    expect(categoryChanges({ ...initial, rolloverFrom: "2026-08" }, initial)).toEqual({ rollover_from: null });
     expect(
-      categoryChanges({ name: "超市", description: null, budgetAccountId: 1 }, categoryFields("超市", " ", 1)),
+      categoryChanges(
+        { name: "超市", description: null, budgetAccountId: 1, rolloverFrom: null },
+        categoryFields("超市", " ", 1),
+      ),
     ).toBeNull();
   });
 
@@ -54,7 +63,7 @@ describe("leafCounts", () => {
   it("counts level-2 categories per budget account across level-1 categories", () => {
     const daily = { id: 1, name: "日常", period: "month" as const };
     const fixed = { id: 2, name: "固定", period: "month" as const };
-    const leaf = (id: number, budget_account: typeof daily) => ({ id, name: `c${id}`, description: null, budget_account });
+    const leaf = (id: number, budget_account: typeof daily) => ({ id, name: `c${id}`, description: null, budget_account, rollover_from: null });
     const counts = leafCounts({
       budget_account_id: null,
       categories: [
@@ -69,7 +78,7 @@ describe("leafCounts", () => {
 
 describe("reorderTree / movedOrder", () => {
   const daily = { id: 1, name: "日常", period: "month" as const };
-  const leaf = (id: number) => ({ id, name: `c${id}`, description: null, budget_account: daily });
+  const leaf = (id: number) => ({ id, name: `c${id}`, description: null, budget_account: daily, rollover_from: null });
   const tree: Schemas["CategoryTree"] = {
     budget_account_id: null,
     categories: [
@@ -218,5 +227,43 @@ describe("budgetReset / periodOf", () => {
     ];
     expect(periodOf(accounts, 3)).toBe("year");
     expect(periodOf(accounts, 9)).toBeUndefined();
+  });
+});
+
+describe("schedule form", () => {
+  const stored: Schemas["ScheduleOut"] = {
+    id: 1,
+    name: "房租",
+    keyword: "自如",
+    category_id: 11,
+    category_name: "房租",
+    parent_category_name: "居住",
+    budget_account_id: 2,
+    budget_account_name: "固定",
+    amount: "6500.00",
+    approximate: false,
+    frequency: "month",
+    day: 1,
+    month_of_year: null,
+    start_month: "2026-01",
+    active: true,
+  };
+
+  it("reports what is missing and accepts a calculation as the amount", () => {
+    const empty = scheduleBody(scheduleForm("2026-10"));
+    expect(empty).toEqual({ valid: false, errors: { name: true, keyword: true, category: true, amount: true } });
+    const filled = scheduleBody({ ...scheduleForm("2026-10"), name: " 宽带 ", keyword: "电信", categoryId: 11, amount: "99*1" });
+    expect(filled).toMatchObject({ valid: true, body: { name: "宽带", amount: "99.00", month_of_year: null, start_month: "2026-10" } });
+    expect(scheduleBody({ ...scheduleForm("2026-10"), name: "x", keyword: "x", categoryId: 1, amount: "0" }).valid).toBe(false);
+  });
+
+  it("sends a month only for a yearly schedule, and only what changed", () => {
+    const form = scheduleForm("2026-10", stored);
+    const yearly = scheduleBody({ ...form, frequency: "year", monthOfYear: 3 });
+    if (!yearly.valid) throw new Error("invalid");
+    expect(scheduleChanges(stored, yearly.body)).toEqual({ frequency: "year", month_of_year: 3 });
+    const same = scheduleBody(form);
+    if (!same.valid) throw new Error("invalid");
+    expect(scheduleChanges(stored, same.body)).toBeNull();
   });
 });
