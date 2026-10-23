@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import {
+  ChartColumnIcon,
   LayoutDashboardIcon,
   LogOutIcon,
   ReceiptTextIcon,
@@ -30,6 +31,7 @@ const NAV: readonly NavItem[] = [
   { to: "/dashboard", label: S.nav.dashboard, icon: LayoutDashboardIcon },
   { to: "/transactions", label: S.nav.transactions, icon: ReceiptTextIcon },
   { to: "/budgets", label: S.nav.budgets, icon: TargetIcon },
+  { to: "/reports", label: S.nav.reports, icon: ChartColumnIcon },
   { to: "/settings", label: S.nav.settings, icon: SettingsIcon },
 ];
 
@@ -126,7 +128,7 @@ function MobileBars() {
       </header>
       <nav
         aria-label={S.nav.label}
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
       >
         {NAV.map((item) => (
           <NavLink

@@ -357,6 +357,88 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/daily": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Daily
+         * @description Net amount per day and the monthly budget per month; without a budget account,
+         *     the monthly budget accounts only (the dashboard's "全部").
+         */
+        get: operations["report_daily_api_v1_reports_daily_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/saved": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Saved Reports */
+        get: operations["list_saved_reports_api_v1_reports_saved_get"];
+        put?: never;
+        /** Save Report */
+        post: operations["save_report_api_v1_reports_saved_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/saved/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Saved Report */
+        delete: operations["delete_saved_report_api_v1_reports_saved__report_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Saved Report
+         * @description Rename and/or overwrite the settings.
+         */
+        patch: operations["update_saved_report_api_v1_reports_saved__report_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/reports/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Summary
+         * @description Net amount and consumption count per group (level-1 or level-2 category,
+         *     counterparty, channel or tag) and per month, inclusive, at most 60 months. A matched
+         *     refund counts with its payment; with tags, a transaction is in each of its tags.
+         */
+        get: operations["report_summary_api_v1_reports_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/schedules": {
         parameters: {
             query?: never;
@@ -1293,6 +1375,31 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** DailyAmount */
+        DailyAmount: {
+            /** Amount */
+            amount: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+        };
+        /** DailyOut */
+        DailyOut: {
+            /**
+             * Budgets
+             * @description The scope's monthly budget per month
+             */
+            budgets: components["schemas"]["MonthBudget"][];
+            /** Currency */
+            currency: string;
+            /**
+             * Days
+             * @description Days with any spending, in order
+             */
+            days: components["schemas"]["DailyAmount"][];
+        };
         /**
          * ErrorEnvelope
          * @description Body of every non-2xx response.
@@ -1411,6 +1518,13 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /** MonthBudget */
+        MonthBudget: {
+            /** Budget */
+            budget: string | null;
+            /** Month */
+            month: string;
         };
         /** MonthDetailOut */
         MonthDetailOut: {
@@ -1599,6 +1713,85 @@ export interface components {
             /** Id */
             id: number;
         };
+        /** ReportGroup */
+        ReportGroup: {
+            /**
+             * Amount
+             * @description Net amount (payments minus refunds) in the range
+             */
+            amount: string;
+            /**
+             * Count
+             * @description Consumption count: payments whose net amount is above 0
+             */
+            count: number;
+            /**
+             * Key
+             * @description Category or channel id, the counterparty, or the tag; null is the group of transactions without a tag
+             */
+            key: string | null;
+            /**
+             * Label
+             * @description What to show; null for the no-tag group
+             */
+            label: string | null;
+            /**
+             * Months
+             * @description Net amount per month of `months`
+             */
+            months: string[];
+        };
+        /** ReportOut */
+        ReportOut: {
+            /** Currency */
+            currency: string;
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+            /**
+             * Groups
+             * @description Largest amount first
+             */
+            groups: components["schemas"]["ReportGroup"][];
+            /** Months */
+            months: string[];
+            /**
+             * Overlapping
+             * @description Some transaction has several tags and is in several groups
+             */
+            overlapping: boolean;
+            /** @description Of the transactions themselves: with tags, not the sum of the groups */
+            total: components["schemas"]["ReportTotal"];
+        };
+        /** ReportRange */
+        ReportRange: {
+            /**
+             * From Month
+             * @description Custom ranges only
+             */
+            from_month?: string | null;
+            /**
+             * Preset
+             * @enum {string}
+             */
+            preset: "this_month" | "last_3" | "last_6" | "last_12" | "this_year" | "custom";
+            /**
+             * To Month
+             * @description Custom ranges only
+             */
+            to_month?: string | null;
+        };
+        /** ReportTotal */
+        ReportTotal: {
+            /** Amount */
+            amount: string;
+            /** Count */
+            count: number;
+            /** Months */
+            months: string[];
+        };
         /** RestoreOut */
         RestoreOut: {
             /**
@@ -1606,6 +1799,50 @@ export interface components {
              * @description The restored rows, by id
              */
             transactions: components["schemas"]["TransactionOut"][];
+        };
+        /**
+         * SavedReportConfig
+         * @description What a saved custom report remembers; the figures are computed when it is opened.
+         */
+        SavedReportConfig: {
+            /** Budget Account Id */
+            budget_account_id?: number | null;
+            /**
+             * Chart
+             * @enum {string}
+             */
+            chart: "table" | "bar" | "line" | "donut";
+            /**
+             * Group By
+             * @enum {string}
+             */
+            group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "total" | "monthly";
+            range: components["schemas"]["ReportRange"];
+        };
+        /** SavedReportIn */
+        SavedReportIn: {
+            config: components["schemas"]["SavedReportConfig"];
+            /** Name */
+            name: string;
+        };
+        /** SavedReportOut */
+        SavedReportOut: {
+            config: components["schemas"]["SavedReportConfig"];
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** SavedReportUpdateIn */
+        SavedReportUpdateIn: {
+            config?: components["schemas"]["SavedReportConfig"] | null;
+            /** Name */
+            name?: string | null;
         };
         /** ScheduleCreateIn */
         ScheduleCreateIn: {
@@ -2980,6 +3217,253 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentSearchOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    report_daily_api_v1_reports_daily_get: {
+        parameters: {
+            query: {
+                from_month: string;
+                to_month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_saved_reports_api_v1_reports_saved_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    save_report_api_v1_reports_saved_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedReportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_saved_report_api_v1_reports_saved__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_saved_report_api_v1_reports_saved__report_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedReportUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedReportOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    report_summary_api_v1_reports_summary_get: {
+        parameters: {
+            query: {
+                group_by: "level1" | "level2" | "counterparty" | "channel" | "tag";
+                from_month: string;
+                to_month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportOut"];
                 };
             };
             /** @description Validation error */

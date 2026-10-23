@@ -1107,6 +1107,56 @@
         "title": "CredentialsIn",
         "type": "object"
       },
+      "DailyAmount": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "amount"
+        ],
+        "title": "DailyAmount",
+        "type": "object"
+      },
+      "DailyOut": {
+        "properties": {
+          "budgets": {
+            "description": "The scope's monthly budget per month",
+            "items": {
+              "$ref": "#/components/schemas/MonthBudget"
+            },
+            "title": "Budgets",
+            "type": "array"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "days": {
+            "description": "Days with any spending, in order",
+            "items": {
+              "$ref": "#/components/schemas/DailyAmount"
+            },
+            "title": "Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "days",
+          "budgets"
+        ],
+        "title": "DailyOut",
+        "type": "object"
+      },
       "ErrorEnvelope": {
         "description": "Body of every non-2xx response.",
         "properties": {
@@ -1359,6 +1409,32 @@
           "password"
         ],
         "title": "LoginIn",
+        "type": "object"
+      },
+      "MonthBudget": {
+        "properties": {
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "budget"
+        ],
+        "title": "MonthBudget",
         "type": "object"
       },
       "MonthDetailOut": {
@@ -1752,6 +1828,189 @@
         "title": "RefundTarget",
         "type": "object"
       },
+      "ReportGroup": {
+        "properties": {
+          "amount": {
+            "description": "Net amount (payments minus refunds) in the range",
+            "title": "Amount",
+            "type": "string"
+          },
+          "count": {
+            "description": "Consumption count: payments whose net amount is above 0",
+            "title": "Count",
+            "type": "integer"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Category or channel id, the counterparty, or the tag; null is the group of transactions without a tag",
+            "title": "Key"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What to show; null for the no-tag group",
+            "title": "Label"
+          },
+          "months": {
+            "description": "Net amount per month of `months`",
+            "items": {
+              "type": "string"
+            },
+            "title": "Months",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "amount",
+          "count",
+          "months"
+        ],
+        "title": "ReportGroup",
+        "type": "object"
+      },
+      "ReportOut": {
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "group_by": {
+            "enum": [
+              "level1",
+              "level2",
+              "counterparty",
+              "channel",
+              "tag"
+            ],
+            "title": "Group By",
+            "type": "string"
+          },
+          "groups": {
+            "description": "Largest amount first",
+            "items": {
+              "$ref": "#/components/schemas/ReportGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "months": {
+            "items": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "type": "string"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "overlapping": {
+            "description": "Some transaction has several tags and is in several groups",
+            "title": "Overlapping",
+            "type": "boolean"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ReportTotal",
+            "description": "Of the transactions themselves: with tags, not the sum of the groups"
+          }
+        },
+        "required": [
+          "currency",
+          "group_by",
+          "months",
+          "groups",
+          "total",
+          "overlapping"
+        ],
+        "title": "ReportOut",
+        "type": "object"
+      },
+      "ReportRange": {
+        "additionalProperties": false,
+        "properties": {
+          "from_month": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Custom ranges only",
+            "title": "From Month"
+          },
+          "preset": {
+            "enum": [
+              "this_month",
+              "last_3",
+              "last_6",
+              "last_12",
+              "this_year",
+              "custom"
+            ],
+            "title": "Preset",
+            "type": "string"
+          },
+          "to_month": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Custom ranges only",
+            "title": "To Month"
+          }
+        },
+        "required": [
+          "preset"
+        ],
+        "title": "ReportRange",
+        "type": "object"
+      },
+      "ReportTotal": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Months",
+            "type": "array"
+          }
+        },
+        "required": [
+          "amount",
+          "count",
+          "months"
+        ],
+        "title": "ReportTotal",
+        "type": "object"
+      },
       "RestoreOut": {
         "properties": {
           "transactions": {
@@ -1767,6 +2026,135 @@
           "transactions"
         ],
         "title": "RestoreOut",
+        "type": "object"
+      },
+      "SavedReportConfig": {
+        "additionalProperties": false,
+        "description": "What a saved custom report remembers; the figures are computed when it is opened.",
+        "properties": {
+          "budget_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Account Id"
+          },
+          "chart": {
+            "enum": [
+              "table",
+              "bar",
+              "line",
+              "donut"
+            ],
+            "title": "Chart",
+            "type": "string"
+          },
+          "group_by": {
+            "enum": [
+              "level1",
+              "level2",
+              "counterparty",
+              "channel",
+              "tag"
+            ],
+            "title": "Group By",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "total",
+              "monthly"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "range": {
+            "$ref": "#/components/schemas/ReportRange"
+          }
+        },
+        "required": [
+          "group_by",
+          "mode",
+          "range",
+          "chart"
+        ],
+        "title": "SavedReportConfig",
+        "type": "object"
+      },
+      "SavedReportIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/SavedReportConfig"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "config"
+        ],
+        "title": "SavedReportIn",
+        "type": "object"
+      },
+      "SavedReportOut": {
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/SavedReportConfig"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "config"
+        ],
+        "title": "SavedReportOut",
+        "type": "object"
+      },
+      "SavedReportUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavedReportConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "SavedReportUpdateIn",
         "type": "object"
       },
       "ScheduleCreateIn": {
@@ -4000,6 +4388,382 @@
         "summary": "Search Payments",
         "tags": [
           "transactions"
+        ]
+      }
+    },
+    "/api/v1/reports/daily": {
+      "get": {
+        "description": "Net amount per day and the monthly budget per month; without a budget account,\nthe monthly budget accounts only (the dashboard's \"全部\").",
+        "operationId": "report_daily_api_v1_reports_daily_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from_month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "From Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "To Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Report Daily",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/saved": {
+      "get": {
+        "operationId": "list_saved_reports_api_v1_reports_saved_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SavedReportOut"
+                  },
+                  "title": "Response List Saved Reports Api V1 Reports Saved Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Saved Reports",
+        "tags": [
+          "reports"
+        ]
+      },
+      "post": {
+        "operationId": "save_report_api_v1_reports_saved_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedReportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Save Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/saved/{report_id}": {
+      "delete": {
+        "operationId": "delete_saved_report_api_v1_reports_saved__report_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Delete Saved Report",
+        "tags": [
+          "reports"
+        ]
+      },
+      "patch": {
+        "description": "Rename and/or overwrite the settings.",
+        "operationId": "update_saved_report_api_v1_reports_saved__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedReportUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Update Saved Report",
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/v1/reports/summary": {
+      "get": {
+        "description": "Net amount and consumption count per group (level-1 or level-2 category,\ncounterparty, channel or tag) and per month, inclusive, at most 60 months. A matched\nrefund counts with its payment; with tags, a transaction is in each of its tags.",
+        "operationId": "report_summary_api_v1_reports_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "group_by",
+            "required": true,
+            "schema": {
+              "enum": [
+                "level1",
+                "level2",
+                "counterparty",
+                "channel",
+                "tag"
+              ],
+              "title": "Group By",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "From Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "To Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Report Summary",
+        "tags": [
+          "reports"
         ]
       }
     },
