@@ -60,7 +60,7 @@ function RefundChips({ transaction, currency }: { transaction: Schemas["Transact
   if (refunds === null) return null;
   return (
     <Chip tone="muted" title={T.refundedHint}>
-      {refunds.full ? T.fullyRefunded : T.refunded(formatMoney(refunds.refunded, currency))}
+      {refunds.full ? T.fullyRefunded : <span className="amount">{T.refunded(formatMoney(refunds.refunded, currency))}</span>}
     </Chip>
   );
 }
@@ -84,7 +84,7 @@ export function StatsLine({
       title={T.statsHint}
       className={cn("num text-sm text-muted-foreground", className)}
     >
-      {T.stats(stats.count, formatMoney(stats.net_amount, currency))}
+      <span className="amount">{T.stats(stats.count, formatMoney(stats.net_amount, currency))}</span>
       <span className="ml-1 text-xs">（{T.statsAnnualNote}）</span>
     </p>
   );
@@ -172,7 +172,7 @@ function Row({
           refund && "text-positive",
         )}
       >
-        {formatMoney(transaction.amount, currency)}
+        <span className="amount">{formatMoney(transaction.amount, currency)}</span>
       </td>
       <td className={cn("py-2 pr-2 pl-1 text-right whitespace-nowrap sm:pr-3", "align-top")}>
         <Button

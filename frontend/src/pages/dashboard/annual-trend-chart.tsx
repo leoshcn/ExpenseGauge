@@ -9,6 +9,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { usePrivacy } from "@/hooks/use-privacy";
 import { formatMoney, formatMoneyCompact, toChartNumber } from "@/lib/money";
 import { S } from "@/strings.zh";
 
@@ -76,6 +77,7 @@ export function AnnualTrendChart({
   className?: string;
 }) {
   const compact = useMediaQuery("(max-width: 639px)");
+  const { hidden } = usePrivacy();
   const points = annualTrendPoints(year, account.months, account.budget);
   const budget = account.budget === null ? null : toChartNumber(account.budget);
   const ticks = niceTicksOf(
@@ -117,7 +119,7 @@ export function AnnualTrendChart({
             ticks={ticks}
             domain={ticks ? [0, ticks.at(-1)!] : undefined}
             fontSize={compact ? 11 : 12}
-            tickFormatter={(value: number) => formatMoneyCompact(value, currency)}
+            tickFormatter={(value: number) => (hidden ? S.privacy.hiddenTick : formatMoneyCompact(value, currency))}
             className="num"
           />
           <ChartTooltip
@@ -144,7 +146,7 @@ export function AnnualTrendChart({
                         />
                         {name === "actual" ? A.legendMonth : A.legendCumulative}
                       </span>
-                      <span className="font-medium">{formatMoney(text, currency)}</span>
+                      <span className="amount font-medium">{formatMoney(text, currency)}</span>
                     </div>
                   );
                 }}

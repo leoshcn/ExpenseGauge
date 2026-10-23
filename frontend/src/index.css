@@ -199,6 +199,17 @@
   font-feature-settings: "tnum", "calt", "cv11";
 }
 
+@utility amount {
+  /* Every money figure: blurred in privacy mode (src/hooks/use-privacy.ts), shown on hover. */
+  :where(html.privacy) & {
+    filter: blur(6px);
+  }
+  :where(html.privacy) &:hover,
+  :where(html.privacy) &:focus {
+    filter: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

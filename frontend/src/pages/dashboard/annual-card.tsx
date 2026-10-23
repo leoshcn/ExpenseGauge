@@ -66,7 +66,7 @@ export function AnnualCard({
                   </span>
                 ) : null}
               </div>
-              <div className={cn("num mt-1 text-sm", over && "text-over")}>
+              <div className={cn("num amount mt-1 text-sm", over && "text-over")}>
                 {account.budget === null ? (
                   <>
                     {money(account.actual)}

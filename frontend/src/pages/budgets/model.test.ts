@@ -58,6 +58,14 @@ describe("parseBudgetInput", () => {
     }
     expect(parseBudgetInput("999999999999.99")).toEqual({ valid: true, amount: "999999999999.99" });
   });
+
+  it("evaluates calculations and rejects malformed or negative ones", () => {
+    expect(parseBudgetInput("1800*1.1")).toEqual({ valid: true, amount: "1980.00" });
+    expect(parseBudgetInput("(300+250)/2")).toEqual({ valid: true, amount: "275.00" });
+    for (const text of ["12+", "100-200", "1/0", "999999999999*10"]) {
+      expect(parseBudgetInput(text)).toEqual({ valid: false });
+    }
+  });
 });
 
 describe("sameBudget", () => {

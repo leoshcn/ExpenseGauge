@@ -5,6 +5,7 @@
  */
 
 import type { Schemas } from "@/api/client";
+import { evaluate, isExpression } from "@/lib/expr";
 import { fromCents, toCents } from "@/lib/money";
 
 /** Input texts the user has typed, by level-2 category id. Untouched rows are absent. */
@@ -16,15 +17,22 @@ export type ParsedAmount = { valid: true; amount: string | null } | { valid: fal
 const AMOUNT = /^(\d{1,12})(?:\.(\d{0,2}))?$/;
 
 /**
- * "" -> no budget (null); "1,200.5" -> "1200.50"; "0" -> "0.00". Spaces and thousands
- * separators are ignored, full-width digits and point are accepted. Negative amounts,
- * more than two decimals and anything else are invalid.
+ * "" -> no budget (null); "1,200.5" -> "1200.50"; "0" -> "0.00"; "1800*1.1" -> "1980.00".
+ * Spaces and thousands separators are ignored, full-width digits and point are accepted.
+ * A calculation (`lib/expr.ts`) is evaluated and rounded to cents. Negative amounts,
+ * more than two decimals, malformed calculations and anything else are invalid.
  */
 export function parseBudgetInput(text: string): ParsedAmount {
   const cleaned = text
     .replace(/[０-９．]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
     .replace(/[\s,，]/g, "");
   if (cleaned === "") return { valid: true, amount: null };
+  if (isExpression(cleaned)) {
+    const result = evaluate(cleaned);
+    return result.ok && toCents(result.value) >= 0 && AMOUNT.test(result.value)
+      ? { valid: true, amount: result.value }
+      : { valid: false };
+  }
   const match = AMOUNT.exec(cleaned);
   if (!match) return { valid: false };
   const [, whole = "0", fraction = ""] = match;

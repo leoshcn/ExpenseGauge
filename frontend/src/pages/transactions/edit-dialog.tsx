@@ -84,7 +84,7 @@ function ReadOnlyFacts({
       <dd className="min-w-0 font-medium break-words">{transaction.counterparty}</dd>
       <dt className="text-muted-foreground">{D.amount}</dt>
       <dd className={cn("num font-medium", refund && "text-positive")}>
-        {formatMoney(transaction.amount, currency)}
+        <span className="amount">{formatMoney(transaction.amount, currency)}</span>
         {refund ? (
           <span className="ml-2 rounded-full bg-positive-soft px-1.5 text-[11px] leading-[1.125rem] font-medium text-positive">
             {T.refund}
@@ -151,13 +151,13 @@ function CandidatePicker({
               >
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 truncate font-medium">{payment.counterparty}</span>
-                  <span className="num shrink-0 font-medium">{money(payment.amount)}</span>
+                  <span className="num amount shrink-0 font-medium">{money(payment.amount)}</span>
                 </div>
                 <div className="num mt-0.5 flex justify-between gap-3 text-xs text-muted-foreground">
                   <span className="min-w-0 truncate">
                     {formatDay(payment.date, now)} · {payment.channel_name} · {payment.category_name}
                   </span>
-                  <span className="shrink-0">{C.refundable(money(subtract(payment.amount, payment.refunded)))}</span>
+                  <span className="amount shrink-0">{C.refundable(money(subtract(payment.amount, payment.refunded)))}</span>
                 </div>
               </button>
             </li>
@@ -237,7 +237,7 @@ function RefundOfField({
       ) : refundOf ? (
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2">
           <div className="min-w-0">
-            <div className="num min-w-0 font-medium break-words">
+            <div className="num amount min-w-0 font-medium break-words">
               {D.refundOfSummary(
                 formatDay(refundOf.date, now),
                 refundOf.counterparty,
@@ -288,7 +288,7 @@ function PaymentRefunds({
     <section aria-label={D.refunds} className="space-y-1.5">
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-sm leading-none font-medium">{D.refunds}</div>
-        <div className="num text-xs text-muted-foreground">
+        <div className="num amount text-xs text-muted-foreground">
           {D.refundedTotal(money(totals.refunded))} · {totals.full ? T.fullyRefunded : D.net(money(totals.net))}
         </div>
       </div>
@@ -306,7 +306,7 @@ function PaymentRefunds({
                 <span className="num text-muted-foreground">{formatDay(refund.date, now)} </span>
                 {refund.counterparty}
               </span>
-              <span className="num shrink-0 font-medium text-positive">{money(refund.amount)}</span>
+              <span className="num amount shrink-0 font-medium text-positive">{money(refund.amount)}</span>
             </li>
           ))}
         </ul>

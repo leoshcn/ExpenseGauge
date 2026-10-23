@@ -60,7 +60,7 @@ export function AnnualSummary({
 
       <div className="mt-5">
         <div className="text-xs text-muted-foreground">{A.actual}</div>
-        <div className="num text-display font-semibold">{money(account.actual)}</div>
+        <div className="num amount text-display font-semibold">{money(account.actual)}</div>
         <p className="num mt-1 text-xs text-muted-foreground">{A.card.count(account.count)}</p>
       </div>
 

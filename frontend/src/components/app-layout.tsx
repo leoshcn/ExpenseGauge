@@ -8,13 +8,20 @@ import {
   TargetIcon,
   type LucideIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { NavLink, Outlet } from "react-router";
 
 import { ApiError } from "@/api/client";
 import { keys, logout, meQuery } from "@/api/queries";
+import { CommandPalette } from "@/components/command-palette";
 import { Logo } from "@/components/logo";
+import { PrivacyToggle } from "@/components/privacy-toggle";
+import { ShortcutsDialog } from "@/components/shortcuts-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
+import { useHotkey } from "@/hooks/use-hotkey";
+import { usePrivacy } from "@/hooks/use-privacy";
 import { S } from "@/strings.zh";
 
 type NavItem = { to: string; label: string; icon: LucideIcon };
@@ -80,6 +87,7 @@ function Sidebar() {
         >
           {me.data?.username}
         </span>
+        <PrivacyToggle />
         <ThemeToggle />
         <Button
           variant="ghost"
@@ -103,6 +111,7 @@ function MobileBars() {
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-card/90 px-4 backdrop-blur lg:hidden">
         <Logo />
         <div className="flex items-center gap-1">
+          <PrivacyToggle />
           <ThemeToggle />
           <Button
             variant="ghost"
@@ -139,10 +148,34 @@ function MobileBars() {
   );
 }
 
+/**
+ * The app-wide overlays and their keys: the command palette (Ctrl/⌘+K), the shortcuts
+ * help (?) and privacy mode (Shift+H). Toasts (undo) render here too.
+ */
+function GlobalOverlays() {
+  const [open, setOpen] = useState<"palette" | "shortcuts" | null>(null);
+  const privacy = usePrivacy();
+  useHotkey({ key: "k", mod: true }, () => setOpen((current) => (current === "palette" ? null : "palette")), {
+    whileTyping: true,
+  });
+  useHotkey({ key: "?" }, () => setOpen("shortcuts"));
+  useHotkey({ key: "h", shift: true }, privacy.toggle);
+  return (
+    <>
+      {open === "palette" ? (
+        <CommandPalette pages={NAV} onClose={() => setOpen(null)} onShortcuts={() => setOpen("shortcuts")} />
+      ) : null}
+      {open === "shortcuts" ? <ShortcutsDialog onClose={() => setOpen(null)} /> : null}
+      <Toaster position="bottom-center" offset={{ bottom: 24 }} mobileOffset={{ bottom: 72 }} />
+    </>
+  );
+}
+
 /** Shell of the signed-in app: sidebar from `lg` up, top bar and tab bar below it. */
 export function AppLayout() {
   return (
     <div className="min-h-dvh">
+      <GlobalOverlays />
       <Sidebar />
       <MobileBars />
       <main className="pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0 lg:pl-56">

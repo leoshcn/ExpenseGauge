@@ -68,7 +68,7 @@ export function ShareChart({
                               />
                               {sliceName(slice)}
                             </span>
-                            <span className="font-medium">{money(slice.amount)}</span>
+                            <span className="amount font-medium">{money(slice.amount)}</span>
                           </div>
                         );
                       }}
@@ -92,7 +92,7 @@ export function ShareChart({
             </ChartContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
               <span className="text-xs text-muted-foreground">{T.total}</span>
-              <span className="num max-w-full truncate text-base font-semibold">{money(total)}</span>
+              <span className="num amount max-w-full truncate text-base font-semibold">{money(total)}</span>
             </div>
           </div>
 
@@ -108,7 +108,7 @@ export function ShareChart({
                 <span className="num w-12 text-right text-xs text-muted-foreground">
                   {formatPercent(slice.share, true)}
                 </span>
-                <span className="num w-24 text-right font-medium">{money(slice.amount)}</span>
+                <span className="num amount w-24 text-right font-medium">{money(slice.amount)}</span>
               </li>
             ))}
           </ul>

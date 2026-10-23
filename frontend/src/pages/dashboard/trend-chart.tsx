@@ -9,6 +9,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { usePrivacy } from "@/hooks/use-privacy";
 import { formatMoney, formatMoneyCompact } from "@/lib/money";
 import { S } from "@/strings.zh";
 
@@ -148,6 +149,7 @@ export function TrendChart({
   className?: string;
 }) {
   const compact = useMediaQuery("(max-width: 639px)");
+  const { hidden } = usePrivacy();
   const points = trendPoints(summary.months);
   const ticks = niceTicks(points);
   // Annual accounts' spending is stacked on the monthly actual ("全部" only); it is not
@@ -198,7 +200,7 @@ export function TrendChart({
             ticks={ticks}
             domain={ticks ? [0, ticks.at(-1)!] : undefined}
             fontSize={compact ? 11 : 12}
-            tickFormatter={(value: number) => formatMoneyCompact(value, summary.currency)}
+            tickFormatter={(value: number) => (hidden ? S.privacy.hiddenTick : formatMoneyCompact(value, summary.currency))}
             className="num"
           />
           <ChartTooltip
@@ -233,7 +235,7 @@ export function TrendChart({
                         />
                         {isBudget ? T.trend.legendBudget : isAnnual ? T.trend.legendAnnual : T.trend.legendActual}
                       </span>
-                      <span className={cn("font-medium", name === "actual" && point.over && "text-over")}>
+                      <span className={cn("amount font-medium", name === "actual" && point.over && "text-over")}>
                         {text === null ? T.summary.noBudget : formatMoney(text, summary.currency)}
                       </span>
                     </div>

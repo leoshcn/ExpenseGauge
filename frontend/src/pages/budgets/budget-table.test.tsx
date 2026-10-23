@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/api/client";
+import { S } from "@/strings.zh";
 
 import { BudgetTable } from "./budget-table";
 import { type BudgetDraft, budgetChanges, groupLines } from "./model";
@@ -104,8 +105,19 @@ describe("BudgetTable", () => {
     await user.clear(input("买菜"));
     await user.type(input("买菜"), "-5");
     expect(input("买菜")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByText("请输入不小于 0 的金额，最多两位小数")).toBeInTheDocument();
+    expect(screen.getByText(S.budgets.invalid)).toBeInTheDocument();
     expect(latest).toEqual({ items: [], invalid: [11] });
+  });
+
+  it("replaces a calculation by its result when the input loses focus", async () => {
+    const user = userEvent.setup();
+    let latest: ReturnType<typeof budgetChanges> = { items: [], invalid: [] };
+    render(<Harness onItems={(items) => (latest = items)} />);
+    await user.clear(input("买菜"));
+    await user.type(input("买菜"), "1800*1.1");
+    expect(latest).toEqual({ items: [{ category_id: 11, amount: "1980.00" }], invalid: [] });
+    await user.tab();
+    expect(input("买菜")).toHaveValue("1980.00");
   });
 
   it("names each row's budget account only in the all-accounts view", () => {

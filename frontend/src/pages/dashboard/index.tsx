@@ -7,6 +7,7 @@ import { annualSummaryQuery, type BudgetScope, monthDetailQuery, monthlySummaryQ
 import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { ErrorState } from "@/components/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useMonthHotkeys } from "@/hooks/use-hotkey";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { yearProgress } from "@/lib/budget";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
@@ -233,6 +234,7 @@ export function DashboardPage() {
   const accounts = budgetAccounts.data ?? [];
   const annualScope = scope != null && accounts.find((account) => account.id === scope)?.period === "year";
   const onMonthChange = (next: string) => update({ month: next });
+  useMonthHotkeys({ month, current: lastMonth, onChange: onMonthChange, min: firstMonth, max: lastMonth });
 
   let body;
   if (budgetAccounts.isLoadingError) {

@@ -104,7 +104,7 @@ function Row({
               />
             </div>
           )}
-          <div className={cn("num text-xs text-muted-foreground", over && "text-over")}>
+          <div className={cn("num text-xs text-muted-foreground", over && "text-over", row.budget !== null && "amount")}>
             {row.budget === null || remaining === null
               ? T.noBudget
               : `${T.budgetOf(money(row.budget))} · ${over ? remaining : T.remainingOf(remaining)}`}
@@ -115,11 +115,11 @@ function Row({
         {row.budget === null ? (
           <span className="text-xs text-muted-foreground">{T.noBudget}</span>
         ) : (
-          money(row.budget)
+          <span className="amount">{money(row.budget)}</span>
         )}
       </td>
       <td className={cn("num px-4 text-right align-top font-medium whitespace-nowrap max-md:w-px sm:px-5 md:px-3 md:align-middle", cell)}>
-        {money(row.actual)}
+        <span className="amount">{money(row.actual)}</span>
         {/* Below `md` the percentage sits under the amount, level with the meter. */}
         {percent ? (
           <div className={cn("mt-1.5 text-xs font-normal text-muted-foreground md:hidden", over && "font-medium text-over")}>
@@ -131,7 +131,11 @@ function Row({
       </td>
       <td className={cn("num hidden px-3 text-right text-muted-foreground md:table-cell", cell)}>{row.count}</td>
       <td className={cn("num hidden px-3 text-right md:table-cell", cell, over && "font-medium text-over")}>
-        {remaining ?? <span className="text-muted-foreground">{S.common.none}</span>}
+        {remaining === null ? (
+          <span className="text-muted-foreground">{S.common.none}</span>
+        ) : (
+          <span className="amount">{remaining}</span>
+        )}
       </td>
       <td className={cn("hidden w-[22%] min-w-40 py-3 pr-5 pl-3 md:table-cell", cell)}>
         {used.state === "none" ? (

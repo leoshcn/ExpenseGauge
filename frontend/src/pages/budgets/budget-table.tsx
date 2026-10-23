@@ -5,6 +5,7 @@ import { useId } from "react";
 import type { Schemas } from "@/api/client";
 import { Input } from "@/components/ui/input";
 import { formatMonth } from "@/lib/date";
+import { isExpression } from "@/lib/expr";
 import { currencySymbol, formatMoney } from "@/lib/money";
 import { S } from "@/strings.zh";
 
@@ -37,7 +38,11 @@ function PeriodFigure({
   money: (value: string) => string;
 }) {
   const figure = (value: string | null) =>
-    value === null ? <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span> : money(value);
+    value === null ? (
+      <span className="text-xs font-normal text-muted-foreground">{T.noBudget}</span>
+    ) : (
+      <span className="amount">{money(value)}</span>
+    );
   if (sums.year === undefined) return figure(sums.month ?? null);
   const parts = (["month", "year"] as const).filter((period) => sums[period] !== undefined);
   return (
@@ -59,7 +64,7 @@ function InForce({ line, money }: { line: Schemas["BudgetLine"]; money: (v: stri
   return (
     <>
       <div className="num">
-        <span>{money(line.amount)}</span>
+        <span className="amount">{money(line.amount)}</span>
         <Per period={line.period} />
       </div>
       {since ? <div className="num text-xs whitespace-nowrap text-muted-foreground">{T.since(since)}</div> : null}
@@ -102,6 +107,15 @@ function AmountInput({
             id={id}
             value={text}
             onChange={(event) => onChange(event.target.value)}
+            // A calculation ("1800*1.1") is replaced by its result once the user is done.
+            onBlur={() => {
+              if (parsed.valid && parsed.amount !== null && isExpression(text)) onChange(parsed.amount);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && parsed.valid && parsed.amount !== null && isExpression(text)) {
+                onChange(parsed.amount);
+              }
+            }}
             inputMode="decimal"
             autoComplete="off"
             placeholder={T.noBudget}
@@ -109,7 +123,7 @@ function AmountInput({
             aria-invalid={parsed.valid ? undefined : true}
             aria-describedby={note ? `${id}-note` : undefined}
             className={cn(
-              "num bg-card pr-8 pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
+              "num amount bg-card pr-8 pl-7 text-right placeholder:text-left placeholder:text-xs sm:pl-9",
               currencySymbol(currency).length > 1 && "pl-10 sm:pl-11",
               changed && parsed.valid && "border-primary",
             )}
@@ -138,7 +152,7 @@ function AmountInput({
       {note ? (
         <p
           id={`${id}-note`}
-          className={cn("num mr-8 text-right text-xs sm:mr-9", parsed.valid ? "text-muted-foreground" : "text-over")}
+          className={cn("num mr-8 text-right text-xs sm:mr-9", parsed.valid ? "amount text-muted-foreground" : "text-over")}
         >
           {note}
         </p>

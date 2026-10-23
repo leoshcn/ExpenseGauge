@@ -81,7 +81,7 @@ export function Figure({
         className={cn(
           "num truncate text-base font-medium",
           tone === "over" && "text-over",
-          tone === "muted" && "text-sm font-normal text-muted-foreground",
+          tone === "muted" ? "text-sm font-normal text-muted-foreground" : "amount",
         )}
       >
         {value}
@@ -131,7 +131,7 @@ export function MonthSummary({
 
       <div className="mt-5">
         <div className="text-xs text-muted-foreground">{T.summary.actual}</div>
-        <div className="num text-display font-semibold">{money(detail.actual)}</div>
+        <div className="num amount text-display font-semibold">{money(detail.actual)}</div>
         <p className="num mt-1 text-xs text-muted-foreground" title={T.summary.countHint}>
           {T.summary.count(detail.count)}
         </p>
@@ -139,7 +139,7 @@ export function MonthSummary({
         {toCents(detail.annual_actual) > 0 ? (
           <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.annualExtraHint}>
             <span aria-hidden="true" className="size-2 shrink-0 rounded-[2px] bg-chart-annual" />
-            {T.summary.annualExtra(money(detail.annual_actual))}
+            <span className="amount">{T.summary.annualExtra(money(detail.annual_actual))}</span>
           </p>
         ) : null}
       </div>
