@@ -298,11 +298,13 @@ with these meanings.
   the same place, in `--over`, and the cell goes back to the saved amount.
 - **Spent** links to the month's transactions of that category; a zero is muted.
 - **Month bar** (`month-bar.tsx`), after the month row on top of Actual Budget's budget
-  page: a card under the page header holding the 12-month window between ‹ › ghost
-  buttons, a small muted year above the first month and above each January. The months on
+  page: a card under the page header holding a window of 12 months between ‹ › ghost
+  buttons (by default up to two months after the current one; it slides to reach the
+  selected month, from 11 months back to 12 ahead), a small muted year above the first month and above each January. The months on
   screen (as many as the grid shows; one in an annual account's view) form one `--accent`
   block rounded at its ends; the selected month is semibold, the current one underlined.
-  Phones show the bare month number. It replaces the arrows that were on the summary card.
+  A future month has no AI insight card (nothing to analyse yet), so the summary takes the
+  full width. Phones show the bare month number. It replaces the arrows that were on the summary card.
 - **Compact cards.** The month summary puts the spending and its notes beside the budget,
   remaining and meter (stacked below `sm`), with a `text-2xl` amount instead of the
   display size. The scheduled-expense and annual cards fold to a heading button with a

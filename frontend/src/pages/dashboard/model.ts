@@ -246,3 +246,23 @@ export function budgetEditText(budget: string | null): string {
   if (budget === null) return "";
   return budget.endsWith(".00") ? budget.slice(0, -3) : budget;
 }
+
+/** Months the month bar lists at once. */
+export const BAR_MONTHS = 12;
+/** Future months the bar lists by default, after the current one. */
+const BAR_AHEAD = 2;
+
+/**
+ * The first month of the month bar's window of `BAR_MONTHS`, which always holds `month`:
+ * by default the current month with `BAR_AHEAD` future months after it; when `month` is
+ * outside that, the window slides just enough to reach it. It never goes beyond `min` or
+ * `max`, the selectable range.
+ */
+export function barStart(month: string, current: string, min: string, max: string): string {
+  let start = addMonths(current, BAR_AHEAD - BAR_MONTHS + 1);
+  if (month < start) start = month;
+  if (month > addMonths(start, BAR_MONTHS - 1)) start = addMonths(month, -(BAR_MONTHS - 1));
+  if (start < min) start = min;
+  const latest = addMonths(max, -(BAR_MONTHS - 1));
+  return start > latest ? latest : start;
+}

@@ -37,6 +37,8 @@ import { ShareChart } from "./share-chart";
 
 const T = S.dashboard;
 const WINDOW_MONTHS = 12;
+/** How far ahead a month can be chosen, to plan its budgets. */
+const AHEAD_MONTHS = 12;
 
 function DashboardSkeleton() {
   return (
@@ -141,6 +143,9 @@ function DashboardBody({
   }
   if (isWindowEmpty(summary.data.months)) return <EmptyState scoped={scope !== null} />;
 
+  // The AI insight is about everything, so it is not offered for one budget account; nor
+  // for a future month, which has nothing to analyse yet.
+  const insight = scope === null && month <= lastMonth;
   const pending = details.some((each) => each.isPlaceholderData) || (withAnnual && annual.isPlaceholderData);
 
   return (
@@ -153,10 +158,9 @@ function DashboardBody({
         month={month}
         now={now}
         forecast={month === lastMonth ? (schedules.data?.forecast ?? null) : null}
-        className={scope === null ? "lg:col-span-2" : "lg:col-span-3"}
+        className={insight ? "lg:col-span-2" : "lg:col-span-3"}
       />
-      {/* The AI insight is about everything, so it is not offered for one budget account. */}
-      {scope === null ? <InsightCard month={month} /> : null}
+      {insight ? <InsightCard month={month} /> : null}
       <BudgetGrid
         details={loaded}
         current={lastMonth}
@@ -259,14 +263,15 @@ export function DashboardPage() {
 
   const lastMonth = monthOf(now);
   const firstMonth = addMonths(lastMonth, -(WINDOW_MONTHS - 1));
+  const maxMonth = addMonths(lastMonth, AHEAD_MONTHS);
   const requested = params.get("month");
   const month =
-    isMonth(requested) && requested >= firstMonth && requested <= lastMonth ? requested : lastMonth;
+    isMonth(requested) && requested >= firstMonth && requested <= maxMonth ? requested : lastMonth;
   const accounts = budgetAccounts.data ?? [];
   const annualScope = scope != null && accounts.find((account) => account.id === scope)?.period === "year";
   const onMonthChange = (next: string) => update({ month: next });
   const gridMonthCount = useGridMonthCount();
-  useMonthHotkeys({ month, current: lastMonth, onChange: onMonthChange, min: firstMonth, max: lastMonth });
+  useMonthHotkeys({ month, current: lastMonth, onChange: onMonthChange, min: firstMonth, max: maxMonth });
 
   let body;
   if (budgetAccounts.isLoadingError) {
@@ -320,8 +325,9 @@ export function DashboardPage() {
       </div>
       <MonthBar
         month={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
+        current={lastMonth}
+        min={firstMonth}
+        max={maxMonth}
         // An annual account's view shows one month ("through"); the grid as many as fit.
         shown={annualScope ? 1 : gridMonthCount}
         onMonthChange={onMonthChange}

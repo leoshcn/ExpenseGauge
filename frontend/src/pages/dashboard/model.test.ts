@@ -4,6 +4,7 @@ import type { Schemas } from "@/api/client";
 
 import {
   annualTrendPoints,
+  barStart,
   budgetEditText,
   gridMonths,
   hasAnnual,
@@ -189,5 +190,20 @@ describe("budgetEditText", () => {
     expect(budgetEditText("12.50")).toBe("12.50");
     expect(budgetEditText("0.00")).toBe("0");
     expect(budgetEditText(null)).toBe("");
+  });
+});
+
+describe("barStart", () => {
+  const at = (month: string) => barStart(month, "2026-10", "2025-11", "2027-10");
+  it("shows two months ahead by default", () => {
+    expect(at("2026-10")).toBe("2026-01");
+    expect(at("2026-01")).toBe("2026-01");
+    expect(at("2026-12")).toBe("2026-01");
+  });
+  it("slides just enough to reach the month, within the range", () => {
+    expect(at("2027-01")).toBe("2026-02");
+    expect(at("2027-10")).toBe("2026-11");
+    expect(at("2025-12")).toBe("2025-12");
+    expect(at("2025-11")).toBe("2025-11");
   });
 });
