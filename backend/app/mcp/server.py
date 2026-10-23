@@ -1,4 +1,4 @@
-"""MCP server: five tools over the same service functions the REST routers call.
+"""MCP server: seven tools over the same service functions the REST routers call.
 
 No rule lives here. A tool opens a database session, calls one service function and
 returns the REST payload. Authentication is the ASGI middleware below, which uses the
@@ -22,7 +22,7 @@ from app.db import get_sessionmaker
 from app.deps import bearer_value
 from app.errors import AppError
 from app.schemas.channel import ChannelOut
-from app.schemas.transaction import RawTransactionItem
+from app.schemas.transaction import RawRecategorizeItem, RawTransactionItem, TransactionKind
 from app.services import auth as auth_service
 from app.services import budgets as budget_service
 from app.services import categories as category_service
@@ -40,7 +40,11 @@ INSTRUCTIONS = (
     "Before submitting a refund (negative amount), call find_payments to find the payment it "
     "reverses and set the refund's refund_of_id (or refund_of_index when that payment is an "
     "item of the same batch); if you cannot find it or are unsure, ask the user, and leave "
-    "both out if it still cannot be determined (the refund is then stored unmatched)."
+    "both out if it still cannot be determined (the refund is then stored unmatched). "
+    "A stored transaction's category may be changed with recategorize_transactions (find it "
+    "with find_transactions), only when the user asked for it or confirmed it; give each "
+    "change a clear reason, which is appended to the transaction's note for the user to read. "
+    "Nothing else of a stored transaction can be changed."
 )
 
 
@@ -191,6 +195,65 @@ def create_mcp_server() -> MCPServer:
         except AppError as error:
             if error.code == "BATCH_REJECTED":
                 # A normal result, so the agent reads the per-item feedback.
+                return {"accepted": False, **error.envelope()}
+            return _error_result(error)
+        return accepted.model_dump(mode="json")
+
+    @server.tool()
+    async def find_transactions(
+        date_from: date,
+        date_to: date,
+        channel_id: int | None = None,
+        category_id: int | None = None,
+        q: str | None = None,
+        kind: TransactionKind | None = None,
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        """Find stored transactions (payments and refunds), to recategorize them:
+        `{"transactions": [{id, channel_id, channel_name, category_id, category_name,
+        parent_category_id, parent_category_name, date, amount, counterparty, description,
+        note, refund_of, ...}]}`, newest first.
+
+        `date_from` / `date_to` (YYYY-MM-DD, inclusive) may span at most 366 days. Optional
+        `channel_id`; `category_id` (a level-1 category matches all its level-2 children);
+        `q` (counterparty or description, matched anywhere, ignoring case); `kind`
+        (`"payment"` or `"refund"`; omitted, both). `limit` is 1 to 50. A refund with a
+        non-null `refund_of` is matched to a payment: its category is the payment's and it
+        cannot be recategorized on its own.
+        """
+        try:
+            found = await _run(
+                lambda db: transaction_service.search_transactions(
+                    db, date_from, date_to, channel_id, category_id, q, kind, limit
+                )
+            )
+        except AppError as error:
+            return _error_result(error)
+        return found.model_dump(mode="json")
+
+    @server.tool()
+    async def recategorize_transactions(items: list[RawRecategorizeItem]) -> dict[str, Any]:
+        """Change the category of stored transactions. All or nothing; 1 to 100 items.
+
+        Each item: `transaction_id` (from find_transactions), `category_id` (the new
+        level-2 category) and `reason` (1 to 200 characters: why the category is wrong).
+        Only call this when the user asked for the change or confirmed it. Each change
+        appends `[Agent 改分类] <old parent>/<old> → <new parent>/<new>：<reason>` as a new
+        line to the transaction's note; the existing note is kept. Nothing else changes.
+
+        On success: `{"accepted": true, "transactions": [...]}`. If any item is rejected
+        nothing is changed and the result is `{"accepted": false, "code": "BATCH_REJECTED",
+        "message", "details": {"items": [...]}}` with a reason code per item:
+        `INVALID_FIELD`, `DUPLICATE_TRANSACTION` (same transaction twice in one call),
+        `TRANSACTION_NOT_FOUND`, `CATEGORY_NOT_FOUND`, `CATEGORY_NOT_LEAF`,
+        `REFUND_CATEGORY_FOLLOWS_PAYMENT` (a matched refund), `CATEGORY_UNCHANGED` (already
+        in that category) or `NOTE_TOO_LONG` (the note would exceed 1000 characters;
+        shorten the reason).
+        """
+        try:
+            accepted = await _run(lambda db: transaction_service.recategorize(db, items))
+        except AppError as error:
+            if error.code == "BATCH_REJECTED":
                 return {"accepted": False, **error.envelope()}
             return _error_result(error)
         return accepted.model_dump(mode="json")

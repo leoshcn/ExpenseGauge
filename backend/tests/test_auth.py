@@ -27,7 +27,9 @@ AGENT_ALLOWED = {
     ("GET", f"{API}/categories"),
     ("GET", f"{API}/budgets"),
     ("GET", f"{API}/payments/search"),
+    ("GET", f"{API}/transactions/search"),
     ("POST", f"{API}/channels/{{channel_id}}/transactions/batch"),
+    ("POST", f"{API}/transactions/recategorize"),
 }
 
 

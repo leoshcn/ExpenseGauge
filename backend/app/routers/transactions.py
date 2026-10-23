@@ -10,9 +10,13 @@ from app.schemas.transaction import (
     BatchAcceptedOut,
     BatchSubmitIn,
     PaymentSearchOut,
+    RecategorizeAcceptedOut,
+    RecategorizeIn,
     RefundCandidatePage,
+    TransactionKind,
     TransactionOut,
     TransactionPage,
+    TransactionSearchOut,
     TransactionUpdateIn,
 )
 from app.services import transactions as transaction_service
@@ -65,6 +69,50 @@ def list_transactions(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/transactions/search", response_model=TransactionSearchOut)
+def search_transactions(
+    principal: AnyPrincipal,
+    db: DbSession,
+    date_from: date,
+    date_to: date,
+    channel_id: int | None = None,
+    category_id: int | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    kind: TransactionKind | None = None,
+    limit: int = 20,
+):
+    """Stored payments and refunds between two dates (inclusive, at most 366 days), to find
+    transactions to recategorize. A level-1 `category_id` matches its level-2 children; `q`
+    searches counterparty and description. Open to agent tokens; the MCP
+    `find_transactions` tool returns the same."""
+    return transaction_service.search_transactions(
+        db,
+        date_from,
+        date_to,
+        channel_id=channel_id,
+        category_id=category_id,
+        q=q,
+        kind=kind,
+        limit=limit,
+    )
+
+
+@router.post(
+    "/transactions/recategorize",
+    response_model=RecategorizeAcceptedOut,
+    responses={
+        409: {
+            "model": ErrorEnvelope,
+            "description": "BATCH_REJECTED: nothing changed; details.items has one entry per item",
+        }
+    },
+)
+def recategorize(payload: RecategorizeIn, principal: AnyPrincipal, db: DbSession):
+    """All-or-nothing category changes, each with a reason appended to the transaction's
+    note. Open to agent tokens; the MCP `recategorize_transactions` tool does the same."""
+    return transaction_service.recategorize(db, payload.items)
 
 
 @router.get("/transactions/{transaction_id}/refund-candidates", response_model=RefundCandidatePage)

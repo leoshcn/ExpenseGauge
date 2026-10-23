@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, StringConstraints, WithJsonSchema, field_validator, model_validator
 
@@ -8,6 +8,11 @@ from app.schemas.common import Money, NoNul, RequestSchema, Schema
 MAX_BATCH_ITEMS = 500
 MAX_PAYMENT_SEARCH_DAYS = 366
 MAX_PAYMENT_SEARCH_LIMIT = 50
+MAX_RECATEGORIZE_ITEMS = 100
+MAX_REASON_LENGTH = 200
+MAX_NOTE_LENGTH = 1000
+
+TransactionKind = Literal["payment", "refund"]
 
 
 class TransactionItemIn(RequestSchema):
@@ -23,7 +28,7 @@ class TransactionItemIn(RequestSchema):
         str, StringConstraints(strip_whitespace=True, max_length=1000), NoNul
     ] = ""
     category_id: int = Field(description="A level-2 category (any budget account)")
-    note: Annotated[str, StringConstraints(max_length=1000), NoNul] | None = None
+    note: Annotated[str, StringConstraints(max_length=MAX_NOTE_LENGTH), NoNul] | None = None
     confirm_duplicate: bool = Field(
         default=False,
         description="Single-use: set only after the user confirmed a reported duplicate is real",
@@ -138,7 +143,7 @@ class TransactionUpdateIn(RequestSchema):
     are left unchanged."""
 
     category_id: int | None = None
-    note: Annotated[str, StringConstraints(max_length=1000), NoNul] | None = None
+    note: Annotated[str, StringConstraints(max_length=MAX_NOTE_LENGTH), NoNul] | None = None
     refund_of_id: int | None = Field(
         default=None,
         description="Refunds only: the payment to match (or re-match) this refund to;"
@@ -164,3 +169,34 @@ class PaymentOut(Schema):
 
 class PaymentSearchOut(Schema):
     payments: list[PaymentOut] = Field(description="Newest first")
+
+
+class TransactionSearchOut(Schema):
+    transactions: list[TransactionOut] = Field(description="Newest first")
+
+
+class RecategorizeItemIn(RequestSchema):
+    """One category change by an agent. Validated per item by the service, like a batch
+    item, so a bad field is reported as an `INVALID_FIELD` item."""
+
+    transaction_id: int
+    category_id: int = Field(description="The new level-2 category")
+    reason: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=MAX_REASON_LENGTH),
+        NoNul,
+    ] = Field(description="Why the category is changed; appended to the transaction's note")
+
+
+RawRecategorizeItem = Annotated[
+    dict[str, Any], WithJsonSchema(RecategorizeItemIn.model_json_schema())
+]
+
+
+class RecategorizeIn(RequestSchema):
+    items: list[RawRecategorizeItem] = Field(description=f"1 to {MAX_RECATEGORIZE_ITEMS} items")
+
+
+class RecategorizeAcceptedOut(Schema):
+    accepted: bool = True
+    transactions: list[TransactionOut]
