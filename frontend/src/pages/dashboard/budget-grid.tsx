@@ -5,7 +5,7 @@ import { Link } from "react-router";
 
 import { errorMessage, type Schemas } from "@/api/client";
 import { Button } from "@/components/ui/button";
-import { useMediaQuery } from "@/hooks/use-media-query";
+import { useGridMonthCount } from "@/hooks/use-grid-month-count";
 import { rolloverBudget, usage } from "@/lib/budget";
 import { formatMonth } from "@/lib/date";
 import { currencySymbol, formatAmount, toCents } from "@/lib/money";
@@ -13,7 +13,7 @@ import { parseMonth } from "@/lib/month";
 import { parseBudgetInput, sameBudget } from "@/pages/budgets/model";
 import { S } from "@/strings.zh";
 
-import { budgetEditText, GRID_MONTHS, type GridChild, type GridParent, mergeGridRows } from "./model";
+import { budgetEditText, type GridChild, type GridParent, mergeGridRows } from "./model";
 
 const T = S.dashboard.grid;
 
@@ -380,10 +380,7 @@ export function BudgetGrid({
   onSave: SaveBudget;
   className?: string;
 }) {
-  const wide = useMediaQuery("(min-width: 80rem)");
-  const medium = useMediaQuery("(min-width: 48rem)");
-  const visible = wide ? GRID_MONTHS : medium ? 2 : 1;
-  const shown = details.slice(-visible);
+  const shown = details.slice(-useGridMonthCount());
   const selected = shown[shown.length - 1]!;
   const rows = mergeGridRows(shown);
   const currency = selected.currency;

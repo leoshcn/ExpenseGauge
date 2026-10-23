@@ -1,65 +1,27 @@
 import { cn } from "cn";
-import { CalendarClockIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
+import { CalendarClockIcon, RefreshCwIcon } from "lucide-react";
 
 import type { Schemas } from "@/api/client";
 import { BudgetMeter } from "@/components/budget-meter";
-import { Button } from "@/components/ui/button";
 import { countByState, usage, usagePercent } from "@/lib/budget";
 import { absolute, formatMoney, formatPercent, toCents } from "@/lib/money";
-import { addMonths, monthElapsed, parseMonth } from "@/lib/month";
+import { monthElapsed, parseMonth } from "@/lib/month";
 import { S } from "@/strings.zh";
-
 
 const T = S.dashboard;
 
-/** The summary card's title with the "本月" chip and the previous/next month buttons. */
-export function MonthHeader({
-  title,
-  current,
-  month,
-  firstMonth,
-  lastMonth,
-  onMonthChange,
-}: {
-  title: string;
-  current: boolean;
-  month: string;
-  firstMonth: string;
-  lastMonth: string;
-  onMonthChange: (month: string) => void;
-}) {
+/** The summary card's title with the "本月" chip; the month is chosen in the month bar. */
+export function MonthHeader({ title, current }: { title: string; current: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2">
-        <h2 className="num text-base font-semibold" aria-live="polite">
-          {title}
-        </h2>
-        {current ? (
-          <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
-            {T.month.current}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex gap-1">
-        <Button
-          variant="outline"
-          size="icon-sm"
-          disabled={month <= firstMonth}
-          onClick={() => onMonthChange(addMonths(month, -1))}
-          aria-label={T.month.previous}
-        >
-          <ChevronLeftIcon />
-        </Button>
-        <Button
-          variant="outline"
-          size="icon-sm"
-          disabled={month >= lastMonth}
-          onClick={() => onMonthChange(addMonths(month, 1))}
-          aria-label={T.month.next}
-        >
-          <ChevronRightIcon />
-        </Button>
-      </div>
+    <div className="flex items-center gap-2">
+      <h2 className="num text-base font-semibold" aria-live="polite">
+        {title}
+      </h2>
+      {current ? (
+        <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-accent-foreground">
+          {T.month.current}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -91,15 +53,12 @@ export function Figure({
 }
 
 /**
- * The selected month at a glance, compact: the month stepper; the month's spending and its
+ * The selected month at a glance, compact: the month's spending and its
  * notes beside the budget, remaining and overall meter (stacked on phones).
  */
 export function MonthSummary({
   detail,
   month,
-  firstMonth,
-  lastMonth,
-  onMonthChange,
   now,
   forecast = null,
   className,
@@ -108,9 +67,6 @@ export function MonthSummary({
   /** The current month's forecast from the scheduled expenses, when there is one. */
   forecast?: Schemas["ScheduleForecast"] | null;
   month: string;
-  firstMonth: string;
-  lastMonth: string;
-  onMonthChange: (month: string) => void;
   now: Date;
   className?: string;
 }) {
@@ -129,10 +85,6 @@ export function MonthSummary({
       <MonthHeader
         title={T.month.long(year, monthNumber)}
         current={elapsed !== null}
-        month={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
       />
 
       <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:gap-6">

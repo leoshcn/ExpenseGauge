@@ -16,6 +16,7 @@ import {
 import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { ErrorState } from "@/components/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useGridMonthCount } from "@/hooks/use-grid-month-count";
 import { useMonthHotkeys } from "@/hooks/use-hotkey";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { yearProgress } from "@/lib/budget";
@@ -29,6 +30,7 @@ import { BudgetGrid } from "./budget-grid";
 import { CategoryTable } from "./category-table";
 import { InsightCard } from "./insight-card";
 import { gridMonths, isWindowEmpty } from "./model";
+import { MonthBar } from "./month-bar";
 import { MonthSummary } from "./month-summary";
 import { ScheduleCard } from "./schedule-card";
 import { ShareChart } from "./share-chart";
@@ -70,7 +72,6 @@ function DashboardBody({
   month,
   firstMonth,
   lastMonth,
-  onMonthChange,
   onOpenAccount,
   withAnnual,
   now,
@@ -79,7 +80,6 @@ function DashboardBody({
   month: string;
   firstMonth: string;
   lastMonth: string;
-  onMonthChange: (month: string) => void;
   onOpenAccount: (budgetAccountId: number) => void;
   /** Show the annual card: "全部" with at least one annual budget account. */
   withAnnual: boolean;
@@ -151,9 +151,6 @@ function DashboardBody({
       <MonthSummary
         detail={detail.data}
         month={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         now={now}
         forecast={month === lastMonth ? (schedules.data?.forecast ?? null) : null}
         className={scope === null ? "lg:col-span-2" : "lg:col-span-3"}
@@ -233,9 +230,6 @@ function AnnualBody({
         account={account}
         currency={currency}
         through={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         now={now}
       />
       <AnnualTrendChart
@@ -271,6 +265,7 @@ export function DashboardPage() {
   const accounts = budgetAccounts.data ?? [];
   const annualScope = scope != null && accounts.find((account) => account.id === scope)?.period === "year";
   const onMonthChange = (next: string) => update({ month: next });
+  const gridMonthCount = useGridMonthCount();
   useMonthHotkeys({ month, current: lastMonth, onChange: onMonthChange, min: firstMonth, max: lastMonth });
 
   let body;
@@ -304,7 +299,6 @@ export function DashboardPage() {
         month={month}
         firstMonth={firstMonth}
         lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         onOpenAccount={(id) => update({ scope: id })}
         withAnnual={scope === null && accounts.some((account) => account.period === "year")}
         now={now}
@@ -324,6 +318,15 @@ export function DashboardPage() {
           />
         ) : null}
       </div>
+      <MonthBar
+        month={month}
+        firstMonth={firstMonth}
+        lastMonth={lastMonth}
+        // An annual account's view shows one month ("through"); the grid as many as fit.
+        shown={annualScope ? 1 : gridMonthCount}
+        onMonthChange={onMonthChange}
+        className="rounded-xl border bg-card px-2 py-1.5 shadow-card sm:px-3"
+      />
       {body}
     </div>
   );

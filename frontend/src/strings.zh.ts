@@ -246,6 +246,10 @@ export const S = {
       progressLabel: (name: string) => `「${name}」预算使用进度`,
       noBudgetProgress: "仅统计实际支出",
     },
+    monthBar: {
+      label: "选择月份",
+      year: (year: number) => `${year}`,
+    },
     /** The three-month budget grid. */
     grid: {
       title: "预算执行",

@@ -297,13 +297,20 @@ with these meanings.
   `--destructive` and keeps the input open; a failed save shows the backend message in
   the same place, in `--over`, and the cell goes back to the saved amount.
 - **Spent** links to the month's transactions of that category; a zero is muted.
+- **Month bar** (`month-bar.tsx`), after the month row on top of Actual Budget's budget
+  page: a card under the page header holding the 12-month window between ‹ › ghost
+  buttons, a small muted year above the first month and above each January. The months on
+  screen (as many as the grid shows; one in an annual account's view) form one `--accent`
+  block rounded at its ends; the selected month is semibold, the current one underlined.
+  Phones show the bare month number. It replaces the arrows that were on the summary card.
 - **Compact cards.** The month summary puts the spending and its notes beside the budget,
   remaining and meter (stacked below `sm`), with a `text-2xl` amount instead of the
   display size. The scheduled-expense and annual cards fold to a heading button with a
   chevron: the schedules show their counts (vermilion when something is overdue, and then
   open by default); the annual card lists each account's "年初至今 / 年度预算" on one line,
   each opening that account's view. The AI insight card is one or two lines with a tone
-  icon each; the model and time replace the month under its title.
+  icon each, the model and time in muted 12 px text at the bottom; once there is an
+  insight, regenerating is a ghost icon button right of the title (a spinner while it runs).
 
 ## States
 

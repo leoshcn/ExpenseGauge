@@ -43,7 +43,8 @@ agent-fed, expense-only ledger:
   (two months on a tablet, one on a phone), with the month totals on top. Click a budget
   to change it in place (calculations accepted); like the budgets page it applies from that
   month on, to later months that have no budget of their own. Click a spent figure for its
-  transactions. Above the grid: the month's summary and a one- or two-sentence AI insight;
+  transactions. A month bar on top lists the last 12 months and marks those on screen;
+  click one to move there. Above the grid: the month's summary and a one- or two-sentence AI insight;
   below it, this month's scheduled expenses and the annual budget accounts, folded.
 - **Budgets page (预算)**: last month's actual and the 3-month average (last year for an
   annual budget) beside each input, as click-to-fill buttons, and "fill all" from either.

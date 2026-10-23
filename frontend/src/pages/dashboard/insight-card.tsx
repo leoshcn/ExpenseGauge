@@ -51,7 +51,8 @@ function Lines({ lines }: { lines: readonly Schemas["InsightPoint"][] }) {
 }
 
 /**
- * The AI insight of the selected month in "全部": one or two short sentences. Only the
+ * The AI insight of the selected month in "全部": one or two short sentences, with the
+ * model and time at the bottom and regenerating as an icon beside the title. Only the
  * user's click asks the model; opening the Dashboard reads the cached result. Its own
  * loading and failures never hold back the rest of the page.
  */
@@ -108,14 +109,30 @@ export function InsightCard({ month, className }: { month: string; className?: s
       aria-busy={generating}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-baseline gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <h2 className="flex items-center gap-1.5 text-base font-semibold">
             <SparklesIcon className="size-4 text-primary" aria-hidden="true" />
             {T.title}
           </h2>
-          <p className="num truncate text-xs text-muted-foreground">
-            {insight ? T.meta(insight.model, formatDateTime(insight.generated_at)) : T.description(year, number)}
-          </p>
+          {/* Once there is an insight, regenerating is an icon beside the title. */}
+          {canGenerate && insight ? (
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="text-muted-foreground"
+              disabled={generate.isPending}
+              onClick={() => generate.mutate(month)}
+              aria-label={generating ? T.generating : T.regenerate}
+              title={generating ? T.generating : T.regenerate}
+            >
+              {generating ? (
+                <LoaderCircleIcon className="animate-spin" aria-hidden="true" />
+              ) : (
+                <RefreshCwIcon aria-hidden="true" />
+              )}
+            </Button>
+          ) : null}
+          <p className="num truncate text-xs text-muted-foreground">{T.description(year, number)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {data?.stale && insight ? (
@@ -123,21 +140,14 @@ export function InsightCard({ month, className }: { month: string; className?: s
               {T.stale}
             </span>
           ) : null}
-          {canGenerate ? (
-            <Button
-              size="sm"
-              variant={insight ? "ghost" : "outline"}
-              disabled={generate.isPending}
-              onClick={() => generate.mutate(month)}
-            >
+          {canGenerate && !insight ? (
+            <Button size="sm" variant="outline" disabled={generate.isPending} onClick={() => generate.mutate(month)}>
               {generating ? (
                 <LoaderCircleIcon className="animate-spin" aria-hidden="true" />
-              ) : insight ? (
-                <RefreshCwIcon aria-hidden="true" />
               ) : (
                 <SparklesIcon aria-hidden="true" />
               )}
-              {generating ? T.generating : insight ? T.regenerate : T.generate}
+              {generating ? T.generating : T.generate}
             </Button>
           ) : null}
         </div>
@@ -153,6 +163,11 @@ export function InsightCard({ month, className }: { month: string; className?: s
         </p>
       ) : null}
       {body}
+      {insight ? (
+        <p className="num mt-auto text-xs text-muted-foreground">
+          {T.meta(insight.model, formatDateTime(insight.generated_at))}
+        </p>
+      ) : null}
     </section>
   );
 }
