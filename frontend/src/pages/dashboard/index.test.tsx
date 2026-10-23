@@ -95,6 +95,11 @@ vi.mock("@/api/queries", async (importOriginal) => {
           return { currency: "CNY", year: Number(month.slice(0, 4)), through: month, accounts: [annualAccount()] };
         },
       }),
+    scheduleStatusQuery: (scope: BudgetScope, month: string) =>
+      queryOptions({
+        queryKey: actual.keys.scheduleStatus(scope, month),
+        queryFn: async (): Promise<Schemas["ScheduleStatusOut"]> => ({ month, items: [], forecast: null }),
+      }),
     insightQuery: (month: string) =>
       queryOptions({
         queryKey: actual.keys.insight(month),

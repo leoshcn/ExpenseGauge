@@ -3,7 +3,13 @@ import { cn } from "cn";
 import { InboxIcon } from "lucide-react";
 import { useState } from "react";
 
-import { annualSummaryQuery, type BudgetScope, monthDetailQuery, monthlySummaryQuery } from "@/api/queries";
+import {
+  annualSummaryQuery,
+  type BudgetScope,
+  monthDetailQuery,
+  monthlySummaryQuery,
+  scheduleStatusQuery,
+} from "@/api/queries";
 import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { ErrorState } from "@/components/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +26,7 @@ import { CategoryTable } from "./category-table";
 import { InsightCard } from "./insight-card";
 import { isWindowEmpty } from "./model";
 import { MonthSummary } from "./month-summary";
+import { ScheduleCard } from "./schedule-card";
 import { ShareChart } from "./share-chart";
 import { TrendChart } from "./trend-chart";
 
@@ -76,6 +83,8 @@ function DashboardBody({
   now: Date;
 }) {
   const summary = useQuery(monthlySummaryQuery(scope, firstMonth, lastMonth));
+  // Scheduled expenses: the current month only (the status of past months is history).
+  const schedules = useQuery({ ...scheduleStatusQuery(scope, month), enabled: month === lastMonth });
   const detail = useQuery({
     ...monthDetailQuery(scope, month),
     // Keep the previous month on screen while the next one loads, but never another
@@ -121,6 +130,7 @@ function DashboardBody({
         lastMonth={lastMonth}
         onMonthChange={onMonthChange}
         now={now}
+        forecast={month === lastMonth ? (schedules.data?.forecast ?? null) : null}
       />
       <TrendChart
         summary={summary.data}
@@ -128,6 +138,9 @@ function DashboardBody({
         onSelect={onMonthChange}
         className="lg:col-span-2"
       />
+      {month === lastMonth && schedules.data && schedules.data.items.length > 0 ? (
+        <ScheduleCard status={schedules.data} currency={detail.data.currency} now={now} className="lg:col-span-3" />
+      ) : null}
       {/* The AI insight is about everything, so it is not offered for one budget account. */}
       {scope === null ? <InsightCard month={month} className="lg:col-span-3" /> : null}
       {withAnnual && annual.data && annual.data.accounts.length > 0 ? (

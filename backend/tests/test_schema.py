@@ -46,7 +46,11 @@ def test_money_is_numeric_and_constraints_hold(client, ledger):
                 )
             ).all()
         )
-    assert types == {"budgets.amount": "numeric(14,2)", "transactions.amount": "numeric(14,2)"}
+    assert types == {
+        "budgets.amount": "numeric(14,2)",
+        "transactions.amount": "numeric(14,2)",
+        "schedules.amount": "numeric(14,2)",
+    }
 
     budget = "INSERT INTO budgets (category_id, effective_from, amount) VALUES"
     category = (

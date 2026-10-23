@@ -357,6 +357,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Schedules
+         * @description Recurring expenses the user expects, active ones first.
+         */
+        get: operations["list_schedules_api_v1_schedules_get"];
+        put?: never;
+        /**
+         * Create Schedule
+         * @description A level-2 category; `month_of_year` for a yearly schedule only.
+         */
+        post: operations["create_schedule_api_v1_schedules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedule Status
+         * @description The schedules due in `month`: paid (with the matching payment), pending or overdue;
+         *     and, for the current month, the forecast of the month's spending.
+         */
+        get: operations["schedule_status_api_v1_schedules_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedule Suggestions
+         * @description Payments of the last months that look recurring and no schedule covers yet.
+         */
+        get: operations["schedule_suggestions_api_v1_schedules_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Schedule */
+        delete: operations["delete_schedule_api_v1_schedules__schedule_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Schedule
+         * @description Partial update; switching to monthly drops `month_of_year`.
+         */
+        patch: operations["update_schedule_api_v1_schedules__schedule_id__patch"];
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -1520,6 +1606,192 @@ export interface components {
              * @description The restored rows, by id
              */
             transactions: components["schemas"]["TransactionOut"][];
+        };
+        /** ScheduleCreateIn */
+        ScheduleCreateIn: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /** Amount */
+            amount: number | string;
+            /**
+             * Approximate
+             * @description Within 7.5% of `amount`
+             * @default false
+             */
+            approximate: boolean;
+            /**
+             * Category Id
+             * @description A level-2 category
+             */
+            category_id: number;
+            /**
+             * Day
+             * @description Day of the month, or -1 for the last day
+             */
+            day: number;
+            /**
+             * Frequency
+             * @default month
+             * @enum {string}
+             */
+            frequency: "month" | "year";
+            /**
+             * Keyword
+             * @description Matched in a payment's counterparty or description
+             */
+            keyword: string;
+            /**
+             * Month Of Year
+             * @description Required for `frequency: year`, refused otherwise
+             */
+            month_of_year?: number | null;
+            /** Name */
+            name: string;
+            /**
+             * Start Month
+             * @description Default: the current month
+             */
+            start_month?: string | null;
+        };
+        /** ScheduleForecast */
+        ScheduleForecast: {
+            /**
+             * Actual
+             * @description The month's actual, as the month detail of the scope
+             */
+            actual: string;
+            /**
+             * Outstanding
+             * @description Expected amounts of the pending and overdue schedules of monthly budget accounts in the scope
+             */
+            outstanding: string;
+            /**
+             * Projected
+             * @description `actual + outstanding`
+             */
+            projected: string;
+        };
+        /** ScheduleOut */
+        ScheduleOut: {
+            /** Active */
+            active: boolean;
+            /** Amount */
+            amount: string;
+            /** Approximate */
+            approximate: boolean;
+            /** Budget Account Id */
+            budget_account_id: number;
+            /** Budget Account Name */
+            budget_account_name: string;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Day */
+            day: number;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency: "month" | "year";
+            /** Id */
+            id: number;
+            /** Keyword */
+            keyword: string;
+            /** Month Of Year */
+            month_of_year: number | null;
+            /** Name */
+            name: string;
+            /** Parent Category Name */
+            parent_category_name: string;
+            /** Start Month */
+            start_month: string;
+        };
+        /** ScheduleStatusItem */
+        ScheduleStatusItem: {
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            schedule: components["schemas"]["ScheduleOut"];
+            /**
+             * Status
+             * @description `paid`: a matching payment was found; `pending`: not yet, and the due date is less than 3 days ago; `overdue`: none 3 days after the due date
+             * @enum {string}
+             */
+            status: "paid" | "pending" | "overdue";
+            /** @description The matching payment, when paid */
+            transaction: components["schemas"]["TransactionOut"] | null;
+        };
+        /** ScheduleStatusOut */
+        ScheduleStatusOut: {
+            /** @description Only for the current month */
+            forecast: components["schemas"]["ScheduleForecast"] | null;
+            /**
+             * Items
+             * @description Overdue first, then by due date
+             */
+            items: components["schemas"]["ScheduleStatusItem"][];
+            /** Month */
+            month: string;
+        };
+        /** ScheduleSuggestion */
+        ScheduleSuggestion: {
+            /** Amount */
+            amount: string;
+            /** Approximate */
+            approximate: boolean;
+            /** Category Id */
+            category_id: number;
+            /** Category Name */
+            category_name: string;
+            /** Day */
+            day: number;
+            /** Keyword */
+            keyword: string;
+            /**
+             * Months
+             * @description How many of the recent months it was paid in
+             */
+            months: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ScheduleUpdateIn
+         * @description Partial update: fields left out keep their value.
+         */
+        ScheduleUpdateIn: {
+            /** Active */
+            active?: boolean;
+            /** Amount */
+            amount?: number | string;
+            /** Approximate */
+            approximate?: boolean;
+            /** Category Id */
+            category_id?: number;
+            /**
+             * Day
+             * @description Day of the month, or -1 for the last day
+             */
+            day?: number;
+            /**
+             * Frequency
+             * @enum {string}
+             */
+            frequency?: "month" | "year";
+            /** Keyword */
+            keyword?: string;
+            /** Month Of Year */
+            month_of_year?: number | null;
+            /** Name */
+            name?: string;
+            /** Start Month */
+            start_month?: string;
         };
         /** SettingsOut */
         SettingsOut: {
@@ -2708,6 +2980,247 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaymentSearchOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_schedules_api_v1_schedules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_schedule_api_v1_schedules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    schedule_status_api_v1_schedules_status_get: {
+        parameters: {
+            query: {
+                month: string;
+                budget_account_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleStatusOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    schedule_suggestions_api_v1_schedules_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleSuggestion"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    delete_schedule_api_v1_schedules__schedule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_schedule_api_v1_schedules__schedule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleOut"];
                 };
             };
             /** @description Validation error */

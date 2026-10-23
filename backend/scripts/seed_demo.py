@@ -373,6 +373,18 @@ def usd_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     }
 
 
+# (name, keyword, level-2 category, amount, day, approximate)
+SCHEDULES = [
+    ("房租", "自如", "房租", "6500.00", 1, False),
+    ("物业费", "万科物业", "物业网络", "230.00", 5, False),
+    ("宽带", "中国电信", "物业网络", "99.00", 5, False),
+    ("健身月卡", "超级猩猩", "健身", "239.00", 2, False),
+    ("网盘会员", "百度网盘", "订阅会员", "30.00", 20, False),
+    ("停车月卡", "停车场", "加油停车", "400.00", 10, False),
+    ("家庭保险", "众安", "日用品", "50.00", 28, True),
+]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
@@ -421,6 +433,23 @@ def main() -> None:
         ledger.submit(first, annual_month(month, offset), channel_of)
         if offset >= -4:
             ledger.submit(first, usd_month(month, offset), channel_of)
+
+    # Scheduled expenses: most are paid by the fixed payments above; 停车月卡 has none
+    # (overdue once its day has passed) and 家庭保险 comes late in the month (pending).
+    start = month_key(add_months(current, -(MONTHS - 1)))
+    for name, keyword, leaf, amount, day, approximate in SCHEDULES:
+        body = {
+            "name": name,
+            "keyword": keyword,
+            "category_id": ledger.leaf[leaf],
+            "amount": amount,
+            "day": day,
+            "approximate": approximate,
+            "frequency": "month",
+            "start_month": start,
+            "active": True,
+        }
+        api.call("POST", "/schedules", 201, json=body)
 
     for name, count in ledger.count.items():
         print(f"channel {ledger.channels[name]}: {name}, {count} transactions")

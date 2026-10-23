@@ -25,7 +25,7 @@ API = "/api/v1"
 
 TABLES = (
     "transactions, budgets, categories, payment_channels, budget_accounts, app_settings,"
-    " api_tokens, sessions, users, ai_settings, ai_insights, deleted_transactions"
+    " api_tokens, sessions, users, ai_settings, ai_insights, deleted_transactions, schedules"
 )
 
 

@@ -49,6 +49,15 @@ export const keys = {
   refunds: (transactionId: number) => ["ledger", "transactions", "refunds", transactionId] as const,
   budgets: ["ledger", "budgets"] as const,
   budgetsAt: (scope: BudgetScope, month: string) => ["ledger", "budgets", scopeKey(scope), month] as const,
+  /**
+   * Scheduled expenses and their status (under `ledger`: a new, edited or deleted
+   * transaction can pay or unpay one, and a category change renames them).
+   */
+  schedules: ["ledger", "schedules"] as const,
+  scheduleList: ["ledger", "schedules", "list"] as const,
+  scheduleStatus: (scope: BudgetScope, month: string) =>
+    ["ledger", "schedules", "status", scopeKey(scope), month] as const,
+  scheduleSuggestions: ["ledger", "schedules", "suggestions"] as const,
   tokens: ["tokens"] as const,
   /** The AI service for insights (the API key is never part of it). */
   aiSettings: ["ai-settings"] as const,
@@ -203,6 +212,26 @@ export const budgetsQuery = (scope: BudgetScope, month: string) =>
       unwrap(api.GET("/api/v1/budgets", { params: { query: { month, budget_account_id: scope } } })),
   });
 
+/** Every scheduled expense, active ones first. */
+export const schedulesQuery = queryOptions({
+  queryKey: keys.scheduleList,
+  queryFn: () => unwrap(api.GET("/api/v1/schedules")),
+});
+
+/** The schedules due in `month` (of the scope) with their status, and the current month's forecast. */
+export const scheduleStatusQuery = (scope: BudgetScope, month: string) =>
+  queryOptions({
+    queryKey: keys.scheduleStatus(scope, month),
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/schedules/status", { params: { query: { month, budget_account_id: scope } } })),
+  });
+
+/** Recent payments that look recurring and no schedule covers yet. */
+export const scheduleSuggestionsQuery = queryOptions({
+  queryKey: keys.scheduleSuggestions,
+  queryFn: () => unwrap(api.GET("/api/v1/schedules/suggestions")),
+});
+
 export const tokensQuery = queryOptions({
   queryKey: keys.tokens,
   queryFn: () => unwrap(api.GET("/api/v1/tokens")),
@@ -349,6 +378,17 @@ export const renameTag = (body: Schemas["TagRenameIn"]) =>
 export const putBudgets = (body: Schemas["BudgetsPutIn"]) => unwrap(api.PUT("/api/v1/budgets", { body }));
 
 export const createToken = (body: Schemas["TokenCreateIn"]) => unwrap(api.POST("/api/v1/tokens", { body }));
+
+/** A level-2 category; `month_of_year` for a yearly schedule only. */
+export const createSchedule = (body: Schemas["ScheduleCreateIn"]) =>
+  unwrap(api.POST("/api/v1/schedules", { body }));
+
+/** Only the fields present change; switching to monthly drops `month_of_year`. */
+export const updateSchedule = (scheduleId: number, body: Schemas["ScheduleUpdateIn"]) =>
+  unwrap(api.PATCH("/api/v1/schedules/{schedule_id}", { params: { path: { schedule_id: scheduleId } }, body }));
+
+export const deleteSchedule = (scheduleId: number) =>
+  unwrap(api.DELETE("/api/v1/schedules/{schedule_id}", { params: { path: { schedule_id: scheduleId } } }));
 
 /** `api_key` omitted keeps the stored key, a string replaces it, `null` clears it. */
 export const updateAiSettings = (body: Schemas["AiSettingsUpdateIn"]) =>

@@ -1769,6 +1769,427 @@
         "title": "RestoreOut",
         "type": "object"
       },
+      "ScheduleCreateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "default": true,
+            "title": "Active",
+            "type": "boolean"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "approximate": {
+            "default": false,
+            "description": "Within 7.5% of `amount`",
+            "title": "Approximate",
+            "type": "boolean"
+          },
+          "category_id": {
+            "description": "A level-2 category",
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "day": {
+            "description": "Day of the month, or -1 for the last day",
+            "maximum": 31.0,
+            "minimum": -1.0,
+            "title": "Day",
+            "type": "integer"
+          },
+          "frequency": {
+            "default": "month",
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "keyword": {
+            "description": "Matched in a payment's counterparty or description",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Keyword",
+            "type": "string"
+          },
+          "month_of_year": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for `frequency: year`, refused otherwise",
+            "title": "Month Of Year"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_month": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the current month",
+            "title": "Start Month"
+          }
+        },
+        "required": [
+          "name",
+          "keyword",
+          "category_id",
+          "amount",
+          "day"
+        ],
+        "title": "ScheduleCreateIn",
+        "type": "object"
+      },
+      "ScheduleForecast": {
+        "properties": {
+          "actual": {
+            "description": "The month's actual, as the month detail of the scope",
+            "title": "Actual",
+            "type": "string"
+          },
+          "outstanding": {
+            "description": "Expected amounts of the pending and overdue schedules of monthly budget accounts in the scope",
+            "title": "Outstanding",
+            "type": "string"
+          },
+          "projected": {
+            "description": "`actual + outstanding`",
+            "title": "Projected",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actual",
+          "outstanding",
+          "projected"
+        ],
+        "title": "ScheduleForecast",
+        "type": "object"
+      },
+      "ScheduleOut": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "approximate": {
+            "title": "Approximate",
+            "type": "boolean"
+          },
+          "budget_account_id": {
+            "title": "Budget Account Id",
+            "type": "integer"
+          },
+          "budget_account_name": {
+            "title": "Budget Account Name",
+            "type": "string"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "frequency": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "month_of_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month Of Year"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent_category_name": {
+            "title": "Parent Category Name",
+            "type": "string"
+          },
+          "start_month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Start Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "keyword",
+          "category_id",
+          "category_name",
+          "parent_category_name",
+          "budget_account_id",
+          "budget_account_name",
+          "amount",
+          "approximate",
+          "frequency",
+          "day",
+          "month_of_year",
+          "start_month",
+          "active"
+        ],
+        "title": "ScheduleOut",
+        "type": "object"
+      },
+      "ScheduleStatusItem": {
+        "properties": {
+          "due_date": {
+            "format": "date",
+            "title": "Due Date",
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleOut"
+          },
+          "status": {
+            "description": "`paid`: a matching payment was found; `pending`: not yet, and the due date is less than 3 days ago; `overdue`: none 3 days after the due date",
+            "enum": [
+              "paid",
+              "pending",
+              "overdue"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The matching payment, when paid"
+          }
+        },
+        "required": [
+          "schedule",
+          "due_date",
+          "status",
+          "transaction"
+        ],
+        "title": "ScheduleStatusItem",
+        "type": "object"
+      },
+      "ScheduleStatusOut": {
+        "properties": {
+          "forecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScheduleForecast"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for the current month"
+          },
+          "items": {
+            "description": "Overdue first, then by due date",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleStatusItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "items",
+          "forecast"
+        ],
+        "title": "ScheduleStatusOut",
+        "type": "object"
+      },
+      "ScheduleSuggestion": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "approximate": {
+            "title": "Approximate",
+            "type": "boolean"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "months": {
+            "description": "How many of the recent months it was paid in",
+            "title": "Months",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "keyword",
+          "category_id",
+          "category_name",
+          "amount",
+          "approximate",
+          "day",
+          "months"
+        ],
+        "title": "ScheduleSuggestion",
+        "type": "object"
+      },
+      "ScheduleUpdateIn": {
+        "additionalProperties": false,
+        "description": "Partial update: fields left out keep their value.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Amount"
+          },
+          "approximate": {
+            "title": "Approximate",
+            "type": "boolean"
+          },
+          "category_id": {
+            "title": "Category Id",
+            "type": "integer"
+          },
+          "day": {
+            "description": "Day of the month, or -1 for the last day",
+            "maximum": 31.0,
+            "minimum": -1.0,
+            "title": "Day",
+            "type": "integer"
+          },
+          "frequency": {
+            "enum": [
+              "month",
+              "year"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "keyword": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Keyword",
+            "type": "string"
+          },
+          "month_of_year": {
+            "anyOf": [
+              {
+                "maximum": 12.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Month Of Year"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "start_month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Start Month",
+            "type": "string"
+          }
+        },
+        "title": "ScheduleUpdateIn",
+        "type": "object"
+      },
       "SettingsOut": {
         "properties": {
           "currency": {
@@ -3579,6 +4000,324 @@
         "summary": "Search Payments",
         "tags": [
           "transactions"
+        ]
+      }
+    },
+    "/api/v1/schedules": {
+      "get": {
+        "description": "Recurring expenses the user expects, active ones first.",
+        "operationId": "list_schedules_api_v1_schedules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleOut"
+                  },
+                  "title": "Response List Schedules Api V1 Schedules Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Schedules",
+        "tags": [
+          "schedules"
+        ]
+      },
+      "post": {
+        "description": "A level-2 category; `month_of_year` for a yearly schedule only.",
+        "operationId": "create_schedule_api_v1_schedules_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Create Schedule",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/status": {
+      "get": {
+        "description": "The schedules due in `month`: paid (with the matching payment), pending or overdue;\nand, for the current month, the forecast of the month's spending.",
+        "operationId": "schedule_status_api_v1_schedules_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "budget_account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Budget Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Schedule Status",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/suggestions": {
+      "get": {
+        "description": "Payments of the last months that look recurring and no schedule covers yet.",
+        "operationId": "schedule_suggestions_api_v1_schedules_suggestions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleSuggestion"
+                  },
+                  "title": "Response Schedule Suggestions Api V1 Schedules Suggestions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Schedule Suggestions",
+        "tags": [
+          "schedules"
+        ]
+      }
+    },
+    "/api/v1/schedules/{schedule_id}": {
+      "delete": {
+        "operationId": "delete_schedule_api_v1_schedules__schedule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "title": "Schedule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Delete Schedule",
+        "tags": [
+          "schedules"
+        ]
+      },
+      "patch": {
+        "description": "Partial update; switching to monthly drops `month_of_year`.",
+        "operationId": "update_schedule_api_v1_schedules__schedule_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "title": "Schedule Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Update Schedule",
+        "tags": [
+          "schedules"
         ]
       }
     },

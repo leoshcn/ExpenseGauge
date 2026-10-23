@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
+import { CalendarClockIcon, ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 
 import type { Schemas } from "@/api/client";
 import { BudgetMeter } from "@/components/budget-meter";
@@ -98,9 +98,12 @@ export function MonthSummary({
   lastMonth,
   onMonthChange,
   now,
+  forecast = null,
   className,
 }: {
   detail: Schemas["MonthDetailOut"];
+  /** The current month's forecast from the scheduled expenses, when there is one. */
+  forecast?: Schemas["ScheduleForecast"] | null;
   month: string;
   firstMonth: string;
   lastMonth: string;
@@ -140,6 +143,14 @@ export function MonthSummary({
           <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.annualExtraHint}>
             <span aria-hidden="true" className="size-2 shrink-0 rounded-[2px] bg-chart-annual" />
             <span className="amount">{T.summary.annualExtra(money(detail.annual_actual))}</span>
+          </p>
+        ) : null}
+        {forecast !== null && toCents(forecast.outstanding) > 0 ? (
+          <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.forecastHint}>
+            <CalendarClockIcon aria-hidden="true" className="size-3 shrink-0" />
+            <span className="amount">
+              {T.summary.forecast(money(forecast.projected), money(forecast.outstanding))}
+            </span>
           </p>
         ) : null}
         {detail.rollover_available !== null ? (

@@ -17,6 +17,9 @@ import {
   movedOrder,
   periodOf,
   reorderTree,
+  scheduleBody,
+  scheduleChanges,
+  scheduleForm,
 } from "./model";
 
 describe("categoryFields / categoryChanges", () => {
@@ -224,5 +227,43 @@ describe("budgetReset / periodOf", () => {
     ];
     expect(periodOf(accounts, 3)).toBe("year");
     expect(periodOf(accounts, 9)).toBeUndefined();
+  });
+});
+
+describe("schedule form", () => {
+  const stored: Schemas["ScheduleOut"] = {
+    id: 1,
+    name: "房租",
+    keyword: "自如",
+    category_id: 11,
+    category_name: "房租",
+    parent_category_name: "居住",
+    budget_account_id: 2,
+    budget_account_name: "固定",
+    amount: "6500.00",
+    approximate: false,
+    frequency: "month",
+    day: 1,
+    month_of_year: null,
+    start_month: "2026-01",
+    active: true,
+  };
+
+  it("reports what is missing and accepts a calculation as the amount", () => {
+    const empty = scheduleBody(scheduleForm("2026-10"));
+    expect(empty).toEqual({ valid: false, errors: { name: true, keyword: true, category: true, amount: true } });
+    const filled = scheduleBody({ ...scheduleForm("2026-10"), name: " 宽带 ", keyword: "电信", categoryId: 11, amount: "99*1" });
+    expect(filled).toMatchObject({ valid: true, body: { name: "宽带", amount: "99.00", month_of_year: null, start_month: "2026-10" } });
+    expect(scheduleBody({ ...scheduleForm("2026-10"), name: "x", keyword: "x", categoryId: 1, amount: "0" }).valid).toBe(false);
+  });
+
+  it("sends a month only for a yearly schedule, and only what changed", () => {
+    const form = scheduleForm("2026-10", stored);
+    const yearly = scheduleBody({ ...form, frequency: "year", monthOfYear: 3 });
+    if (!yearly.valid) throw new Error("invalid");
+    expect(scheduleChanges(stored, yearly.body)).toEqual({ frequency: "year", month_of_year: 3 });
+    const same = scheduleBody(form);
+    if (!same.valid) throw new Error("invalid");
+    expect(scheduleChanges(stored, same.body)).toBeNull();
   });
 });

@@ -22,6 +22,8 @@ export function useInvalidateLedger() {
       // amount to another budget account), so going back never shows stale figures.
       queryClient.invalidateQueries({ queryKey: keys.summaries, refetchType: "all" }),
       queryClient.invalidateQueries({ queryKey: keys.budgets }),
+      // A payment can pay or unpay a scheduled expense.
+      queryClient.invalidateQueries({ queryKey: keys.schedules }),
     ]);
 }
 

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_by_id
 from app.errors import conflict, invalid, not_found
-from app.models import Budget, BudgetAccount, Category, Transaction
+from app.models import Budget, BudgetAccount, Category, Schedule, Transaction
 from app.months import format_month, parse_month
 from app.schemas.budget_account import BudgetAccountOut
 from app.schemas.category import CategoryLeaf, CategoryNode, CategoryTree
@@ -281,6 +281,8 @@ def delete_category(db: Session, category_id: int) -> None:
             raise conflict("CATEGORY_HAS_CHILDREN", "该一级分类下还有二级分类，无法删除")
     elif db.scalar(select(exists().where(Transaction.category_id == category.id))):
         raise conflict("CATEGORY_IN_USE", "该分类下已有流水，无法删除")
+    elif db.scalar(select(exists().where(Schedule.category_id == category.id))):
+        raise conflict("CATEGORY_IN_USE", "该分类被定期支出使用，请先修改或删除对应的定期支出")
     db.delete(category)
     try:
         db.commit()
