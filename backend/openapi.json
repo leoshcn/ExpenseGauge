@@ -596,6 +596,80 @@
         "title": "BudgetsPutIn",
         "type": "object"
       },
+      "BulkUpdateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BulkUpdateItemIn"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BulkUpdateIn",
+        "type": "object"
+      },
+      "BulkUpdateItemIn": {
+        "additionalProperties": false,
+        "description": "One transaction's new category and/or note. Fields absent are unchanged; `note: null`\nremoves the note. Nothing is appended to the note (unlike an agent's recategorize).",
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "transaction_id": {
+            "title": "Transaction Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "transaction_id"
+        ],
+        "title": "BulkUpdateItemIn",
+        "type": "object"
+      },
+      "BulkUpdateOut": {
+        "properties": {
+          "transactions": {
+            "description": "In the order of the request",
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "BulkUpdateOut",
+        "type": "object"
+      },
       "CategoryCreateIn": {
         "additionalProperties": false,
         "properties": {
@@ -1331,6 +1405,25 @@
         "title": "MonthlySummaryOut",
         "type": "object"
       },
+      "NoteChange": {
+        "properties": {
+          "note_before": {
+            "description": "The note before the rename, to undo it",
+            "title": "Note Before",
+            "type": "string"
+          },
+          "transaction_id": {
+            "title": "Transaction Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "transaction_id",
+          "note_before"
+        ],
+        "title": "NoteChange",
+        "type": "object"
+      },
       "PaymentOut": {
         "description": "A stored payment, as much of it as finding a refund's original payment needs.",
         "properties": {
@@ -1547,6 +1640,23 @@
         "title": "RefundTarget",
         "type": "object"
       },
+      "RestoreOut": {
+        "properties": {
+          "transactions": {
+            "description": "The restored rows, by id",
+            "items": {
+              "$ref": "#/components/schemas/TransactionOut"
+            },
+            "title": "Transactions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transactions"
+        ],
+        "title": "RestoreOut",
+        "type": "object"
+      },
       "SettingsOut": {
         "properties": {
           "currency": {
@@ -1595,6 +1705,65 @@
           "user_exists"
         ],
         "title": "SetupStatus",
+        "type": "object"
+      },
+      "TagCount": {
+        "properties": {
+          "count": {
+            "description": "Transactions whose note has the tag",
+            "title": "Count",
+            "type": "integer"
+          },
+          "tag": {
+            "description": "Without the `#`",
+            "title": "Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tag",
+          "count"
+        ],
+        "title": "TagCount",
+        "type": "object"
+      },
+      "TagRenameIn": {
+        "additionalProperties": false,
+        "properties": {
+          "from_tag": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "From Tag",
+            "type": "string"
+          },
+          "to_tag": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "To Tag",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_tag",
+          "to_tag"
+        ],
+        "title": "TagRenameIn",
+        "type": "object"
+      },
+      "TagRenameOut": {
+        "properties": {
+          "changed": {
+            "items": {
+              "$ref": "#/components/schemas/NoteChange"
+            },
+            "title": "Changed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "changed"
+        ],
+        "title": "TagRenameOut",
         "type": "object"
       },
       "TokenCreateIn": {
@@ -1717,6 +1886,25 @@
           "revoked_at"
         ],
         "title": "TokenOut",
+        "type": "object"
+      },
+      "TransactionIdsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "TransactionIdsIn",
         "type": "object"
       },
       "TransactionOut": {
@@ -3931,6 +4119,128 @@
             }
           },
           {
+            "description": "Text in the row's own counterparty, description or note",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Text in the row's own counterparty, description or note",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Absolute amount at least this",
+            "in": "query",
+            "name": "amount_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Absolute amount at least this",
+              "title": "Amount Min"
+            }
+          },
+          {
+            "description": "Absolute amount at most this",
+            "in": "query",
+            "name": "amount_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Absolute amount at most this",
+              "title": "Amount Max"
+            }
+          },
+          {
+            "description": "Own date on or after",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Own date on or after",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "Own date on or before",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Own date on or before",
+              "title": "Date To"
+            }
+          },
+          {
+            "description": "Tags (without `#`), any of; a matched refund has its payment's",
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tags (without `#`), any of; a matched refund has its payment's",
+              "title": "Tag"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -3987,6 +4297,123 @@
           }
         },
         "summary": "List Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/bulk-delete": {
+      "post": {
+        "description": "Deletes all of `ids` or none; each can be restored for a week.",
+        "operationId": "bulk_delete_api_v1_transactions_bulk_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionIdsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "TRANSACTION_HAS_REFUNDS: a payment's matched refunds are not included"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Bulk Delete",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/bulk-update": {
+      "post": {
+        "description": "The user's category and note changes to several transactions, all or none.",
+        "operationId": "bulk_update_api_v1_transactions_bulk_update_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkUpdateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "BATCH_REJECTED: nothing changed; details.items has one entry per item"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Bulk Update",
         "tags": [
           "transactions"
         ]
@@ -4049,6 +4476,68 @@
           }
         },
         "summary": "Recategorize",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/restore": {
+      "post": {
+        "description": "Undoes deletes: puts the transactions back under their own ids, all or none.",
+        "operationId": "restore_api_v1_transactions_restore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionIdsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestoreOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "RESTORE_CONFLICT: nothing restored; details.items says why per id"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Restore",
         "tags": [
           "transactions"
         ]
@@ -4192,6 +4681,104 @@
           }
         },
         "summary": "Search Transactions",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/tags": {
+      "get": {
+        "description": "Every `#tag` written in a note, most used first.",
+        "operationId": "list_tags_api_v1_transactions_tags_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TagCount"
+                  },
+                  "title": "Response List Tags Api V1 Transactions Tags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "List Tags",
+        "tags": [
+          "transactions"
+        ]
+      }
+    },
+    "/api/v1/transactions/tags/rename": {
+      "post": {
+        "description": "Writes `#from_tag` as `#to_tag` in every note; returns the notes as they were.",
+        "operationId": "rename_tag_api_v1_transactions_tags_rename_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRenameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagRenameOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Rename Tag",
         "tags": [
           "transactions"
         ]

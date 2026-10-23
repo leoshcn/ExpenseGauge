@@ -40,6 +40,8 @@ export const keys = {
   insight: (month: string) => ["ledger", "summary", "insight", month] as const,
   transactions: ["ledger", "transactions"] as const,
   transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
+  /** Every tag in use (under `transactions`, so edits refresh it). */
+  tags: ["ledger", "transactions", "tags"] as const,
   /** Payments a refund may be matched to (under `transactions`, so edits refresh them). */
   refundCandidates: (transactionId: number, q: string, page: number) =>
     ["ledger", "transactions", "refund-candidates", transactionId, q, page] as const,
@@ -60,6 +62,16 @@ export type TransactionFilter = {
   categoryId: number | null;
   /** `"unmatched"`: only refunds without an original payment. */
   refundStatus: RefundStatus | null;
+  /** Text in the counterparty, description or note. */
+  q: string | null;
+  /** Absolute amount bounds, as money strings. */
+  amountMin: string | null;
+  amountMax: string | null;
+  /** Inclusive `YYYY-MM-DD` bounds of the row's own date. */
+  dateFrom: string | null;
+  dateTo: string | null;
+  /** Any of these tags (without `#`); empty = not filtered. */
+  tags: string[];
   page: number;
   pageSize: number;
 };
@@ -163,6 +175,12 @@ export const transactionPageQuery = (filter: TransactionFilter) =>
               budget_account_id: filter.budgetAccountId,
               category_id: filter.categoryId,
               refund_status: filter.refundStatus,
+              q: filter.q,
+              amount_min: filter.amountMin,
+              amount_max: filter.amountMax,
+              date_from: filter.dateFrom,
+              date_to: filter.dateTo,
+              tag: filter.tags.length > 0 ? filter.tags : null,
               page: filter.page,
               page_size: filter.pageSize,
             },
@@ -170,6 +188,12 @@ export const transactionPageQuery = (filter: TransactionFilter) =>
         }),
       ),
   });
+
+/** Every `#tag` written in a note, most used first. */
+export const tagsQuery = queryOptions({
+  queryKey: keys.tags,
+  queryFn: () => unwrap(api.GET("/api/v1/transactions/tags")),
+});
 
 /** The budget in force for each level-2 category (of the scope) in `month`. */
 export const budgetsQuery = (scope: BudgetScope, month: string) =>
@@ -301,6 +325,25 @@ export const deleteTransaction = (transactionId: number) =>
       params: { path: { transaction_id: transactionId } },
     }),
   );
+
+/**
+ * Category and/or note of several transactions, all or none (409 `BATCH_REJECTED` with
+ * one entry per item). Nothing is appended to the note.
+ */
+export const bulkUpdateTransactions = (items: Schemas["BulkUpdateItemIn"][]) =>
+  unwrap(api.POST("/api/v1/transactions/bulk-update", { body: { items } }));
+
+/** Deletes all of `ids` or none; each can be restored for a week. */
+export const bulkDeleteTransactions = (ids: number[]) =>
+  unwrap(api.POST("/api/v1/transactions/bulk-delete", { body: { ids } }));
+
+/** Undoes deletes (409 `RESTORE_CONFLICT` says why one cannot come back). */
+export const restoreTransactions = (ids: number[]) =>
+  unwrap(api.POST("/api/v1/transactions/restore", { body: { ids } }));
+
+/** Writes `#from_tag` as `#to_tag` in every note; answers with the notes as they were. */
+export const renameTag = (body: Schemas["TagRenameIn"]) =>
+  unwrap(api.POST("/api/v1/transactions/tags/rename", { body }));
 
 /** Sets each item from `effective_from` on; an `amount` of null clears that budget. */
 export const putBudgets = (body: Schemas["BudgetsPutIn"]) => unwrap(api.PUT("/api/v1/budgets", { body }));

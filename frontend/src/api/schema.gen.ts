@@ -542,6 +542,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/transactions/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Delete
+         * @description Deletes all of `ids` or none; each can be restored for a week.
+         */
+        post: operations["bulk_delete_api_v1_transactions_bulk_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/bulk-update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Update
+         * @description The user's category and note changes to several transactions, all or none.
+         */
+        post: operations["bulk_update_api_v1_transactions_bulk_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/transactions/recategorize": {
         parameters: {
             query?: never;
@@ -557,6 +597,26 @@ export interface paths {
          *     note. Open to agent tokens; the MCP `recategorize_transactions` tool does the same.
          */
         post: operations["recategorize_api_v1_transactions_recategorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore
+         * @description Undoes deletes: puts the transactions back under their own ids, all or none.
+         */
+        post: operations["restore_api_v1_transactions_restore_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -580,6 +640,46 @@ export interface paths {
         get: operations["search_transactions_api_v1_transactions_search_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tags
+         * @description Every `#tag` written in a note, most used first.
+         */
+        get: operations["list_tags_api_v1_transactions_tags_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/transactions/tags/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename Tag
+         * @description Writes `#from_tag` as `#to_tag` in every note; returns the notes as they were.
+         */
+        post: operations["rename_tag_api_v1_transactions_tags_rename_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -913,6 +1013,32 @@ export interface components {
             /** Items */
             items: components["schemas"]["BudgetItemIn"][];
         };
+        /** BulkUpdateIn */
+        BulkUpdateIn: {
+            /** Items */
+            items: components["schemas"]["BulkUpdateItemIn"][];
+        };
+        /**
+         * BulkUpdateItemIn
+         * @description One transaction's new category and/or note. Fields absent are unchanged; `note: null`
+         *     removes the note. Nothing is appended to the note (unlike an agent's recategorize).
+         */
+        BulkUpdateItemIn: {
+            /** Category Id */
+            category_id?: number | null;
+            /** Note */
+            note?: string | null;
+            /** Transaction Id */
+            transaction_id: number;
+        };
+        /** BulkUpdateOut */
+        BulkUpdateOut: {
+            /**
+             * Transactions
+             * @description In the order of the request
+             */
+            transactions: components["schemas"]["TransactionOut"][];
+        };
         /** CategoryCreateIn */
         CategoryCreateIn: {
             /**
@@ -1223,6 +1349,16 @@ export interface components {
             /** Months */
             months: components["schemas"]["MonthTotal"][];
         };
+        /** NoteChange */
+        NoteChange: {
+            /**
+             * Note Before
+             * @description The note before the rename, to undo it
+             */
+            note_before: string;
+            /** Transaction Id */
+            transaction_id: number;
+        };
         /**
          * PaymentOut
          * @description A stored payment, as much of it as finding a refund's original payment needs.
@@ -1332,6 +1468,14 @@ export interface components {
             /** Id */
             id: number;
         };
+        /** RestoreOut */
+        RestoreOut: {
+            /**
+             * Transactions
+             * @description The restored rows, by id
+             */
+            transactions: components["schemas"]["TransactionOut"][];
+        };
         /** SettingsOut */
         SettingsOut: {
             /**
@@ -1352,6 +1496,31 @@ export interface components {
         SetupStatus: {
             /** User Exists */
             user_exists: boolean;
+        };
+        /** TagCount */
+        TagCount: {
+            /**
+             * Count
+             * @description Transactions whose note has the tag
+             */
+            count: number;
+            /**
+             * Tag
+             * @description Without the `#`
+             */
+            tag: string;
+        };
+        /** TagRenameIn */
+        TagRenameIn: {
+            /** From Tag */
+            from_tag: string;
+            /** To Tag */
+            to_tag: string;
+        };
+        /** TagRenameOut */
+        TagRenameOut: {
+            /** Changed */
+            changed: components["schemas"]["NoteChange"][];
         };
         /** TokenCreateIn */
         TokenCreateIn: {
@@ -1394,6 +1563,11 @@ export interface components {
             name: string;
             /** Revoked At */
             revoked_at: string | null;
+        };
+        /** TransactionIdsIn */
+        TransactionIdsIn: {
+            /** Ids */
+            ids: number[];
         };
         /** TransactionOut */
         TransactionOut: {
@@ -2924,6 +3098,18 @@ export interface operations {
                 category_id?: number | null;
                 /** @description `unmatched`: only refunds not matched to a payment */
                 refund_status?: "unmatched" | null;
+                /** @description Text in the row's own counterparty, description or note */
+                q?: string | null;
+                /** @description Absolute amount at least this */
+                amount_min?: number | string | null;
+                /** @description Absolute amount at most this */
+                amount_max?: number | string | null;
+                /** @description Own date on or after */
+                date_from?: string | null;
+                /** @description Own date on or before */
+                date_to?: string | null;
+                /** @description Tags (without `#`), any of; a matched refund has its payment's */
+                tag?: string[] | null;
                 page?: number;
                 page_size?: number;
             };
@@ -2940,6 +3126,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    bulk_delete_api_v1_transactions_bulk_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIdsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description TRANSACTION_HAS_REFUNDS: a payment's matched refunds are not included */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    bulk_update_api_v1_transactions_bulk_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkUpdateOut"];
+                };
+            };
+            /** @description BATCH_REJECTED: nothing changed; details.items has one entry per item */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
             /** @description Validation error */
@@ -3013,6 +3299,57 @@ export interface operations {
             };
         };
     };
+    restore_api_v1_transactions_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionIdsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestoreOut"];
+                };
+            };
+            /** @description RESTORE_CONFLICT: nothing restored; details.items says why per id */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     search_transactions_api_v1_transactions_search_get: {
         parameters: {
             query: {
@@ -3037,6 +3374,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionSearchOut"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_tags_api_v1_transactions_tags_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagCount"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Any non-2xx response */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    rename_tag_api_v1_transactions_tags_rename_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TagRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagRenameOut"];
                 };
             };
             /** @description Validation error */

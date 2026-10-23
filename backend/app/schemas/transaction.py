@@ -200,3 +200,61 @@ class RecategorizeIn(RequestSchema):
 class RecategorizeAcceptedOut(Schema):
     accepted: bool = True
     transactions: list[TransactionOut]
+
+
+MAX_BULK_ITEMS = 500
+MAX_SEARCH_TEXT = 100
+
+Note = Annotated[str, StringConstraints(max_length=MAX_NOTE_LENGTH), NoNul]
+
+
+class BulkUpdateItemIn(RequestSchema):
+    """One transaction's new category and/or note. Fields absent are unchanged; `note: null`
+    removes the note. Nothing is appended to the note (unlike an agent's recategorize)."""
+
+    transaction_id: int
+    category_id: int | None = None
+    note: Note | None = None
+
+    @model_validator(mode="after")
+    def _changes_something(self) -> "BulkUpdateItemIn":
+        if not self.model_fields_set & {"category_id", "note"}:
+            raise ValueError("category_id or note is required")
+        if "category_id" in self.model_fields_set and self.category_id is None:
+            raise ValueError("category_id cannot be null")
+        return self
+
+
+class BulkUpdateIn(RequestSchema):
+    items: Annotated[list[BulkUpdateItemIn], Field(min_length=1, max_length=MAX_BULK_ITEMS)]
+
+
+class BulkUpdateOut(Schema):
+    transactions: list[TransactionOut] = Field(description="In the order of the request")
+
+
+class TransactionIdsIn(RequestSchema):
+    ids: Annotated[list[int], Field(min_length=1, max_length=MAX_BULK_ITEMS)]
+
+
+class RestoreOut(Schema):
+    transactions: list[TransactionOut] = Field(description="The restored rows, by id")
+
+
+class TagCount(Schema):
+    tag: str = Field(description="Without the `#`")
+    count: int = Field(description="Transactions whose note has the tag")
+
+
+class TagRenameIn(RequestSchema):
+    from_tag: Annotated[str, StringConstraints(min_length=1, max_length=50), NoNul]
+    to_tag: Annotated[str, StringConstraints(min_length=1, max_length=50), NoNul]
+
+
+class NoteChange(Schema):
+    transaction_id: int
+    note_before: str = Field(description="The note before the rename, to undo it")
+
+
+class TagRenameOut(Schema):
+    changed: list[NoteChange]

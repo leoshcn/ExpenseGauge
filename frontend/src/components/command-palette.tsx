@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { EyeIcon, KeyboardIcon, type LucideIcon, SunMoonIcon, TagIcon } from "lucide-react";
+import { EyeIcon, FolderIcon, HashIcon, KeyboardIcon, type LucideIcon, SunMoonIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 
-import { categoriesQuery } from "@/api/queries";
+import { categoriesQuery, tagsQuery } from "@/api/queries";
 import {
   CommandDialog,
   CommandEmpty,
@@ -36,6 +36,7 @@ export function CommandPalette({
   useRestoreFocus();
   const navigate = useNavigate();
   const tree = useQuery(categoriesQuery(null));
+  const tags = useQuery(tagsQuery);
   const theme = useTheme();
   const privacy = usePrivacy();
 
@@ -72,11 +73,25 @@ export function CommandPalette({
                   value={`category ${child.id} ${parent.name} ${child.name}`}
                   onSelect={() => run(() => navigate(`/transactions?category=${child.id}`))}
                 >
-                  <TagIcon />
+                  <FolderIcon />
                   {T.category(parent.name, child.name)}
                 </CommandItem>
               )),
             )}
+          </CommandGroup>
+        ) : null}
+        {tags.data && tags.data.length > 0 ? (
+          <CommandGroup heading={T.groups.tags}>
+            {tags.data.map(({ tag }) => (
+              <CommandItem
+                key={tag}
+                value={`tag ${tag}`}
+                onSelect={() => run(() => navigate(`/transactions?tag=${encodeURIComponent(tag)}`))}
+              >
+                <HashIcon />
+                {S.transactions.tag(tag)}
+              </CommandItem>
+            ))}
           </CommandGroup>
         ) : null}
         <CommandGroup heading={T.groups.actions}>

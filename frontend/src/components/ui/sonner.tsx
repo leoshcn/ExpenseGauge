@@ -9,6 +9,11 @@ function Toaster(props: ToasterProps) {
     <Sonner
       theme={theme}
       className="toaster group"
+      toastOptions={{
+        classNames: {
+          actionButton: "!bg-primary !text-primary-foreground",
+        },
+      }}
       style={
         {
           "--normal-bg": "var(--popover)",

@@ -8,6 +8,7 @@ import {
   categoryEditable,
   type FilterLists,
   findCategory,
+  groupByDay,
   isFiltered,
   isRefund,
   matchState,
@@ -16,7 +17,10 @@ import {
   pageRange,
   paymentRefunds,
   readFilter,
+  recategorizable,
   type RefundTarget,
+  reverseChanges,
+  sumAmounts,
   toRefundTarget,
   transactionChanges,
 } from "./model";
@@ -144,8 +148,35 @@ describe("readFilter", () => {
       budgetAccountId: 2,
       categoryId: 12,
       refundStatus: null,
+      q: null,
+      amountMin: null,
+      amountMax: null,
+      dateFrom: null,
+      dateTo: null,
+      tags: [],
       page: 3,
       pageSize: PAGE_SIZE,
+    });
+  });
+
+  it("reads search text, amount and date bounds and tags", () => {
+    const params = new URLSearchParams("q=+地铁+&min=50&max=200.5&from=2026-09-02&to=2026-09-03&tag=国庆&tag=聚餐&tag=国庆");
+    expect(readFilter(params, lists)).toMatchObject({
+      q: "地铁",
+      amountMin: "50.00",
+      amountMax: "200.50",
+      dateFrom: "2026-09-02",
+      dateTo: "2026-09-03",
+      tags: ["国庆", "聚餐"],
+    });
+    const bad = new URLSearchParams("q=+&min=-1&max=1.234&from=2026-02-30&to=2026-9-3&tag=两+词");
+    expect(readFilter(bad, lists)).toMatchObject({
+      q: null,
+      amountMin: null,
+      amountMax: null,
+      dateFrom: null,
+      dateTo: null,
+      tags: [],
     });
   });
 
@@ -161,6 +192,12 @@ describe("readFilter", () => {
       budgetAccountId: null,
       categoryId: null,
       refundStatus: null,
+      q: null,
+      amountMin: null,
+      amountMax: null,
+      dateFrom: null,
+      dateTo: null,
+      tags: [],
       page: 1,
       pageSize: PAGE_SIZE,
     });
@@ -263,5 +300,36 @@ describe("transactionChanges", () => {
   it("sends null to remove a note, and nothing when there was none", () => {
     expect(transactionChanges(original, { categoryId: 11, note: "  ", refundOf: null })).toEqual({ note: null });
     expect(transactionChanges({ category_id: 11, note: null, refund_of: null }, { categoryId: 11, note: "", refundOf: null })).toBeNull();
+  });
+});
+
+describe("groupByDay and sums", () => {
+  const row = (id: number, date: string, amount: string, refundOf: boolean = false) =>
+    ({ id, date, amount, refund_of: refundOf ? { id: 1 } : null }) as unknown as Schemas["TransactionOut"];
+
+  it("groups consecutive rows of one day with the day's net", () => {
+    const groups = groupByDay([row(3, "2026-10-11", "94.80"), row(2, "2026-10-11", "-4.00"), row(1, "2026-10-10", "58.80")]);
+    expect(groups.map((group) => [group.date, group.net, group.items.length])).toEqual([
+      ["2026-10-11", "90.80", 2],
+      ["2026-10-10", "58.80", 1],
+    ]);
+  });
+
+  it("sums a selection and skips matched refunds in a batch category change", () => {
+    const rows = [row(1, "2026-10-01", "100.00"), row(2, "2026-10-02", "-20.00", true)];
+    expect(sumAmounts(rows)).toBe("80.00");
+    const { changed, skipped } = recategorizable(rows);
+    expect(changed.map((r) => r.id)).toEqual([1]);
+    expect(skipped.map((r) => r.id)).toEqual([2]);
+  });
+});
+
+describe("reverseChanges", () => {
+  it("puts back only the fields the edit touched", () => {
+    const original = { category_id: 11, note: null, refund_of: null };
+    expect(reverseChanges(original, { category_id: 12 })).toEqual({ category_id: 11 });
+    expect(reverseChanges(original, { note: "#x" })).toEqual({ note: null });
+    const matched = { category_id: 11, note: "a", refund_of: payment };
+    expect(reverseChanges(matched, { refund_of_id: null, note: "b" })).toEqual({ refund_of_id: payment.id, note: "a" });
   });
 });

@@ -291,18 +291,18 @@ def daily_month(m: Month, offset: int) -> dict[str, list[Tx]]:
     if offset == 0:
         # A holiday month: travel and one dinner push two categories over budget early.
         items["旅行"] = (
-            m.fixed(1, "1480.00", "东方航空", "机票 上海-成都", "国庆出行")
-            + m.fixed(2, "1260.00", "携程旅行", "酒店 3 晚")
-            + m.fixed(3, "320.00", "大熊猫基地", "门票")
+            m.fixed(1, "1480.00", "东方航空", "机票 上海-成都", "#国庆成都 出行")
+            + m.fixed(2, "1260.00", "携程旅行", "酒店 3 晚", "#国庆成都")
+            + m.fixed(3, "320.00", "大熊猫基地", "门票", "#国庆成都")
         )
-        items["外食"] += m.fixed(3, "868.00", "蜀九香火锅", "微信支付", "国庆聚餐")
+        items["外食"] += m.fixed(3, "868.00", "蜀九香火锅", "微信支付", "#国庆成都 #聚餐")
         items["数码"] = m.fixed(6, "1299.00", "Apple Store", "AirPods")
         items["服饰"] = m.fixed(5, "399.00", "优衣库", "门店消费") + m.fixed(
             8, "-199.00", "优衣库", "部分退款", "退了一件"
         )
     if offset == -2:
-        items["旅行"] = m.fixed(14, "1980.00", "携程旅行", "酒店 2 晚") + m.fixed(
-            13, "880.00", "中国铁路", "高铁票 往返"
+        items["旅行"] = m.fixed(14, "1980.00", "携程旅行", "酒店 2 晚", "#杭州周末") + m.fixed(
+            13, "880.00", "中国铁路", "高铁票 往返", "#杭州周末"
         )
         items["宠物医院"] = m.fixed(21, "1180.00", "瑞鹏宠物医院", "体检与疫苗")
     if offset == -3:

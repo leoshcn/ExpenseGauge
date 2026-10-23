@@ -2,10 +2,13 @@
 
 import type { Schemas } from "@/api/client";
 import type { TransactionFilter } from "@/api/queries";
-import { subtract, toCents } from "@/lib/money";
+import { fromCents, subtract, toCents } from "@/lib/money";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
+import { isValidTag } from "@/lib/tags";
 
 export const PAGE_SIZE = 50;
+/** The API's limit for `q`. */
+export const MAX_SEARCH = 100;
 /** How many months back the month filter offers, counting the current one. */
 export const MONTH_OPTIONS = 24;
 
@@ -44,6 +47,12 @@ export function readFilter(params: URLSearchParams, lists: FilterLists): Transac
     ),
     categoryId: knownId(params.get("category"), categoryIds),
     refundStatus: params.get("refund") === "unmatched" ? "unmatched" : null,
+    q: searchText(params.get("q")),
+    amountMin: moneyParam(params.get("min")),
+    amountMax: moneyParam(params.get("max")),
+    dateFrom: dayParam(params.get("from")),
+    dateTo: dayParam(params.get("to")),
+    tags: [...new Set(params.getAll("tag").filter(isValidTag))],
     page: Number.isInteger(page) && page > 0 ? page : 1,
     pageSize: PAGE_SIZE,
   };
@@ -58,6 +67,22 @@ export function awaitsLists(params: URLSearchParams, lists: FilterLists): boolea
   );
 }
 
+/** The URL parameters of every filter, for "清除筛选" (`null` removes each). */
+export const FILTER_PARAMS = [
+  "month",
+  "channel",
+  "budget_account",
+  "category",
+  "refund",
+  "q",
+  "min",
+  "max",
+  "from",
+  "to",
+  "tag",
+  "page",
+] as const;
+
 /** Whether any filter (not the page) is in effect. */
 export function isFiltered(filter: TransactionFilter): boolean {
   return (
@@ -65,8 +90,71 @@ export function isFiltered(filter: TransactionFilter): boolean {
     filter.channelId !== null ||
     filter.budgetAccountId !== null ||
     filter.categoryId !== null ||
-    filter.refundStatus !== null
+    filter.refundStatus !== null ||
+    filter.q !== null ||
+    filter.amountMin !== null ||
+    filter.amountMax !== null ||
+    filter.dateFrom !== null ||
+    filter.dateTo !== null ||
+    filter.tags.length > 0
   );
+}
+
+/** Search text from the URL: trimmed, at most `MAX_SEARCH` characters, or null. */
+export function searchText(raw: string | null): string | null {
+  const text = raw?.trim() ?? "";
+  return text === "" ? null : [...text].slice(0, MAX_SEARCH).join("");
+}
+
+const MONEY = /^\d{1,12}(?:\.\d{1,2})?$/;
+
+/** A non-negative amount from the URL as a money string ("50" -> "50.00"), or null. */
+export function moneyParam(raw: string | null): string | null {
+  if (raw === null || !MONEY.test(raw)) return null;
+  return fromCents(toCents(raw));
+}
+
+/** A real calendar day `YYYY-MM-DD` from the URL, or null. */
+export function dayParam(raw: string | null): string | null {
+  if (raw === null || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [year, month, day] = raw.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    ? raw
+    : null;
+}
+
+/** The rows of a page grouped by their own date, newest first, with each day's net. */
+export function groupByDay(items: readonly Schemas["TransactionOut"][]) {
+  const groups: { date: string; net: string; items: Schemas["TransactionOut"][] }[] = [];
+  for (const item of items) {
+    const last = groups.at(-1);
+    if (last && last.date === item.date) {
+      last.items.push(item);
+      last.net = fromCents(toCents(last.net) + toCents(item.amount));
+    } else {
+      groups.push({ date: item.date, net: item.amount, items: [item] });
+    }
+  }
+  return groups;
+}
+
+/** The net of the selected rows. */
+export function sumAmounts(items: Iterable<Pick<Schemas["TransactionOut"], "amount">>): string {
+  let cents = 0;
+  for (const item of items) cents += toCents(item.amount);
+  return fromCents(cents);
+}
+
+/**
+ * The selected rows a batch category change applies to, and the matched refunds it must
+ * skip (their category follows the payment).
+ */
+export function recategorizable(items: Iterable<Schemas["TransactionOut"]>) {
+  const changed: Schemas["TransactionOut"][] = [];
+  const skipped: Schemas["TransactionOut"][] = [];
+  for (const item of items) (item.refund_of === null ? changed : skipped).push(item);
+  return { changed, skipped };
 }
 
 /** The budget account a level-2 category belongs to, or null if it is not in the tree. */
@@ -172,4 +260,19 @@ export function transactionChanges(
   const note = form.note.trim() === "" ? null : form.note.trim();
   if (note !== (original.note ?? null)) changes.note = note;
   return Object.keys(changes).length > 0 ? changes : null;
+}
+
+/**
+ * The PATCH body that puts back what `changes` (an edit's body) changed: the original
+ * category, note and original payment of each field it touched.
+ */
+export function reverseChanges(
+  original: Pick<Schemas["TransactionOut"], "category_id" | "note" | "refund_of">,
+  changes: Schemas["TransactionUpdateIn"],
+): Schemas["TransactionUpdateIn"] {
+  const reverse: Schemas["TransactionUpdateIn"] = {};
+  if ("refund_of_id" in changes) reverse.refund_of_id = original.refund_of?.id ?? null;
+  if ("category_id" in changes) reverse.category_id = original.category_id;
+  if ("note" in changes) reverse.note = original.note;
+  return reverse;
 }

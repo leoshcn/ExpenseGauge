@@ -48,6 +48,7 @@ describe("CommandPalette", () => {
     const user = userEvent.setup();
     const client = new QueryClient();
     client.setQueryData(keys.categories(null), tree);
+    client.setQueryData(keys.tags, []);
     const onClose = vi.fn();
     render(
       <QueryClientProvider client={client}>

@@ -10,12 +10,12 @@ import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import ValidationError
-from sqlalchemy import and_, case, func, literal, or_, select
+from sqlalchemy import ColumnElement, and_, case, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_by_id
@@ -30,6 +30,8 @@ from app.schemas.transaction import (
     MAX_PAYMENT_SEARCH_LIMIT,
     MAX_RECATEGORIZE_ITEMS,
     BatchAcceptedOut,
+    BulkUpdateItemIn,
+    BulkUpdateOut,
     PaymentOut,
     PaymentSearchOut,
     RecategorizeAcceptedOut,
@@ -59,6 +61,8 @@ from app.services.refunds import (
     refunded_subquery,
     sum_totals,
 )
+from app.services.tags import tagged_ids
+from app.services.transaction_trash import trash
 
 _WHITESPACE = re.compile(r"\s+")
 CENT = Decimal("0.01")
@@ -464,6 +468,35 @@ def _leaf_ids(categories: dict[int, Category], category_id: int) -> list[int]:
     return [category_id]
 
 
+def _row_filters(
+    db: Session,
+    q: str | None,
+    amount_min: Decimal | None,
+    amount_max: Decimal | None,
+    tags: list[str] | None,
+) -> list[ColumnElement[bool]]:
+    """The list's text, amount and tag filters, on `Transaction`'s own columns only (so
+    `effective_totals` can apply them to the stats too)."""
+    conditions: list[ColumnElement[bool]] = []
+    text = (q or "").strip()
+    if text:
+        pattern = _contains(text)
+        conditions.append(
+            or_(
+                Transaction.counterparty.ilike(pattern, escape="\\"),
+                Transaction.description.ilike(pattern, escape="\\"),
+                Transaction.note.ilike(pattern, escape="\\"),
+            )
+        )
+    if amount_min is not None:
+        conditions.append(func.abs(Transaction.amount) >= amount_min)
+    if amount_max is not None:
+        conditions.append(func.abs(Transaction.amount) <= amount_max)
+    if tags:
+        conditions.append(Transaction.id.in_(sorted(tagged_ids(db, tags))))
+    return conditions
+
+
 def list_transactions(
     db: Session,
     month: str | None = None,
@@ -471,6 +504,12 @@ def list_transactions(
     budget_account_id: int | None = None,
     category_id: int | None = None,
     refund_status: RefundStatus | None = None,
+    q: str | None = None,
+    amount_min: Decimal | None = None,
+    amount_max: Decimal | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    tags: list[str] | None = None,
     page: int = 1,
     page_size: int = 50,
 ) -> TransactionPage:
@@ -481,6 +520,10 @@ def list_transactions(
     count in (a matched refund's is its payment's, which is the one shown). `stats` use the
     effective attribution throughout (month, category and channel of the payment), the
     same as the summaries. `refund_status="unmatched"` lists only refunds without a payment.
+
+    `q` matches the row's own counterparty, description or note; `amount_min`/`amount_max`
+    its absolute amount; `date_from`/`date_to` (inclusive) narrow `month` further; `tags`
+    (any of) the tags of its effective note (`services/tags.py`).
     """
     names = _load_names(db)
     categories = names.categories
@@ -488,6 +531,16 @@ def list_transactions(
     if month:
         start = parse_month(month)
         end = add_months(start, 1)
+    if date_from is not None and (start is None or date_from > start):
+        start = date_from
+    if date_to is not None and (end is None or date_to + timedelta(days=1) < end):
+        end = date_to + timedelta(days=1)
+    if start is not None and end is not None and start >= end:
+        raise invalid(
+            "INVALID_DATE_RANGE",
+            "日期范围无效：开始日期不能晚于结束日期，且须与所选月份重叠",
+            {"date_from": str(date_from), "date_to": str(date_to)},
+        )
     leaf_ids: set[int] | None = None
     if budget_account_id is not None:
         get_budget_account(db, budget_account_id, status_code=422)
@@ -507,6 +560,8 @@ def list_transactions(
         conditions.append(effective_category.in_(leaf_ids))
     if refund_status == "unmatched":
         conditions += [Transaction.amount < 0, Transaction.refund_of_id.is_(None)]
+    extra = _row_filters(db, q, amount_min, amount_max, tags)
+    conditions += extra
     total = db.scalar(join_payment(select(func.count())).where(*conditions))
     rows = list(
         db.scalars(
@@ -526,6 +581,7 @@ def list_transactions(
                 end=end,
                 channel_id=channel_id,
                 unmatched_refunds_only=refund_status == "unmatched",
+                extra_conditions=extra,
             ).values()
         )
     )
@@ -606,9 +662,15 @@ def update_transaction(
     return result
 
 
+def describe(db: Session, rows: list[Transaction]) -> list[TransactionOut]:
+    """`TransactionOut` for rows loaded elsewhere (`services/transaction_trash.py`)."""
+    return _outputs(db, rows, _load_names(db))
+
+
 def delete_transaction(db: Session, transaction_id: int) -> None:
     """A payment that still has matched refunds cannot be deleted (409
-    `TRANSACTION_HAS_REFUNDS`); a refund always can."""
+    `TRANSACTION_HAS_REFUNDS`); a refund always can. The row is kept in the trash so the
+    delete can be undone (`services/transaction_trash.py`)."""
     _get_transaction(db, transaction_id)
     transaction = _lock_transaction(db, transaction_id)[transaction_id]
     if transaction.amount > 0:
@@ -626,7 +688,7 @@ def delete_transaction(db: Session, transaction_id: int) -> None:
                 f"这笔支付已匹配 {len(refund_ids)} 笔退款，请先取消匹配或删除对应退款",
                 {"refund_ids": refund_ids},
             )
-    db.delete(transaction)
+    trash(db, [transaction])
     db.commit()
 
 
@@ -935,5 +997,63 @@ def recategorize(db: Session, raw_items: list[Any]) -> RecategorizeAcceptedOut:
         changed.append(transaction)
     db.flush()
     result = RecategorizeAcceptedOut(transactions=_outputs(db, changed, names))
+    db.commit()
+    return result
+
+
+def bulk_update(db: Session, items: list[BulkUpdateItemIn]) -> BulkUpdateOut:
+    """The user's changes to several transactions (category and/or note), every item or
+    none: the transactions page's batch recategorize, and the undo of it or of a tag
+    rename. The rules are `update_transaction`'s; nothing is appended to the note. Raises
+    `BATCH_REJECTED` (409) with one feedback entry per item when any item is rejected."""
+    names = _load_names(db)
+    choices = _category_choices(names)
+    locked = lock_transactions(db, {item.transaction_id for item in items})
+    feedback: list[dict[str, Any] | None] = [None] * len(items)
+    seen: dict[int, int] = {}
+    for index, item in enumerate(items):
+        earlier = seen.setdefault(item.transaction_id, index)
+        transaction = locked.get(item.transaction_id)
+        if earlier != index:
+            feedback[index] = _rejected(
+                index,
+                "DUPLICATE_TRANSACTION",
+                f"与本批第 {earlier} 条（index={earlier}）是同一笔流水",
+                transaction_id=item.transaction_id,
+                duplicate_of_index=earlier,
+            )
+        elif transaction is None:
+            feedback[index] = _rejected(
+                index,
+                "TRANSACTION_NOT_FOUND",
+                f"流水 {item.transaction_id} 不存在",
+                transaction_id=item.transaction_id,
+            )
+        elif "category_id" in item.model_fields_set and item.category_id is not None:
+            rejection = _category_rejection(index, item.category_id, names, choices)
+            if rejection is None and transaction.refund_of_id is not None:
+                rejection = _rejected(
+                    index,
+                    "REFUND_CATEGORY_FOLLOWS_PAYMENT",
+                    "已匹配的退款分类跟随原支付，不能单独修改",
+                    category_id=item.category_id,
+                    refund_of_id=transaction.refund_of_id,
+                )
+            feedback[index] = rejection
+        if feedback[index] is None:
+            feedback[index] = {"index": index, "status": "ok"}
+
+    _raise_if_rejected(db, feedback)
+
+    changed = []
+    for item in items:
+        transaction = locked[item.transaction_id]
+        if "category_id" in item.model_fields_set and item.category_id is not None:
+            transaction.category_id = item.category_id
+        if "note" in item.model_fields_set:
+            transaction.note = item.note
+        changed.append(transaction)
+    db.flush()
+    result = BulkUpdateOut(transactions=_outputs(db, changed, names))
     db.commit()
     return result
