@@ -6,38 +6,64 @@ import { MonthBar } from "./month-bar";
 
 function renderBar(month: string, shown = 3) {
   const onMonthChange = vi.fn();
-  render(<MonthBar month={month} firstMonth="2025-11" lastMonth="2026-10" shown={shown} onMonthChange={onMonthChange} />);
+  render(
+    <MonthBar
+      month={month}
+      current="2026-10"
+      min="2025-11"
+      max="2027-10"
+      shown={shown}
+      onMonthChange={onMonthChange}
+    />,
+  );
   return onMonthChange;
 }
 
+const listed = () =>
+  within(screen.getByRole("navigation", { name: "选择月份" }))
+    .getAllByRole("button", { name: /^\d{4}年\d+月$/ })
+    .map((button) => button.getAttribute("aria-label"));
+
 describe("MonthBar", () => {
-  it("lists the 12-month window with a year label where each year starts", () => {
+  it("lists 12 months up to two after the current one, with a year label where each year starts", () => {
     renderBar("2026-10");
-    const nav = screen.getByRole("navigation", { name: "选择月份" });
-    const buttons = within(nav).getAllByRole("button", { name: /^\d{4}年\d+月$/ });
-    expect(buttons).toHaveLength(12);
-    expect(buttons[0]).toHaveAccessibleName("2025年11月");
-    expect(buttons[11]).toHaveAccessibleName("2026年10月");
-    expect(buttons[11]).toHaveAttribute("aria-current", "date");
-    expect(within(nav).getByText("2025")).toBeVisible();
-    expect(within(nav).getByText("2026")).toBeVisible();
+    expect(listed()[0]).toBe("2026年1月");
+    expect(listed()[11]).toBe("2026年12月");
+    expect(screen.getByRole("button", { name: "2026年10月" })).toHaveAttribute("aria-current", "date");
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getByText("2026")).toBeInTheDocument();
+    expect(within(nav).queryByText("2025")).not.toBeInTheDocument();
   });
 
-  it("marks the selected month and selects another on click", async () => {
+  it("slides to reach a month outside the default window", () => {
+    renderBar("2027-03");
+    expect(listed()[0]).toBe("2026年4月");
+    expect(listed()[11]).toBe("2027年3月");
+    expect(within(screen.getByRole("navigation")).getByText("2027")).toBeInTheDocument();
+
+    cleanup();
+    renderBar("2025-11");
+    expect(listed()[0]).toBe("2025年11月");
+  });
+
+  it("marks the selected month and selects another, future ones included", async () => {
     const user = userEvent.setup();
     const onMonthChange = renderBar("2026-08");
     expect(screen.getByRole("button", { name: "2026年8月" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "2026年9月" })).toHaveAttribute("aria-pressed", "false");
-    await user.click(screen.getByRole("button", { name: "2026年2月" }));
-    expect(onMonthChange).toHaveBeenCalledWith("2026-02");
+    await user.click(screen.getByRole("button", { name: "2026年12月" }));
+    expect(onMonthChange).toHaveBeenCalledWith("2026-12");
   });
 
-  it("steps one month with the arrows, within the window", async () => {
+  it("steps one month with the arrows, within the selectable range", async () => {
     const user = userEvent.setup();
     const onMonthChange = renderBar("2026-10");
+    await user.click(screen.getByRole("button", { name: "下一个月" }));
+    expect(onMonthChange).toHaveBeenCalledWith("2026-11");
+
+    cleanup();
+    renderBar("2027-10");
     expect(screen.getByRole("button", { name: "下一个月" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "上一个月" }));
-    expect(onMonthChange).toHaveBeenCalledWith("2026-09");
 
     cleanup();
     renderBar("2025-11");

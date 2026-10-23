@@ -116,6 +116,13 @@ for (const viewport of Object.keys(VIEWPORTS)) {
     await capture(page, `dashboard-${viewport}-empty`);
   }
 
+  // Two months ahead, chosen in the month bar: budgets to plan, nothing spent, no insight.
+  await page.goto(`${BASE}/dashboard`);
+  await ready(page);
+  for (let step = 0; step < 2; step += 1) await page.getByRole("button", { name: "下一个月" }).click();
+  await page.locator("[aria-busy=false]").first().waitFor();
+  await capture(page, `dashboard-${viewport}-future-month`);
+
   // Three months back: a refund makes one category's actual negative.
   await page.goto(`${BASE}/dashboard`);
   await ready(page);

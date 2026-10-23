@@ -192,6 +192,23 @@ describe("DashboardPage", () => {
     expect(annualRequests).toContainEqual({ scope: 3, month: "2026-03" });
   });
 
+  it("opens a future month to plan its budgets, without an AI insight", async () => {
+    const user = userEvent.setup();
+    renderAt("/dashboard?month=2026-12");
+    expect(await screen.findByRole("region", { name: "2026年12月" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2026年12月" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: "AI 洞察" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "修改「买菜」2026年12月的预算" }));
+    await user.keyboard("{Control>}a{/Control}7000{Enter}");
+    expect(putBudgets).toHaveBeenCalledWith({ effective_from: "2026-12", items: [{ category_id: 11, amount: "7000.00" }] });
+
+    // Beyond 12 months ahead the URL's month is not honoured.
+    cleanup();
+    renderAt("/dashboard?month=2027-11");
+    expect(await screen.findByRole("region", { name: "2026年10月" })).toBeInTheDocument();
+  });
+
   it("offers the AI insight in 全部 only", async () => {
     renderAt("/dashboard?month=2026-09");
     expect(await screen.findByRole("heading", { name: "AI 洞察" })).toBeInTheDocument();
