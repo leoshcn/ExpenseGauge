@@ -246,6 +246,32 @@ export const S = {
       progressLabel: (name: string) => `「${name}」预算使用进度`,
       noBudgetProgress: "仅统计实际支出",
     },
+    monthBar: {
+      label: "选择月份",
+      year: (year: number) => `${year}`,
+    },
+    /** The three-month budget grid. */
+    grid: {
+      title: "预算执行",
+      description: (months: number, symbol: string) =>
+        `${months === 1 ? "所选月份" : `近 ${months} 个月`} · 单位 ${symbol}`,
+      category: "分类",
+      budget: "预算",
+      actual: "支出",
+      remaining: "剩余",
+      available: "可用",
+      total: "合计",
+      current: "本月",
+      none: "—",
+      over: "超支",
+      editBudget: (name: string, month: string) => `修改「${name}」${month}的预算`,
+      editHint: (month: string) => `从${month}起生效，之后未单独设置的月份也会沿用。回车保存，Esc 取消，清空表示不设预算。`,
+      invalid: "请输入不小于 0 的金额或算式",
+      saving: "正在保存…",
+      saveFailed: (reason: string) => `保存失败：${reason}`,
+      actualLink: (name: string, month: string) => `查看「${name}」${month}的流水`,
+      carryIn: (amount: string) => `含上月 ${amount}`,
+    },
     share: {
       title: "支出构成",
       description: "按一级分类",
@@ -309,19 +335,14 @@ export const S = {
     /** The AI insight card ("全部" only). */
     insight: {
       title: "AI 洞察",
-      description: (year: number, month: number) =>
-        month === 1 ? `${year}年1月` : `${year}年${month}月，以及${year}年1月至${month}月`,
-      notConfigured: "尚未配置 AI 服务",
-      notConfiguredBody: "在设置中填写 OpenAI 兼容接口的 Base URL、模型和 API Key 后，AI 可以总结本月和年初至今的消费。",
+      description: (year: number, month: number) => `${year}年${month}月`,
+      notConfigured: "尚未配置 AI 服务，配置后可以用一两句话点出本月最值得注意的事。",
       configure: "去设置",
-      empty: "这个月还没有洞察",
-      emptyBody: "点击生成，AI 会根据本月和年初至今的数据给出一句总结和要点。可能需要一两分钟。",
+      empty: "点击生成，AI 会用一两句话点出本月最值得注意的事。",
       generate: "生成洞察",
       regenerate: "重新生成",
       generating: "正在生成…",
       generatingHint: "AI 正在分析，可能需要一两分钟。",
-      month: "本月",
-      year: "本年",
       meta: (model: string, when: string) => `${model} · 生成于 ${when}`,
       stale: "数据已更新，可重新生成",
       failed: (reason: string) => `生成失败：${reason}`,
@@ -501,7 +522,8 @@ export const S = {
   },
   reports: {
     title: "报表",
-    tabs: { label: "报表类型", custom: "自定义", pace: "同期对比", calendar: "日历" },
+    tabs: { label: "报表类型", custom: "自定义", pace: "同期对比", calendar: "日历", trend: "趋势" },
+    trendHint: "点击柱形打开该月的概览",
     scopeHint: "「全部」包含年度预算账户的支出",
     custom: {
       groupBy: "分组",

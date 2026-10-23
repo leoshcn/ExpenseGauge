@@ -1,8 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 
-import { type BudgetScope, reportDailyQuery } from "@/api/queries";
+import { type BudgetScope, monthlySummaryQuery, reportDailyQuery } from "@/api/queries";
 import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { ErrorState } from "@/components/error-state";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { useMonthHotkeys } from "@/hooks/use-hotkey";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { formatMonth } from "@/lib/date";
 import { addMonths, isMonth, monthOf } from "@/lib/month";
+import { TrendChart } from "@/pages/dashboard/trend-chart";
 import { S } from "@/strings.zh";
 
 import { CustomReport } from "./custom-report";
@@ -20,10 +22,12 @@ import { PaceChart } from "./pace-chart";
 import { SpendingCalendar } from "./spending-calendar";
 
 const T = S.reports;
-const TABS = ["custom", "pace", "calendar"] as const;
+const TABS = ["custom", "pace", "calendar", "trend"] as const;
 type Tab = (typeof TABS)[number];
 /** Months before the chosen one that the pace comparison needs. */
 const PACE_MONTHS = 3;
+/** Months in the trend, ending at the current one. */
+const TREND_MONTHS = 12;
 
 function MonthStepper({ month, current, onChange }: { month: string; current: string; onChange: (month: string) => void }) {
   return (
@@ -70,8 +74,37 @@ function DailyViews({ tab, scope, month, now }: { tab: "pace" | "calendar"; scop
 }
 
 /**
+ * The 12 months ending at the current one, budget against actual (the Dashboard's former
+ * trend chart). A click on a month opens that month on the Dashboard, in the same scope.
+ */
+function TrendView({ scope, current }: { scope: BudgetScope; current: string }) {
+  const navigate = useNavigate();
+  const summary = useQuery({
+    ...monthlySummaryQuery(scope, addMonths(current, -(TREND_MONTHS - 1)), current),
+    placeholderData: keepPreviousData,
+  });
+  if (summary.isLoadingError) {
+    return <ErrorState title={S.errors.loadFailedTitle} error={summary.error} onRetry={() => void summary.refetch()} />;
+  }
+  if (!summary.data) return <Skeleton role="status" aria-label={S.common.loading} className="h-96 rounded-xl" />;
+  return (
+    <TrendChart
+      summary={summary.data}
+      selected={current}
+      description={T.trendHint}
+      onSelect={(month) => {
+        const params = new URLSearchParams({ month });
+        if (scope !== null) params.set("scope", String(scope));
+        navigate(`/dashboard?${params}`);
+      }}
+    />
+  );
+}
+
+/**
  * Reports: a custom report (grouping, range and chart chosen by the user, savable), the
- * month's cumulative spending against earlier months, and a calendar of daily spending.
+ * month's cumulative spending against earlier months, a calendar of daily spending, and
+ * the 12-month trend of budget against actual.
  * Everything lives in the URL (`?tab&scope&month&group&mode&range&from&to&chart&saved`).
  */
 export function ReportsPage() {
@@ -125,6 +158,9 @@ export function ReportsPage() {
           <MonthStepper month={month} current={current} onChange={onMonthChange} />
           <DailyViews tab="calendar" scope={scope} month={month} now={now} />
         </TabsContent>
+        <TabsContent value="trend">
+          <TrendView scope={scope} current={current} />
+        </TabsContent>
       </>
     );
   }
@@ -138,6 +174,7 @@ export function ReportsPage() {
             <TabsTrigger value="custom">{T.tabs.custom}</TabsTrigger>
             <TabsTrigger value="pace">{T.tabs.pace}</TabsTrigger>
             <TabsTrigger value="calendar">{T.tabs.calendar}</TabsTrigger>
+            <TabsTrigger value="trend">{T.tabs.trend}</TabsTrigger>
           </TabsList>
           {budgetAccounts.data && scope !== undefined ? (
             <BudgetAccountSelect

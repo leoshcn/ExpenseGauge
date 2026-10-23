@@ -1190,35 +1190,22 @@
             "title": "Generated At",
             "type": "string"
           },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/InsightPoint"
+            },
+            "minItems": 1,
+            "title": "Lines",
+            "type": "array"
+          },
           "model": {
             "description": "Model that produced the insight",
             "title": "Model",
             "type": "string"
-          },
-          "month_points": {
-            "items": {
-              "$ref": "#/components/schemas/InsightPoint"
-            },
-            "title": "Month Points",
-            "type": "array"
-          },
-          "summary": {
-            "minLength": 1,
-            "title": "Summary",
-            "type": "string"
-          },
-          "year_points": {
-            "items": {
-              "$ref": "#/components/schemas/InsightPoint"
-            },
-            "title": "Year Points",
-            "type": "array"
           }
         },
         "required": [
-          "summary",
-          "month_points",
-          "year_points",
+          "lines",
           "model",
           "generated_at"
         ],

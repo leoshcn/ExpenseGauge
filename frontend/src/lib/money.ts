@@ -54,6 +54,19 @@ export function formatMoney(value: string, currency: string): string {
   return formatter(currency, false).format(value as Intl.StringNumericLiteral);
 }
 
+/**
+ * Without the currency sign, for a dense table whose heading names the currency once:
+ * "1,234.50", "-300.00"; as many decimals as the currency has.
+ */
+export function formatAmount(value: string, currency: string): string {
+  toCents(value);
+  return formatter(currency, false)
+    .formatToParts(value as Intl.StringNumericLiteral)
+    .filter((part) => part.type !== "currency" && part.type !== "literal")
+    .map((part) => part.value)
+    .join("");
+}
+
 /** The sign the formatted amounts use, for an input's prefix: "¥", "US$". */
 export function currencySymbol(currency: string): string {
   const part = formatter(currency, false)

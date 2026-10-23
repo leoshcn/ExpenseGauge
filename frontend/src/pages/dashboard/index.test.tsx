@@ -17,6 +17,11 @@ const state: { accounts: Schemas["BudgetAccountOut"][]; annualActual: string } =
   annualActual: "8000.00",
 };
 const annualRequests: { scope: BudgetScope; month: string }[] = [];
+const detailRequests: string[] = [];
+const putBudgets = vi.fn(async (body: Schemas["BudgetsPutIn"]) => {
+  void body;
+  return { budget_account_id: null, currency: "CNY", month: "2026-10", budgets: [] };
+});
 
 const food: Schemas["Level1Row"] = {
   category_id: 10,
@@ -78,14 +83,17 @@ vi.mock("@/api/queries", async (importOriginal) => {
     monthDetailQuery: (scope: BudgetScope, month: string) =>
       queryOptions({
         queryKey: actual.keys.monthDetail(scope, month),
-        queryFn: async (): Promise<Schemas["MonthDetailOut"]> => ({
-          ...monthTotal(month),
-          count: 42,
-          budget_account_id: scope,
-          currency: "CNY",
-          rollover_available: null,
-          categories: [food],
-        }),
+        queryFn: async (): Promise<Schemas["MonthDetailOut"]> => {
+          detailRequests.push(month);
+          return {
+            ...monthTotal(month),
+            count: 42,
+            budget_account_id: scope,
+            currency: "CNY",
+            rollover_available: null,
+            categories: [food],
+          };
+        },
       }),
     annualSummaryQuery: (scope: BudgetScope, month: string) =>
       queryOptions({
@@ -100,6 +108,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
         queryKey: actual.keys.scheduleStatus(scope, month),
         queryFn: async (): Promise<Schemas["ScheduleStatusOut"]> => ({ month, items: [], forecast: null }),
       }),
+    putBudgets: (body: Schemas["BudgetsPutIn"]) => putBudgets(body),
     insightQuery: (month: string) =>
       queryOptions({
         queryKey: actual.keys.insight(month),
@@ -138,6 +147,24 @@ describe("DashboardPage", () => {
     state.accounts = [daily, yearly];
     state.annualActual = "8000.00";
     annualRequests.length = 0;
+    detailRequests.length = 0;
+    putBudgets.mockClear();
+  });
+
+  it("shows the budget grid of the month and the two before it and saves a budget from a month on", async () => {
+    const user = userEvent.setup();
+    renderAt("/dashboard?month=2026-09");
+    await screen.findByRole("heading", { name: "预算执行" });
+    expect([...detailRequests].sort()).toEqual(["2026-07", "2026-08", "2026-09"]);
+    expect(screen.queryByRole("heading", { name: "分类明细" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /环形图/ })).not.toBeInTheDocument();
+
+    // jsdom matches no width query: the phone layout shows the selected month only.
+    await user.click(screen.getByRole("button", { name: "修改「买菜」2026年9月的预算" }));
+    await user.keyboard("{Control>}a{/Control}6500{Enter}");
+    expect(putBudgets).toHaveBeenCalledWith({ effective_from: "2026-09", items: [{ category_id: 11, amount: "6500.00" }] });
+    // Later months may follow the change: the months are fetched again.
+    await vi.waitFor(() => expect(detailRequests.filter((month) => month === "2026-09")).toHaveLength(2));
   });
 
   it("keeps annual spending out of the monthly comparison in 全部 and lists annual accounts apart", async () => {
@@ -147,8 +174,11 @@ describe("DashboardPage", () => {
     expect(within(summary).getByText("另有年度开支 ¥6,000.00")).toBeInTheDocument();
     expect(within(summary).getByText("42 笔消费")).toBeInTheDocument();
 
-    const card = screen.getByRole("heading", { name: "年度预算" }).closest("section")!;
+    const card = screen.getByRole("heading", { name: /^年度预算/ }).closest("section")!;
+    // Folded: one line per account.
     expect(within(card).getByText("¥8,000.00 / ¥30,000.00")).toBeInTheDocument();
+    expect(within(card).queryByRole("meter")).not.toBeInTheDocument();
+    await userEvent.setup().click(within(card).getByRole("button", { name: /^年度预算/ }));
     expect(within(card).getByText("年初至今 2 笔消费")).toBeInTheDocument();
     expect(within(card).getByRole("meter", { name: "「年度」年度预算使用进度" })).toBeInTheDocument();
     expect(annualRequests).toEqual([{ scope: null, month: "2026-10" }]);
@@ -178,7 +208,7 @@ describe("DashboardPage", () => {
     renderAt("/dashboard");
     const summary = await screen.findByRole("region", { name: "2026年10月" });
     expect(within(summary).queryByText(/另有年度开支/)).not.toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "年度预算" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^年度预算/ })).not.toBeInTheDocument();
     expect(annualRequests).toEqual([]);
   });
 

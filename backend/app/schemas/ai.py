@@ -8,7 +8,7 @@ from pydantic import AfterValidator, Field, StringConstraints, field_validator
 
 from app.schemas.common import Month, NoNul, RequestSchema, Schema
 
-MAX_POINTS = 5
+MAX_LINES = 2
 
 
 def _http_url(value: str) -> str:
@@ -79,16 +79,15 @@ class InsightPoint(Schema):
 
 
 class InsightContent(Schema):
-    """What the model must return, and what is stored. Longer point lists are cut to 5."""
+    """What the model must return, and what is stored: one or two short sentences. More are
+    cut to 2."""
 
-    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
-    month_points: list[InsightPoint]
-    year_points: list[InsightPoint]
+    lines: Annotated[list[InsightPoint], Field(min_length=1)]
 
-    @field_validator("month_points", "year_points")
+    @field_validator("lines")
     @classmethod
-    def _at_most_five(cls, points: list[InsightPoint]) -> list[InsightPoint]:
-        return points[:MAX_POINTS]
+    def _at_most_two(cls, lines: list[InsightPoint]) -> list[InsightPoint]:
+        return lines[:MAX_LINES]
 
 
 class InsightOut(InsightContent):

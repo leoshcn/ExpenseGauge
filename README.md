@@ -38,6 +38,14 @@ agent-fed, expense-only ledger:
   with its id and refund match (deleted rows are kept for 7 days).
 - **Tags** are plain text in the note (`#国庆2026`, ends at a space, `#` or punctuation;
   `##` is a literal `#`), so the agent can write them too; no API change.
+- **Dashboard (概览)**: a budget grid in the style of Actual Budget's budget view: each
+  category's budget, spent and remaining for the selected month and the two before it
+  (two months on a tablet, one on a phone), with the month totals on top. Click a budget
+  to change it in place (calculations accepted); like the budgets page it applies from that
+  month on, to later months that have no budget of their own. Click a spent figure for its
+  transactions. A month bar on top lists the last 12 months and marks those on screen;
+  click one to move there. Above the grid: the month's summary and a one- or two-sentence AI insight;
+  below it, this month's scheduled expenses and the annual budget accounts, folded.
 - **Budgets page (预算)**: last month's actual and the 3-month average (last year for an
   annual budget) beside each input, as click-to-fill buttons, and "fill all" from either.
   Amount inputs accept a calculation such as `1800*1.1`.
@@ -52,8 +60,9 @@ agent-fed, expense-only ledger:
   agent missed) and shows the month-end forecast. Nothing is created automatically.
 - **Reports (报表)**: a custom report (by category, counterparty, channel or tag; in total
   or by month; over a range of months; as a chart and a table; saved by name), the
-  month's cumulative spending against last month and the 3-month average, and a calendar
-  of daily spending that links each day to its transactions.
+  month's cumulative spending against last month and the 3-month average, a calendar
+  of daily spending that links each day to its transactions, and the 12-month trend of
+  budget against actual (趋势; a month opens on the Dashboard).
 - **Keys and privacy**: `?` lists the shortcuts; Ctrl/⌘+K opens a command palette (pages,
   categories, tags, theme); ←/→ and `0` step through months; Shift+H (or the eye button)
   blurs every amount until hovered, remembered on this device.
@@ -126,8 +135,10 @@ Refund matching in the web UI uses `GET /api/v1/transactions` (`refund_status=un
 ### AI insights (optional)
 
 The Dashboard's "全部" view has an **AI 洞察** card: on request, a large language model
-summarises the selected month and the year to date in one sentence plus points
-(overspending, anomalies, changes, what went well). It is off until configured.
+points out the one or two things most worth noticing about the selected month (an
+overspend, spending running ahead of the month, a clear change from earlier months), in one
+or two short sentences. It is off until configured. Insights generated before this format
+show their old one-line summary and are marked "数据已更新，可重新生成" until regenerated.
 
 1. Go to 设置 → AI 洞察 and enter an **OpenAI-compatible** service: the Base URL (e.g.
    `https://api.openai.com/v1`, `https://api.deepseek.com/v1`, or

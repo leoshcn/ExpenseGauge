@@ -1,18 +1,22 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { InboxIcon } from "lucide-react";
 import { useState } from "react";
 
+import type { Schemas } from "@/api/client";
 import {
   annualSummaryQuery,
   type BudgetScope,
+  keys,
   monthDetailQuery,
   monthlySummaryQuery,
+  putBudgets,
   scheduleStatusQuery,
 } from "@/api/queries";
 import { BudgetAccountSelect } from "@/components/budget-account-select";
 import { ErrorState } from "@/components/error-state";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useGridMonthCount } from "@/hooks/use-grid-month-count";
 import { useMonthHotkeys } from "@/hooks/use-hotkey";
 import { useBudgetScope } from "@/hooks/use-search-state";
 import { yearProgress } from "@/lib/budget";
@@ -22,13 +26,14 @@ import { S } from "@/strings.zh";
 import { AnnualCard } from "./annual-card";
 import { AnnualSummary } from "./annual-summary";
 import { AnnualTrendChart } from "./annual-trend-chart";
+import { BudgetGrid } from "./budget-grid";
 import { CategoryTable } from "./category-table";
 import { InsightCard } from "./insight-card";
-import { isWindowEmpty } from "./model";
+import { gridMonths, isWindowEmpty } from "./model";
+import { MonthBar } from "./month-bar";
 import { MonthSummary } from "./month-summary";
 import { ScheduleCard } from "./schedule-card";
 import { ShareChart } from "./share-chart";
-import { TrendChart } from "./trend-chart";
 
 const T = S.dashboard;
 const WINDOW_MONTHS = 12;
@@ -36,10 +41,9 @@ const WINDOW_MONTHS = 12;
 function DashboardSkeleton() {
   return (
     <div role="status" aria-label={S.common.loading} className="grid gap-5 lg:grid-cols-3">
-      <Skeleton className="h-80 rounded-xl" />
-      <Skeleton className="h-80 rounded-xl lg:col-span-2" />
-      <Skeleton className="h-96 rounded-xl lg:col-span-2" />
-      <Skeleton className="h-96 rounded-xl" />
+      <Skeleton className="h-44 rounded-xl lg:col-span-2" />
+      <Skeleton className="h-44 rounded-xl" />
+      <Skeleton className="h-96 rounded-xl lg:col-span-3" />
     </div>
   );
 }
@@ -58,8 +62,9 @@ function EmptyState({ scoped }: { scoped: boolean }) {
 }
 
 /**
- * "全部" or one monthly budget account: the month against the monthly budgets. In "全部"
- * annual accounts are left out of that comparison; their spending is shown beside it
+ * "全部" or one monthly budget account: the month against the monthly budgets, and the
+ * budget grid of that month and the two before it, where budgets are edited in place. In
+ * "全部" annual accounts are left out of that comparison; their spending is shown beside it
  * (`annual_actual`) and, when `withAnnual`, in the annual card.
  */
 function DashboardBody({
@@ -67,7 +72,6 @@ function DashboardBody({
   month,
   firstMonth,
   lastMonth,
-  onMonthChange,
   onOpenAccount,
   withAnnual,
   now,
@@ -76,20 +80,37 @@ function DashboardBody({
   month: string;
   firstMonth: string;
   lastMonth: string;
-  onMonthChange: (month: string) => void;
   onOpenAccount: (budgetAccountId: number) => void;
   /** Show the annual card: "全部" with at least one annual budget account. */
   withAnnual: boolean;
   now: Date;
 }) {
+  const queryClient = useQueryClient();
+  // Only for "nothing in the 12-month window yet".
   const summary = useQuery(monthlySummaryQuery(scope, firstMonth, lastMonth));
   // Scheduled expenses: the current month only (the status of past months is history).
   const schedules = useQuery({ ...scheduleStatusQuery(scope, month), enabled: month === lastMonth });
-  const detail = useQuery({
-    ...monthDetailQuery(scope, month),
-    // Keep the previous month on screen while the next one loads, but never another
-    // scope's figures: they would be read as this budget account's.
-    placeholderData: (previous) => (previous?.budget_account_id === scope ? previous : undefined),
+  // The grid's months, oldest first; the last one is the selected month.
+  const details = useQueries({
+    queries: gridMonths(month).map((each) => ({
+      ...monthDetailQuery(scope, each),
+      // Keep the previous months on screen while the next ones load, but never another
+      // scope's figures: they would be read as this budget account's.
+      placeholderData: (previous: Schemas["MonthDetailOut"] | undefined) =>
+        previous?.budget_account_id === scope ? previous : undefined,
+    })),
+  });
+  const detail = details[details.length - 1]!;
+  // A budget is saved from the month on: later months that follow it change too, so every
+  // month's figures (and the budgets page) are refetched.
+  const saveBudget = useMutation({
+    mutationFn: ({ categoryId, from, amount }: { categoryId: number; from: string; amount: string | null }) =>
+      putBudgets({ effective_from: from, items: [{ category_id: categoryId, amount }] }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.budgets }),
+        queryClient.invalidateQueries({ queryKey: keys.summaries }),
+      ]),
   });
   // Only asked for in "全部" (the body is keyed by scope, so the kept result is always that).
   const annual = useQuery({
@@ -98,25 +119,29 @@ function DashboardBody({
     placeholderData: keepPreviousData,
   });
 
-  if (summary.isLoadingError || detail.isLoadingError || (withAnnual && annual.isLoadingError)) {
+  const failedDetail = details.find((each) => each.isLoadingError);
+  if (summary.isLoadingError || failedDetail || (withAnnual && annual.isLoadingError)) {
     return (
       <ErrorState
         title={S.errors.loadFailedTitle}
         // Not `summary.error ?? ...`: a summary whose background refetch failed still has
-        // data and an error, but it is the month detail that failed to load.
-        error={summary.isLoadingError ? summary.error : detail.isLoadingError ? detail.error : annual.error}
+        // data and an error, but it is a month detail that failed to load.
+        error={summary.isLoadingError ? summary.error : failedDetail ? failedDetail.error : annual.error}
         onRetry={() => {
           void summary.refetch();
-          void detail.refetch();
+          for (const each of details) void each.refetch();
           if (withAnnual) void annual.refetch();
         }}
       />
     );
   }
-  if (!summary.data || !detail.data || (withAnnual && !annual.data)) return <DashboardSkeleton />;
+  const loaded = details.flatMap((each) => (each.data ? [each.data] : []));
+  if (!summary.data || !detail.data || loaded.length < details.length || (withAnnual && !annual.data)) {
+    return <DashboardSkeleton />;
+  }
   if (isWindowEmpty(summary.data.months)) return <EmptyState scoped={scope !== null} />;
 
-  const pending = detail.isPlaceholderData || (withAnnual && annual.isPlaceholderData);
+  const pending = details.some((each) => each.isPlaceholderData) || (withAnnual && annual.isPlaceholderData);
 
   return (
     <div
@@ -126,28 +151,24 @@ function DashboardBody({
       <MonthSummary
         detail={detail.data}
         month={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         now={now}
         forecast={month === lastMonth ? (schedules.data?.forecast ?? null) : null}
+        className={scope === null ? "lg:col-span-2" : "lg:col-span-3"}
       />
-      <TrendChart
-        summary={summary.data}
-        selected={month}
-        onSelect={onMonthChange}
-        className="lg:col-span-2"
+      {/* The AI insight is about everything, so it is not offered for one budget account. */}
+      {scope === null ? <InsightCard month={month} /> : null}
+      <BudgetGrid
+        details={loaded}
+        current={lastMonth}
+        onSave={(categoryId, from, amount) => saveBudget.mutateAsync({ categoryId, from, amount })}
+        className="lg:col-span-3"
       />
       {month === lastMonth && schedules.data && schedules.data.items.length > 0 ? (
         <ScheduleCard status={schedules.data} currency={detail.data.currency} now={now} className="lg:col-span-3" />
       ) : null}
-      {/* The AI insight is about everything, so it is not offered for one budget account. */}
-      {scope === null ? <InsightCard month={month} className="lg:col-span-3" /> : null}
       {withAnnual && annual.data && annual.data.accounts.length > 0 ? (
         <AnnualCard summary={annual.data} now={now} onOpen={onOpenAccount} className="lg:col-span-3" />
       ) : null}
-      <CategoryTable detail={detail.data} className="lg:col-span-2 lg:self-start" />
-      <ShareChart detail={detail.data} className="lg:self-start" />
     </div>
   );
 }
@@ -209,9 +230,6 @@ function AnnualBody({
         account={account}
         currency={currency}
         through={month}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         now={now}
       />
       <AnnualTrendChart
@@ -247,6 +265,7 @@ export function DashboardPage() {
   const accounts = budgetAccounts.data ?? [];
   const annualScope = scope != null && accounts.find((account) => account.id === scope)?.period === "year";
   const onMonthChange = (next: string) => update({ month: next });
+  const gridMonthCount = useGridMonthCount();
   useMonthHotkeys({ month, current: lastMonth, onChange: onMonthChange, min: firstMonth, max: lastMonth });
 
   let body;
@@ -280,7 +299,6 @@ export function DashboardPage() {
         month={month}
         firstMonth={firstMonth}
         lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
         onOpenAccount={(id) => update({ scope: id })}
         withAnnual={scope === null && accounts.some((account) => account.period === "year")}
         now={now}
@@ -300,6 +318,15 @@ export function DashboardPage() {
           />
         ) : null}
       </div>
+      <MonthBar
+        month={month}
+        firstMonth={firstMonth}
+        lastMonth={lastMonth}
+        // An annual account's view shows one month ("through"); the grid as many as fit.
+        shown={annualScope ? 1 : gridMonthCount}
+        onMonthChange={onMonthChange}
+        className="rounded-xl border bg-card px-2 py-1.5 shadow-card sm:px-3"
+      />
       {body}
     </div>
   );

@@ -141,11 +141,14 @@ export function TrendChart({
   summary,
   selected,
   onSelect,
+  description = T.trend.description,
   className,
 }: {
   summary: Schemas["MonthlySummaryOut"];
   selected: string;
   onSelect: (month: string) => void;
+  /** What a click on a month does. */
+  description?: string;
   className?: string;
 }) {
   const compact = useMediaQuery("(max-width: 639px)");
@@ -163,7 +166,7 @@ export function TrendChart({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div>
           <h2 className="text-base font-semibold">{T.trend.title}</h2>
-          <p className="text-xs text-muted-foreground">{T.trend.description}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
         <Legend annual={annual} />
       </div>

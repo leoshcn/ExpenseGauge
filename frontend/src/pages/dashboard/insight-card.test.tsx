@@ -7,13 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, type Schemas } from "@/api/client";
 import type * as Queries from "@/api/queries";
 
-const insight = (summary: string): Schemas["InsightOut"] => ({
-  summary,
-  month_points: [
-    { tone: "warning", text: "买菜超出预算 20%。" },
+const insight = (first: string): Schemas["InsightOut"] => ({
+  lines: [
+    { tone: "warning", text: first },
     { tone: "positive", text: "外食低于预算。" },
   ],
-  year_points: [{ tone: "neutral", text: "保险年初至今 ¥3,000.00。" }],
   model: "gpt-test",
   generated_at: "2026-10-12T08:30:00Z",
 });
@@ -63,24 +61,23 @@ describe("InsightCard", () => {
     server.state = { ...server.state, configured: false };
     renderCard();
     const section = await card();
-    expect(await within(section).findByText("尚未配置 AI 服务")).toBeInTheDocument();
+    expect(await within(section).findByText(/^尚未配置 AI 服务/)).toBeInTheDocument();
     expect(within(section).getByRole("link", { name: "去设置" })).toHaveAttribute("href", "/settings?tab=ai");
     expect(within(section).queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("generates on request and shows the summary, both groups of points, model and time", async () => {
+  it("generates on request and shows its one or two sentences, model and time", async () => {
     const user = userEvent.setup();
     renderCard();
     const section = await card();
-    expect(await within(section).findByText("这个月还没有洞察")).toBeInTheDocument();
+    expect(await within(section).findByText(/^点击生成/)).toBeInTheDocument();
     expect(generateInsight).not.toHaveBeenCalled();
 
     await user.click(within(section).getByRole("button", { name: "生成洞察" }));
     expect(generateInsight).toHaveBeenCalledWith("2026-09");
     expect(await within(section).findByText("新的总结")).toBeInTheDocument();
-    expect(within(section).getByText("本月")).toBeInTheDocument();
-    expect(within(section).getByText("本年")).toBeInTheDocument();
-    expect(within(section).getByText("买菜超出预算 20%。")).toBeInTheDocument();
+    expect(within(section).getByText("外食低于预算。")).toBeInTheDocument();
+    expect(within(section).getAllByRole("listitem")).toHaveLength(2);
     expect(within(section).getByText("需要注意：")).toBeInTheDocument();
     expect(within(section).getByText(/^gpt-test · 生成于 /)).toBeInTheDocument();
     expect(within(section).getByRole("button", { name: "重新生成" })).toBeInTheDocument();

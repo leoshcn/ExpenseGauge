@@ -10,6 +10,7 @@ import type { BudgetScope, ReportGroupBy } from "@/api/queries";
 
 const daily = { id: 1, name: "日常", period: "month" as const };
 const summaries: { groupBy: ReportGroupBy; from: string; to: string; scope: BudgetScope }[] = [];
+const trends: { from: string; to: string; scope: BudgetScope }[] = [];
 const saveReport = vi.fn(async (body: Schemas["SavedReportIn"]) => ({ id: 9, ...body }));
 
 vi.mock("@/api/queries", async (importOriginal) => {
@@ -47,6 +48,18 @@ vi.mock("@/api/queries", async (importOriginal) => {
           days: [{ date: "2026-10-02", amount: "88.00" }],
           budgets: [{ month: "2026-10", budget: "1000.00" }],
         }),
+      }),
+    monthlySummaryQuery: (scope: BudgetScope, from: string, to: string) =>
+      queryOptions({
+        queryKey: actual.keys.monthlySummary(scope, from, to),
+        queryFn: async (): Promise<Schemas["MonthlySummaryOut"]> => {
+          trends.push({ from, to, scope });
+          return {
+            budget_account_id: scope,
+            currency: "CNY",
+            months: [{ month: "2026-10", budget: "1000.00", actual: "88.00", annual_actual: "0.00" }],
+          };
+        },
       }),
     saveReport,
   };
@@ -105,5 +118,13 @@ describe("ReportsPage", () => {
     const day = await screen.findByRole("link", { name: "10月2日：¥88.00" });
     expect(day).toHaveAttribute("href", "/transactions?from=2026-10-02&to=2026-10-02");
     expect(screen.getByText("本月合计 ¥88.00")).toBeInTheDocument();
+  });
+
+  it("shows the 12-month trend of budget against actual for the scope", async () => {
+    renderAt("/reports?tab=trend&scope=1");
+    expect(await screen.findByRole("heading", { name: "近 12 个月" })).toBeInTheDocument();
+    expect(screen.getByText("点击柱形打开该月的概览")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "趋势" })).toHaveAttribute("aria-selected", "true");
+    expect(trends).toEqual([{ from: "2025-11", to: "2026-10", scope: 1 }]);
   });
 });

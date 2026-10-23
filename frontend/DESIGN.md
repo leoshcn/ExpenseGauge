@@ -124,14 +124,21 @@ Line heights are taller than Latin defaults because Chinese glyphs fill the em b
 
 ## Layout
 
-- **From `lg` (1024 px)**: fixed 224 px sidebar; a three-column grid with the month summary
-  (1) beside the 12-month chart (2), then ("全部" only) the AI insight card across all three
-  columns, then the category table (2) beside the share chart (1).
-- **Below `lg`**: one column in reading order: summary, trend, table, share. A top bar and
-  a bottom tab bar replace the sidebar.
-- **Below `md` (768 px)** the table folds: budget, remaining and meter move under the
-  category name, the amount stays right-aligned with the percentage under it. Nothing
-  scrolls sideways at 360 px.
+- **From `lg` (1024 px)**: fixed 224 px sidebar. The Dashboard ("全部" or a monthly budget
+  account) is a three-column grid: the compact month summary (2; 3 without the insight)
+  beside the AI insight card (1, "全部" only), then the budget grid across all three, then
+  the folded scheduled-expense and annual cards across all three. An annual budget
+  account's view keeps its year-to-date layout: summary (1) beside the monthly chart (2),
+  then the category table (2) beside the share chart (1).
+- **Below `lg`**: one column in reading order. A top bar and a bottom tab bar replace the
+  sidebar.
+- **The budget grid shows as many months as fit**: three from `xl` (1280 px; with the
+  sidebar narrower screens cannot fit nine amount columns), two from `md`, one below.
+  Only the shown months are rendered (not hidden with CSS). Below `sm` the grid's text is
+  12 px and its cell padding 4 px, so nothing scrolls sideways at 360 px.
+- **Below `md` (768 px)** the category table (annual view) folds: budget, remaining and
+  meter move under the category name, the amount stays right-aligned with the percentage
+  under it. Nothing scrolls sideways at 360 px.
 - **Every page has the same header**: the page title (`text-lg`) on the left, the budget
   account selector ("全部" or one budget account; Dashboard and budgets) or, on settings,
   the tabs on the right. The transactions page has no header control: its filters (month,
@@ -270,6 +277,40 @@ with these meanings.
   show a bare compact number, wider screens the full amount.
 - **Keyboard.** `?` opens the shortcut list; Ctrl/⌘+K the command palette (cmdk, top 20%
   of the screen). Single-key shortcuts never fire while typing or with a dialog open.
+
+## Three-month Dashboard (task 10-23-overview-three-months)
+
+- **Budget grid** (`pages/dashboard/budget-grid.tsx`), after Actual Budget's budget view.
+  Rows: level-1 categories (on `--muted`/20%, medium weight, folding their level-2 rows;
+  open by default) and level-2 rows indented under them; the month totals are the last
+  header row. Columns per month: 预算 / 支出 / 剩余, the month name centred over them, a
+  1 px border between months, the selected month tinted `--accent`/30%, the current one
+  chipped "本月". Amounts are plain numbers (`formatAmount`, no currency sign); the
+  heading says "单位 ¥" once.
+- **Remaining is a pill** coloured by `usage()`: over in `--over-soft`/`--over` with a
+  minus sign and a screen-reader "超支", near in `--warning-soft`, ok and positive in
+  `--positive-soft`; zero left while ok and "no budget" (`—`) stay plain. A rollover
+  category's pill shows what is available, with "含上月 ±x" under it in 11 px muted text.
+- **Editing a budget**: the cell is a ghost button (hover `--muted`); clicking it puts a
+  28 px input with the value selected in its place and a popover-coloured note under it
+  saying the change applies from that month on. Invalid input turns the note
+  `--destructive` and keeps the input open; a failed save shows the backend message in
+  the same place, in `--over`, and the cell goes back to the saved amount.
+- **Spent** links to the month's transactions of that category; a zero is muted.
+- **Month bar** (`month-bar.tsx`), after the month row on top of Actual Budget's budget
+  page: a card under the page header holding the 12-month window between ‹ › ghost
+  buttons, a small muted year above the first month and above each January. The months on
+  screen (as many as the grid shows; one in an annual account's view) form one `--accent`
+  block rounded at its ends; the selected month is semibold, the current one underlined.
+  Phones show the bare month number. It replaces the arrows that were on the summary card.
+- **Compact cards.** The month summary puts the spending and its notes beside the budget,
+  remaining and meter (stacked below `sm`), with a `text-2xl` amount instead of the
+  display size. The scheduled-expense and annual cards fold to a heading button with a
+  chevron: the schedules show their counts (vermilion when something is overdue, and then
+  open by default); the annual card lists each account's "年初至今 / 年度预算" on one line,
+  each opening that account's view. The AI insight card is one or two lines with a tone
+  icon each, the model and time in muted 12 px text at the bottom; once there is an
+  insight, regenerating is a ghost icon button right of the title (a spinner while it runs).
 
 ## States
 

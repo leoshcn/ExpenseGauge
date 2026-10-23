@@ -13,7 +13,7 @@ const T = S.dashboard;
 const A = T.annual;
 
 /**
- * An annual budget account through the selected month: the month stepper, the year to
+ * An annual budget account through the selected month: the year to
  * date against the annual budget, and the year's time progress as a tick on the meter.
  * Only spending above the budget counts as over; spending ahead of the time progress is
  * left for the reader to see from the tick.
@@ -22,18 +22,12 @@ export function AnnualSummary({
   account,
   currency,
   through,
-  firstMonth,
-  lastMonth,
-  onMonthChange,
   now,
   className,
 }: {
   account: Schemas["AnnualAccount"];
   currency: string;
   through: string;
-  firstMonth: string;
-  lastMonth: string;
-  onMonthChange: (month: string) => void;
   now: Date;
   className?: string;
 }) {
@@ -52,10 +46,6 @@ export function AnnualSummary({
       <MonthHeader
         title={A.through(year, month)}
         current={monthOf(now) === through}
-        month={through}
-        firstMonth={firstMonth}
-        lastMonth={lastMonth}
-        onMonthChange={onMonthChange}
       />
 
       <div className="mt-5">
