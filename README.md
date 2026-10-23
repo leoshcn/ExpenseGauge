@@ -24,6 +24,40 @@ category.
 Status: MVP complete: backend, frontend, Docker Compose deployment and the
 [agent integration guide](docs/agent-guide.md).
 
+### Beyond the basics
+
+Ideas borrowed from [Actual Budget](https://actualbudget.org/docs), adapted to an
+agent-fed, expense-only ledger:
+
+- **Transactions page (流水)**: search in counterparty, description and note; an amount
+  range; `#tags` written in notes (shown as chips, filterable, renamable everywhere, with
+  autocompletion in the note field); rows grouped by day with each day's net; above the
+  list the count, consumption count and net of the filter. Select rows (Shift for a
+  range) to see their sum and change their category or delete them at once. Every change
+  there can be undone from the toast or with Ctrl/⌘+Z; a deleted transaction comes back
+  with its id and refund match (deleted rows are kept for 7 days).
+- **Tags** are plain text in the note (`#国庆2026`, ends at a space, `#` or punctuation;
+  `##` is a literal `#`), so the agent can write them too; no API change.
+- **Budgets page (预算)**: last month's actual and the 3-month average (last year for an
+  annual budget) beside each input, as click-to-fill buttons, and "fill all" from either.
+  Amount inputs accept a calculation such as `1800*1.1`.
+- **Rollover (结余结转)**: in 设置 → 分类 a level-2 category of a monthly budget account
+  can carry what it leaves (or overspends) into the next month, from a chosen month. The
+  Dashboard then shows what is *available* (carry-in + budget − actual) and judges the
+  row by it; level-1 rows and the month total are unchanged.
+- **Scheduled expenses (定期支出)**: rent, subscriptions and other recurring bills, kept in
+  设置 → 定期支出 (or found in the last 6 months' history). A period is paid when a payment
+  within 3 days of the due date has the keyword and the amount (exact, or within 7.5%).
+  The Dashboard lists this month's as paid, pending or overdue (possibly a payment the
+  agent missed) and shows the month-end forecast. Nothing is created automatically.
+- **Reports (报表)**: a custom report (by category, counterparty, channel or tag; in total
+  or by month; over a range of months; as a chart and a table; saved by name), the
+  month's cumulative spending against last month and the 3-month average, and a calendar
+  of daily spending that links each day to its transactions.
+- **Keys and privacy**: `?` lists the shortcuts; Ctrl/⌘+K opens a command palette (pages,
+  categories, tags, theme); ←/→ and `0` step through months; Shift+H (or the eye button)
+  blurs every amount until hovered, remembered on this device.
+
 ## Run with Docker Compose
 
 Requires Docker with the Compose plugin. Three services: `web` (nginx: the web UI and a
@@ -164,6 +198,11 @@ keep the old data for reference.
 **Migration 0007 (refund matching)** only adds a column: every existing refund is
 unmatched and every figure stays as it was. Matching a refund to a payment of an earlier
 month changes that month's figures afterwards. Its downgrade drops the matches.
+
+**Migrations 0009–0012** are additive: `deleted_transactions` (undo of deletes),
+`categories.rollover_from` (NULL for every existing category, so no figure changes until
+rollover is turned on), `schedules` and `saved_reports`. Their downgrades drop what they
+added.
 
 ### Logs
 

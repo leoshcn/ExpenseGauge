@@ -120,7 +120,7 @@ for (const viewport of Object.keys(VIEWPORTS)) {
   await page.goto(`${BASE}/dashboard`);
   await ready(page);
   for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: "上一个月" }).click();
-  await page.locator("[aria-busy=false]").waitFor();
+  await page.locator("[aria-busy=false]").first().waitFor();
   await page.getByRole("button", { name: "全部展开" }).click();
   await capture(page, `dashboard-${viewport}-refund-month`);
 
@@ -209,6 +209,19 @@ if (want("transactions")) {
     await page.goto(`${BASE}/transactions?category=${tree.categories.at(-1).children.at(-1).id}&month=2000-01`);
     await page.getByText("没有符合条件的流水").waitFor();
     await capture(page, `transactions-${viewport}-no-match`);
+
+    // Search and a tag (from the demo notes).
+    await page.goto(`${BASE}/transactions?q=${encodeURIComponent("携程")}&tag=${encodeURIComponent("国庆成都")}`);
+    await settled(page);
+    await capture(page, `transactions-${viewport}-search-tag`);
+
+    // Three rows selected: the bar with their sum (nothing is changed).
+    await page.goto(`${BASE}/transactions`);
+    await settled(page);
+    const boxes = page.getByRole("checkbox", { name: /^选择「/ });
+    await boxes.nth(0).click();
+    await boxes.nth(2).click({ modifiers: ["Shift"] });
+    await captureScreen(page, `transactions-${viewport}-selected`);
     await context.close();
   }
 }
@@ -262,7 +275,7 @@ if (want("settings")) {
   for (const viewport of Object.keys(VIEWPORTS)) {
     for (const theme of THEMES) {
       const { context, page } = await open(browser, viewport, theme);
-      for (const tab of ["ledger", "categories", "agent"]) {
+      for (const tab of ["ledger", "categories", "schedules", "agent"]) {
         await page.goto(`${BASE}/settings?tab=${tab}`);
         await settled(page);
         await capture(page, `settings-${viewport}-${theme}-${tab}`);
@@ -291,6 +304,13 @@ if (want("settings")) {
     await page.getByRole("button", { name: /^编辑「/ }).first().click();
     await page.getByRole("dialog").waitFor();
     await captureScreen(page, `settings-${viewport}-category-edit`);
+    await page.keyboard.press("Escape");
+
+    await page.goto(`${BASE}/settings?tab=schedules`);
+    await settled(page);
+    await page.getByRole("button", { name: "添加定期支出" }).click();
+    await page.getByRole("dialog").waitFor();
+    await captureScreen(page, `settings-${viewport}-schedule-add`);
     await page.keyboard.press("Escape");
 
     await page.goto(`${BASE}/settings`);
@@ -329,6 +349,46 @@ if (want("settings")) {
     await captureScreen(page, `settings-${viewport}-token-created`);
     await context.close();
   }
+}
+
+if (want("reports")) {
+  for (const viewport of Object.keys(VIEWPORTS)) {
+    for (const theme of THEMES) {
+      const { context, page } = await open(browser, viewport, theme);
+      await page.goto(`${BASE}/reports?group=tag&range=last_6`);
+      await settled(page);
+      await capture(page, `reports-${viewport}-${theme}-custom`);
+      await page.goto(`${BASE}/reports?tab=pace`);
+      await settled(page);
+      await capture(page, `reports-${viewport}-${theme}-pace`);
+      await page.goto(`${BASE}/reports?tab=calendar`);
+      await settled(page);
+      await capture(page, `reports-${viewport}-${theme}-calendar`);
+      await context.close();
+    }
+    const { context, page } = await open(browser, viewport, "light");
+    await page.goto(`${BASE}/reports?group=level1&mode=monthly&range=last_6`);
+    await settled(page);
+    await capture(page, `reports-${viewport}-monthly`);
+    await context.close();
+  }
+}
+
+if (want("extras")) {
+  const { context, page } = await open(browser, "desktop", "light");
+  await page.goto(`${BASE}/dashboard`);
+  await settled(page);
+  await page.keyboard.press("Shift+H"); // privacy mode, stored in this context only
+  await captureScreen(page, "dashboard-desktop-privacy");
+  await page.keyboard.press("Shift+H");
+  await page.keyboard.press("Control+k");
+  await page.keyboard.type("地铁");
+  await captureScreen(page, "palette-desktop");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("?");
+  await page.getByRole("dialog").waitFor();
+  await captureScreen(page, "shortcuts-desktop");
+  await context.close();
 }
 
 await browser.close();

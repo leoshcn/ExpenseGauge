@@ -276,7 +276,7 @@ Submits a batch of 1 to 500 items, all from **one channel**. **All or nothing.**
 | `counterparty` | string, 1-200 | yes | as on the statement |
 | `description` | string, 0-1000 | no (default `""`) | as on the statement |
 | `category_id` | int | yes | any level-2 category |
-| `note` | string, 0-1000 | no | free text, e.g. what the user said or the original foreign amount |
+| `note` | string, 0-1000 | no | free text, e.g. what the user said or the original foreign amount. `#tags` in it (`#国庆2026`: up to a space, `#` or punctuation) group transactions across categories in the app; add one when the user names a trip or event |
 | `confirm_duplicate` | bool | no (default `false`) | **single-use**, see below |
 | `refund_of_id` | int | no | refunds only: `id` of the stored payment it reverses (from `find_payments`) |
 | `refund_of_index` | int | no | refunds only: `index` of the payment item in this same batch that it reverses |

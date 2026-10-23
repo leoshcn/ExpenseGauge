@@ -237,6 +237,40 @@ with these meanings.
   plain HTTP on a LAN too (`src/lib/clipboard.ts` falls back when the Clipboard API is
   missing).
 
+## Added views (task 10-23-actual-inspired)
+
+- **Privacy mode.** Every money figure carries the `amount` utility (`index.css`); while
+  `html.privacy` is set it is blurred (6 px) and shown on hover or focus. Chart axes print
+  `•••` instead (`usePrivacy()` in the chart components). Dates, names, percentages and
+  counts stay readable. New money on screen must get `amount`, or it leaks in privacy mode.
+- **Rollover rows.** A rollover category keeps the budget states of `usage()`, measured
+  against carry-in + budget (`rolloverBudget()` in `lib/budget.ts`): the remaining cell
+  says "可用 ¥x" with "含上月 ±¥y" under it in muted text, and a small rotate icon follows
+  the name. The month summary adds one muted line "结转分类可用合计" (vermilion when
+  negative). Level-1 rows and the total ignore carry-ins, so "1 个分类超支" is unchanged.
+- **Transactions.** Rows are grouped by day under a `--muted`/25% header with the day's
+  net on the right. The first column is a checkbox (accent-primary); selected rows take
+  `--accent`. The bulk bar floats above the page bottom (above the phone tab bar) as a
+  popover-coloured card with the selection's sum. Tags in notes are `--accent` pills that
+  turn `--primary` on hover. Undo toasts (sonner, themed with the popover tokens) put the
+  "撤销" action in `--primary`.
+- **Budgets.** The reference column replaces "当前预算": muted "上月 ¥x / 近3月均 ¥y"
+  buttons that turn `--accent` on hover; the amount in force and its start month moved
+  under the category name.
+- **Scheduled expenses.** The Dashboard card is a grid of rows (1, 2 or 3 columns): name,
+  "应于… / …到账" and the frequency in muted text, the amount, and a state chip: paid in
+  `--positive-soft`, pending outlined, overdue in `--over-soft` with a vermilion edge on
+  the row (state is never colour alone: each chip has an icon and a word). The month-end
+  forecast is a muted line with a calendar icon under the total.
+- **Reports.** Group colours are `--chart-1` to `--chart-7` by rank and `--chart-8` for
+  "其他"; at most 7 groups plus 其他 are drawn, the table lists all. The pace chart draws
+  the month in `--chart-actual` (2.5 px), last month in `--chart-4`, the 3-month average
+  dashed in `--chart-8`, and the budget as a dashed `--over` line. The calendar shades days
+  with `--primary` at 10/25/45/70% (square-root scale of the month's largest day); phones
+  show a bare compact number, wider screens the full amount.
+- **Keyboard.** `?` opens the shortcut list; Ctrl/⌘+K the command palette (cmdk, top 20%
+  of the screen). Single-key shortcuts never fire while typing or with a dialog open.
+
 ## States
 
 Every data view has four states, implemented on every page: loading (skeleton
@@ -257,4 +291,5 @@ keeps the previous result on screen at 60% opacity until the new one arrives.
   (`useRestoreFocus`). Every icon-only button (edit, delete, rename, copy, clear) has an
   accessible name that includes what it acts on ("删除「买菜」").
 - The theme follows the system on first visit and is then remembered (`localStorage`,
-  key `eg-theme`); it is applied before first paint by a script in `index.html`.
+  key `eg-theme`); it is applied before first paint by a script in `index.html`. Privacy
+  mode is remembered and applied the same way (`eg-privacy`), so amounts never flash.
