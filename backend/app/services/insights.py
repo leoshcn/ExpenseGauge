@@ -63,14 +63,14 @@ SYSTEM_PROMPT = "\n".join(
         "- 只使用给出的数据，不要编造；结论要具体，引用金额、比例、分类名称或交易对方，"
         "不要泛泛的理财建议。",
         "- 如果所选月份是当前月份，要结合时间进度判断（例如月中已用 80% 的预算属于偏快）。",
-        "- month_points 是关于所选月份的要点，year_points 是关于年初至今"
-        "（趋势和年度预算账户）的要点，各 2 到 5 条。",
+        "- 只写 1 到 2 句简短的洞察，每句一条、不超过 40 个字，"
+        "挑出最值得注意的一两件事（例如超支、花得偏快、和前几个月相比的明显变化），"
+        "不要罗列，不要复述所有数字。",
         "- tone 取值：warning 表示超支、异常或需要注意；positive 表示低于预算或有所改善；"
         "neutral 表示其他客观情况。",
         "- 使用简体中文。",
         "- 只输出一个 JSON 对象，不要输出任何其他文字，格式如下：",
-        '{"summary": "一句话总结", "month_points": [{"tone": "warning", "text": "……"}], '
-        '"year_points": [{"tone": "positive", "text": "……"}]}',
+        '{"lines": [{"tone": "warning", "text": "……"}, {"tone": "positive", "text": "……"}]}',
     ]
 )
 
@@ -207,20 +207,31 @@ def _month(month: str) -> date:
     return start
 
 
-def _out(row: AiInsight) -> InsightOut:
-    return InsightOut(**row.content, model=row.model, generated_at=row.generated_at)
+def _content(row: AiInsight) -> tuple[dict[str, Any], bool]:
+    """The stored content in the current shape, and whether it is of the old one
+    (`summary` + `month_points` + `year_points`, before insights were cut to one or two
+    sentences): its summary is kept as the one line, and it is reported as stale so the
+    user regenerates it."""
+    content = row.content
+    if "lines" in content:
+        return content, False
+    return {"lines": [{"tone": "neutral", "text": content["summary"]}]}, True
 
 
 def get_state(db: Session, month: str) -> InsightStateOut:
     """The month's cached insight and whether its data changed since. Never calls the model."""
     start = _month(month)
     row = db.get(AiInsight, start)
-    stale = row is not None and row.data_hash != data_hash(build_input(db, start))
+    if row is None:
+        return InsightStateOut(
+            month=format_month(start), configured=is_configured(db), insight=None, stale=False
+        )
+    content, outdated = _content(row)
     return InsightStateOut(
         month=format_month(start),
         configured=is_configured(db),
-        insight=_out(row) if row is not None else None,
-        stale=stale,
+        insight=InsightOut(**content, model=row.model, generated_at=row.generated_at),
+        stale=outdated or row.data_hash != data_hash(build_input(db, start)),
     )
 
 

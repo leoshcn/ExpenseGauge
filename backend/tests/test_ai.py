@@ -8,7 +8,10 @@ from datetime import date
 
 import httpx
 import pytest
+from sqlalchemy import update
 
+from app.db import get_engine
+from app.models import AiInsight
 from app.months import add_months, format_month
 from app.services import ai_client, insights
 from tests.conftest import Ledger
@@ -20,12 +23,10 @@ MONTH = "2026-09"
 INSIGHT = f"{API}/insights/{MONTH}"
 
 CONTENT = {
-    "summary": "九月买菜超支，其余分类正常。",
-    "month_points": [
+    "lines": [
         {"tone": "warning", "text": "买菜支出 ¥1,200.00，超出预算 20%。"},
         {"tone": "positive", "text": "外食低于预算。"},
     ],
-    "year_points": [{"tone": "neutral", "text": "保险年初至今支出 ¥3,000.00。"}],
 }
 
 
@@ -354,9 +355,7 @@ def test_generated_insight_is_cached_and_read_without_calling_the_model(client, 
     state = generated.json()
     assert state["configured"] is True and state["stale"] is False
     insight = state["insight"]
-    assert insight["summary"] == CONTENT["summary"]
-    assert insight["month_points"] == CONTENT["month_points"]
-    assert insight["year_points"] == CONTENT["year_points"]
+    assert insight["lines"] == CONTENT["lines"]
     assert insight["model"] == "gpt-test" and insight["generated_at"]
 
     calls = len(provider.requests)
@@ -375,10 +374,9 @@ def test_invalid_answers_keep_the_previous_insight(client, ledger, provider):
 
     for text in (
         "我无法回答。",
-        json.dumps({"summary": "", "month_points": [], "year_points": []}),
-        json.dumps(
-            {"summary": "x", "month_points": [{"tone": "bad", "text": "y"}], "year_points": []}
-        ),
+        json.dumps({"lines": []}),
+        json.dumps({"lines": [{"tone": "neutral", "text": " "}]}),
+        json.dumps({"lines": [{"tone": "bad", "text": "y"}]}),
     ):
         provider.reply = lambda request, text=text: provider.content(text)
         assert_envelope(client.post(INSIGHT), 502, "AI_INVALID_RESPONSE")
@@ -389,13 +387,34 @@ def test_invalid_answers_keep_the_previous_insight(client, ledger, provider):
     assert client.get(INSIGHT).json() == stored
 
 
-def test_points_are_capped_at_five(client, ledger, provider):
+def test_lines_are_capped_at_two(client, ledger, provider):
     seed(ledger)
     configure(client)
-    many = {**CONTENT, "month_points": [{"tone": "neutral", "text": f"第{i}条"} for i in range(8)]}
+    many = {"lines": [{"tone": "neutral", "text": f"第{i}条"} for i in range(5)]}
     provider.reply = lambda request: provider.content(json.dumps(many, ensure_ascii=False))
     insight = client.post(INSIGHT).json()["insight"]
-    assert [p["text"] for p in insight["month_points"]] == [f"第{i}条" for i in range(5)]
+    assert [p["text"] for p in insight["lines"]] == ["第0条", "第1条"]
+
+
+def test_insight_of_the_old_shape_is_read_as_its_summary_and_stale(client, ledger, provider):
+    """An insight stored before insights were cut to one or two sentences shows its summary
+    and is stale until regenerated."""
+    seed(ledger)
+    configure(client)
+    client.post(INSIGHT)
+    old = {
+        "summary": "九月买菜超支。",
+        "month_points": [{"tone": "warning", "text": "买菜超支。"}],
+        "year_points": [],
+    }
+    with get_engine().begin() as connection:
+        connection.execute(update(AiInsight).values(content=old))
+
+    state = client.get(INSIGHT).json()
+    assert state["stale"] is True
+    assert state["insight"]["lines"] == [{"tone": "neutral", "text": "九月买菜超支。"}]
+    assert client.post(INSIGHT).json()["insight"]["lines"] == CONTENT["lines"]
+    assert client.get(INSIGHT).json()["stale"] is False
 
 
 def test_insight_turns_stale_when_the_month_data_changes(client, ledger, provider):

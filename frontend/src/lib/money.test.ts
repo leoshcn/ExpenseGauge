@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { absolute, formatMoney, formatMoneyCompact, formatPercent, fromCents, subtract, toCents, toChartNumber } from "./money";
+import {
+  absolute,
+  formatAmount,
+  formatMoney,
+  formatMoneyCompact,
+  formatPercent,
+  fromCents,
+  subtract,
+  toCents,
+  toChartNumber,
+} from "./money";
 
 describe("cents", () => {
   it("parses the API's decimal strings exactly", () => {
@@ -63,5 +73,14 @@ describe("formatting", () => {
 
   it("converts for chart geometry", () => {
     expect(toChartNumber("35.50")).toBe(35.5);
+  });
+});
+
+describe("formatAmount", () => {
+  it("leaves the currency sign out and keeps the currency's decimals", () => {
+    expect(formatAmount("1234.5", "CNY")).toBe("1,234.50");
+    expect(formatAmount("-300.00", "CNY")).toBe("-300.00");
+    expect(formatAmount("1200.00", "JPY")).toBe("1,200");
+    expect(formatAmount("0.00", "USD")).toBe("0.00");
   });
 });

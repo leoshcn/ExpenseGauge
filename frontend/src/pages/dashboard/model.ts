@@ -3,7 +3,7 @@
 import type { Schemas } from "@/api/client";
 import { usage } from "@/lib/budget";
 import { fromCents, toCents, toChartNumber } from "@/lib/money";
-import { parseMonth } from "@/lib/month";
+import { addMonths, parseMonth } from "@/lib/month";
 
 export type TrendPoint = {
   month: string;
@@ -185,4 +185,64 @@ export function shares(categories: readonly Schemas["Level1Row"][], maxSlices = 
     });
   }
   return { slices, total: fromCents(totalCents), excluded };
+}
+
+/** Months shown side by side in the budget grid: the selected one and the two before it. */
+export const GRID_MONTHS = 3;
+
+/** The grid's months, oldest first, ending at `month`. */
+export function gridMonths(month: string, count = GRID_MONTHS): string[] {
+  return Array.from({ length: count }, (_, index) => addMonths(month, index - count + 1));
+}
+
+/** One level-2 category across the grid's months; null where a month does not have it. */
+export type GridChild = { category_id: number; name: string; months: (Schemas["Level2Row"] | null)[] };
+
+/** One level-1 category across the grid's months, with its level-2 categories. */
+export type GridParent = {
+  category_id: number;
+  name: string;
+  months: (Schemas["Level1Row"] | null)[];
+  children: GridChild[];
+};
+
+/**
+ * The rows of the grid from the months' details (oldest first). The order is that of the
+ * last month, the selected one, so a category stays where the month detail puts it; a
+ * category only an earlier month has (deleted, or moved to another budget account since)
+ * is added after the others of its level-1 category, and a level-1 category only an
+ * earlier month has goes last. The name is the latest month's.
+ */
+export function mergeGridRows(details: readonly Pick<Schemas["MonthDetailOut"], "categories">[]): GridParent[] {
+  const parents = new Map<number, GridParent>();
+  const children = new Map<number, GridChild>();
+  const empty = () => details.map(() => null);
+  const ordered = details.map((detail, index) => ({ detail, index })).reverse();
+
+  for (const { detail, index } of ordered) {
+    for (const level1 of detail.categories) {
+      let parent = parents.get(level1.category_id);
+      if (!parent) {
+        parent = { category_id: level1.category_id, name: level1.name, months: empty(), children: [] };
+        parents.set(level1.category_id, parent);
+      }
+      parent.months[index] = level1;
+      for (const level2 of level1.children) {
+        let child = children.get(level2.category_id);
+        if (!child) {
+          child = { category_id: level2.category_id, name: level2.name, months: empty() };
+          children.set(level2.category_id, child);
+          parent.children.push(child);
+        }
+        child.months[index] = level2;
+      }
+    }
+  }
+  return [...parents.values()];
+}
+
+/** Text to start editing a budget from: "1500.00" -> "1500", "12.50" -> "12.50", none -> "". */
+export function budgetEditText(budget: string | null): string {
+  if (budget === null) return "";
+  return budget.endsWith(".00") ? budget.slice(0, -3) : budget;
 }

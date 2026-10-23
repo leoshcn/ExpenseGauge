@@ -74,7 +74,7 @@ async function captureScreen(page, name) {
   console.log(`wrote docs/screenshots/${name}.png`);
 }
 
-const ready = (page) => page.locator(".recharts-bar-rectangle").first().waitFor();
+const ready = (page) => page.getByRole("heading", { name: "预算执行" }).waitFor();
 
 await mkdir(OUT, { recursive: true });
 const { browser, label } = await launch();
@@ -88,9 +88,10 @@ for (const viewport of Object.keys(VIEWPORTS)) {
     await ready(page);
     await capture(page, `dashboard-${viewport}-${theme}`);
 
-    // Level-1 rows opened to their level-2 rows.
-    await page.getByRole("button", { name: "全部展开" }).click();
-    await capture(page, `dashboard-${viewport}-${theme}-expanded`);
+    // A budget being edited in place (cancelled with Esc, nothing is saved).
+    await page.getByRole("button", { name: /^修改「.*的预算$/ }).last().click();
+    await captureScreen(page, `dashboard-${viewport}-${theme}-editing`);
+    await page.keyboard.press("Escape");
     await context.close();
   }
 }
@@ -106,7 +107,6 @@ for (const viewport of Object.keys(VIEWPORTS)) {
   if (fixed) {
     await page.goto(`${BASE}/dashboard?scope=${fixed}`);
     await ready(page);
-    await page.getByRole("button", { name: "全部展开" }).click();
     await capture(page, `dashboard-${viewport}-budget-account`);
   }
   const empty = byName("旅行基金");
@@ -121,7 +121,6 @@ for (const viewport of Object.keys(VIEWPORTS)) {
   await ready(page);
   for (let step = 0; step < 3; step += 1) await page.getByRole("button", { name: "上一个月" }).click();
   await page.locator("[aria-busy=false]").first().waitFor();
-  await page.getByRole("button", { name: "全部展开" }).click();
   await capture(page, `dashboard-${viewport}-refund-month`);
 
   // The API failing: the error envelope's message and code are shown with a retry.
@@ -364,6 +363,9 @@ if (want("reports")) {
       await page.goto(`${BASE}/reports?tab=calendar`);
       await settled(page);
       await capture(page, `reports-${viewport}-${theme}-calendar`);
+      await page.goto(`${BASE}/reports?tab=trend`);
+      await settled(page);
+      await capture(page, `reports-${viewport}-${theme}-trend`);
       await context.close();
     }
     const { context, page } = await open(browser, viewport, "light");

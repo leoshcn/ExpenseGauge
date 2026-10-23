@@ -30,7 +30,8 @@ class AiSettings(Base):
 class AiInsight(Base):
     """The last insight generated for one month (`month` is its first day).
 
-    `content` is `{summary, month_points, year_points}`, validated before it is saved.
+    `content` is `{lines: [{tone, text}]}` (one or two), validated before it is saved. A row
+    of the earlier `{summary, month_points, year_points}` shape is read as its summary.
     `data_hash` is the SHA-256 of the input it was generated from; when the current input
     hashes differently the insight is reported as stale.
     """

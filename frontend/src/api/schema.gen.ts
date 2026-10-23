@@ -1427,17 +1427,13 @@ export interface components {
              * Format: date-time
              */
             generated_at: string;
+            /** Lines */
+            lines: components["schemas"]["InsightPoint"][];
             /**
              * Model
              * @description Model that produced the insight
              */
             model: string;
-            /** Month Points */
-            month_points: components["schemas"]["InsightPoint"][];
-            /** Summary */
-            summary: string;
-            /** Year Points */
-            year_points: components["schemas"]["InsightPoint"][];
         };
         /** InsightPoint */
         InsightPoint: {

@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import type { Schemas } from "@/api/client";
 
-import { annualTrendPoints, hasAnnual, isWindowEmpty, niceTicks, shares, trendPoints } from "./model";
+import {
+  annualTrendPoints,
+  budgetEditText,
+  gridMonths,
+  hasAnnual,
+  isWindowEmpty,
+  mergeGridRows,
+  niceTicks,
+  shares,
+  trendPoints,
+} from "./model";
 
 const month = (
   m: string,
@@ -126,5 +136,58 @@ describe("annual spending in the trend", () => {
     expect(points[3]).toMatchObject({ month: "2026-04", actual: null, cumulative: null, pace: 10000 });
     expect(points[11]?.pace).toBe(30000);
     expect(annualTrendPoints(2026, [], null)[0]?.pace).toBeNull();
+  });
+});
+
+const leaf = (id: number, name: string, actual: string): Schemas["Level2Row"] => ({
+  category_id: id,
+  name,
+  budget: null,
+  actual,
+  count: 0,
+});
+const parent = (id: number, name: string, children: Schemas["Level2Row"][]): Schemas["Level1Row"] => ({
+  ...row(id, name, "0.00"),
+  children,
+});
+
+describe("gridMonths", () => {
+  it("ends at the month, oldest first, across a year boundary", () => {
+    expect(gridMonths("2026-10")).toEqual(["2026-08", "2026-09", "2026-10"]);
+    expect(gridMonths("2026-01")).toEqual(["2025-11", "2025-12", "2026-01"]);
+  });
+});
+
+describe("mergeGridRows", () => {
+  it("lines the months up by category in the selected month's order", () => {
+    const rows = mergeGridRows([
+      { categories: [parent(1, "餐饮", [leaf(11, "早餐", "10.00"), leaf(12, "午餐", "20.00")])] },
+      { categories: [parent(1, "餐饮", [leaf(12, "午餐", "21.00"), leaf(11, "早饭", "11.00")])] },
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.children.map((child) => child.name)).toEqual(["午餐", "早饭"]);
+    expect(rows[0]!.children[1]!.months.map((month) => month?.actual)).toEqual(["10.00", "11.00"]);
+  });
+
+  it("keeps categories only an earlier month has, after the others", () => {
+    const rows = mergeGridRows([
+      { categories: [parent(1, "餐饮", [leaf(11, "早餐", "10.00")]), parent(2, "旧分类", [leaf(21, "x", "5.00")])] },
+      { categories: [parent(1, "餐饮", [leaf(12, "午餐", "20.00")])] },
+      { categories: [parent(3, "交通", []), parent(1, "餐饮", [leaf(12, "午餐", "30.00")])] },
+    ]);
+    expect(rows.map((r) => r.name)).toEqual(["交通", "餐饮", "旧分类"]);
+    const dining = rows[1]!;
+    expect(dining.children.map((child) => child.category_id)).toEqual([12, 11]);
+    expect(dining.children[1]!.months.map((month) => month?.actual ?? null)).toEqual(["10.00", null, null]);
+    expect(rows[2]!.months.map((month) => month !== null)).toEqual([true, false, false]);
+  });
+});
+
+describe("budgetEditText", () => {
+  it("drops whole-unit decimals and leaves no budget empty", () => {
+    expect(budgetEditText("1500.00")).toBe("1500");
+    expect(budgetEditText("12.50")).toBe("12.50");
+    expect(budgetEditText("0.00")).toBe("0");
+    expect(budgetEditText(null)).toBe("");
   });
 });
