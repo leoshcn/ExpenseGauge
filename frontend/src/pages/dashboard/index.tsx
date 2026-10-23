@@ -16,6 +16,7 @@ import { AnnualCard } from "./annual-card";
 import { AnnualSummary } from "./annual-summary";
 import { AnnualTrendChart } from "./annual-trend-chart";
 import { CategoryTable } from "./category-table";
+import { InsightCard } from "./insight-card";
 import { isWindowEmpty } from "./model";
 import { MonthSummary } from "./month-summary";
 import { ShareChart } from "./share-chart";
@@ -126,6 +127,8 @@ function DashboardBody({
         onSelect={onMonthChange}
         className="lg:col-span-2"
       />
+      {/* The AI insight is about everything, so it is not offered for one budget account. */}
+      {scope === null ? <InsightCard month={month} className="lg:col-span-3" /> : null}
       {withAnnual && annual.data && annual.data.accounts.length > 0 ? (
         <AnnualCard summary={annual.data} now={now} onOpen={onOpenAccount} className="lg:col-span-3" />
       ) : null}

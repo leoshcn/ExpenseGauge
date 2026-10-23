@@ -1,6 +1,120 @@
 {
   "components": {
     "schemas": {
+      "AiSettingsOut": {
+        "properties": {
+          "api_key_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Last 4 characters of the stored key, if any",
+            "title": "Api Key Hint"
+          },
+          "api_key_set": {
+            "description": "Whether an API key is stored; the key is never returned",
+            "title": "Api Key Set",
+            "type": "boolean"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base URL of the OpenAI-compatible API",
+            "title": "Base Url"
+          },
+          "configured": {
+            "description": "Base URL and model are both set (the key is optional)",
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "required": [
+          "base_url",
+          "model",
+          "api_key_set",
+          "api_key_hint",
+          "configured"
+        ],
+        "title": "AiSettingsOut",
+        "type": "object"
+      },
+      "AiSettingsUpdateIn": {
+        "additionalProperties": false,
+        "description": "`api_key` omitted keeps the stored key, a string replaces it, `null` clears it.",
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "description": "For example https://api.openai.com/v1",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url",
+          "model"
+        ],
+        "title": "AiSettingsUpdateIn",
+        "type": "object"
+      },
+      "AiTestOut": {
+        "properties": {
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model",
+          "latency_ms"
+        ],
+        "title": "AiTestOut",
+        "type": "object"
+      },
       "AnnualAccount": {
         "properties": {
           "actual": {
@@ -858,6 +972,111 @@
         "title": "ErrorEnvelope",
         "type": "object"
       },
+      "InsightOut": {
+        "properties": {
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "model": {
+            "description": "Model that produced the insight",
+            "title": "Model",
+            "type": "string"
+          },
+          "month_points": {
+            "items": {
+              "$ref": "#/components/schemas/InsightPoint"
+            },
+            "title": "Month Points",
+            "type": "array"
+          },
+          "summary": {
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "year_points": {
+            "items": {
+              "$ref": "#/components/schemas/InsightPoint"
+            },
+            "title": "Year Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "summary",
+          "month_points",
+          "year_points",
+          "model",
+          "generated_at"
+        ],
+        "title": "InsightOut",
+        "type": "object"
+      },
+      "InsightPoint": {
+        "properties": {
+          "text": {
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "tone": {
+            "description": "warning: overspend or anomaly; positive: under budget or improvement",
+            "enum": [
+              "warning",
+              "positive",
+              "neutral"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tone",
+          "text"
+        ],
+        "title": "InsightPoint",
+        "type": "object"
+      },
+      "InsightStateOut": {
+        "properties": {
+          "configured": {
+            "description": "Whether an AI service is configured",
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "insight": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InsightOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The cached insight of the month, if any"
+          },
+          "month": {
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+            "title": "Month",
+            "type": "string"
+          },
+          "stale": {
+            "description": "The month's data changed since the insight was generated; false without one",
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "month",
+          "configured",
+          "insight",
+          "stale"
+        ],
+        "title": "InsightStateOut",
+        "type": "object"
+      },
       "Level1Row": {
         "properties": {
           "actual": {
@@ -1683,6 +1902,140 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/ai/settings": {
+      "get": {
+        "description": "The OpenAI-compatible service used for insights. The API key is never returned:\nonly whether one is set and its last 4 characters.",
+        "operationId": "get_ai_settings_api_v1_ai_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Ai Settings",
+        "tags": [
+          "ai"
+        ]
+      },
+      "put": {
+        "description": "Saves base URL and model. `api_key` omitted keeps the stored key, a string\nreplaces it, `null` clears it.",
+        "operationId": "update_ai_settings_api_v1_ai_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiSettingsUpdateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Update Ai Settings",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/v1/ai/settings/test": {
+      "post": {
+        "description": "Sends one minimal chat request with the saved configuration; returns the latency.\n409 `AI_NOT_CONFIGURED`, 502 `AI_PROVIDER_ERROR` / `AI_INVALID_RESPONSE`, 504\n`AI_PROVIDER_TIMEOUT`.",
+        "operationId": "test_ai_settings_api_v1_ai_settings_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Test Ai Settings",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "login_api_v1_auth_login_post",
@@ -2632,6 +2985,112 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/insights/{month}": {
+      "get": {
+        "description": "The month's cached insight, and `stale` when its data changed since it was\ngenerated. Never calls the model.",
+        "operationId": "get_insight_api_v1_insights__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightStateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Get Insight",
+        "tags": [
+          "insights"
+        ]
+      },
+      "post": {
+        "description": "Sends the month's summaries and transactions to the configured AI service and\nstores the answer. A failure leaves the stored insight unchanged. 409\n`AI_NOT_CONFIGURED`, 502 `AI_PROVIDER_ERROR` / `AI_INVALID_RESPONSE`, 504\n`AI_PROVIDER_TIMEOUT`.",
+        "operationId": "generate_insight_api_v1_insights__month__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+              "title": "Month",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightStateOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Any non-2xx response"
+          }
+        },
+        "summary": "Generate Insight",
+        "tags": [
+          "insights"
         ]
       }
     },

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, queryOptions } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -94,6 +94,16 @@ vi.mock("@/api/queries", async (importOriginal) => {
           return { currency: "CNY", year: Number(month.slice(0, 4)), through: month, accounts: [annualAccount()] };
         },
       }),
+    insightQuery: (month: string) =>
+      queryOptions({
+        queryKey: actual.keys.insight(month),
+        queryFn: async (): Promise<Schemas["InsightStateOut"]> => ({
+          month,
+          configured: false,
+          insight: null,
+          stale: false,
+        }),
+      }),
   };
 });
 
@@ -144,6 +154,17 @@ describe("DashboardPage", () => {
     await user.click(await screen.findByRole("button", { name: "查看「年度」" }));
     expect(await screen.findByRole("region", { name: "截至2026年3月" })).toBeInTheDocument();
     expect(annualRequests).toContainEqual({ scope: 3, month: "2026-03" });
+  });
+
+  it("offers the AI insight in 全部 only", async () => {
+    renderAt("/dashboard?month=2026-09");
+    expect(await screen.findByRole("heading", { name: "AI 洞察" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "去设置" })).toHaveAttribute("href", "/settings?tab=ai");
+
+    cleanup();
+    renderAt("/dashboard?scope=1&month=2026-09");
+    expect(await screen.findByRole("region", { name: "2026年9月" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "AI 洞察" })).not.toBeInTheDocument();
   });
 
   it("looks as before with monthly budget accounts only", async () => {

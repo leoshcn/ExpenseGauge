@@ -174,3 +174,32 @@ export function activeFirst(tokens: readonly Schemas["TokenOut"][]): Schemas["To
     return b.id - a.id;
   });
 }
+
+/** What the AI settings form holds: the key field is only what the user typed now. */
+export type AiForm = { baseUrl: string; model: string; apiKey: string; clearKey: boolean };
+
+export type AiFormErrors = { baseUrl?: "required" | "invalid"; model?: "required"; apiKey?: "invalid" };
+
+export function validateAiForm(form: AiForm): AiFormErrors {
+  const baseUrl = form.baseUrl.trim();
+  const errors: AiFormErrors = {};
+  if (!baseUrl) errors.baseUrl = "required";
+  else if (!/^https?:\/\/[^/\s]+/i.test(baseUrl)) errors.baseUrl = "invalid";
+  if (!form.model.trim()) errors.model = "required";
+  // The key is sent in an HTTP header: printable ASCII only, no inner spaces.
+  const key = form.apiKey.trim();
+  if (!form.clearKey && key && !/^[\x21-\x7e]+$/.test(key)) errors.apiKey = "invalid";
+  return errors;
+}
+
+/**
+ * The PUT body. `api_key` is sent only when the user typed a new key (replace) or pressed
+ * 清除 (`null`); left out, the server keeps the stored key.
+ */
+export function aiSettingsBody(form: AiForm): Schemas["AiSettingsUpdateIn"] {
+  const body: Schemas["AiSettingsUpdateIn"] = { base_url: form.baseUrl.trim(), model: form.model.trim() };
+  const key = form.apiKey.trim();
+  if (form.clearKey) body.api_key = null;
+  else if (key) body.api_key = key;
+  return body;
+}

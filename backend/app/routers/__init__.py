@@ -5,11 +5,13 @@ from fastapi import APIRouter, Depends
 from app.deps import require_json_body
 from app.errors import ErrorEnvelope
 from app.routers import (
+    ai,
     auth,
     budget_accounts,
     budgets,
     categories,
     channels,
+    insights,
     settings,
     summaries,
     transactions,
@@ -39,5 +41,7 @@ for module in (
     budgets,
     transactions,
     summaries,
+    ai,
+    insights,
 ):
     api_router.include_router(module.router)

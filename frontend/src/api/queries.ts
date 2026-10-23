@@ -32,6 +32,12 @@ export const keys = {
   /** Year to date through `month`; `null` scope = every annual budget account. */
   annualSummary: (scope: BudgetScope, month: string) =>
     ["ledger", "summary", "annual", scopeKey(scope), month] as const,
+  /**
+   * Prefix of the cached AI insights. Under `summaries`, so every change that moves a
+   * figure also refreshes their `stale` flag.
+   */
+  insights: ["ledger", "summary", "insight"] as const,
+  insight: (month: string) => ["ledger", "summary", "insight", month] as const,
   transactions: ["ledger", "transactions"] as const,
   transactionPage: (filter: TransactionFilter) => ["ledger", "transactions", filter] as const,
   /** Payments a refund may be matched to (under `transactions`, so edits refresh them). */
@@ -42,6 +48,8 @@ export const keys = {
   budgets: ["ledger", "budgets"] as const,
   budgetsAt: (scope: BudgetScope, month: string) => ["ledger", "budgets", scopeKey(scope), month] as const,
   tokens: ["tokens"] as const,
+  /** The AI service for insights (the API key is never part of it). */
+  aiSettings: ["ai-settings"] as const,
 };
 
 /** The transaction list's query parameters; `null` means "not filtered". */
@@ -176,6 +184,19 @@ export const tokensQuery = queryOptions({
   queryFn: () => unwrap(api.GET("/api/v1/tokens")),
 });
 
+/** Base URL and model of the AI service; the key only as `api_key_set` and its last 4 characters. */
+export const aiSettingsQuery = queryOptions({
+  queryKey: keys.aiSettings,
+  queryFn: () => unwrap(api.GET("/api/v1/ai/settings")),
+});
+
+/** The month's cached AI insight and whether its data changed since. Never calls the model. */
+export const insightQuery = (month: string) =>
+  queryOptions({
+    queryKey: keys.insight(month),
+    queryFn: () => unwrap(api.GET("/api/v1/insights/{month}", { params: { path: { month } } })),
+  });
+
 // Requests behind mutations. Pages wrap them in `useMutation`.
 
 export const createFirstUser = (body: Schemas["CredentialsIn"]) =>
@@ -285,6 +306,17 @@ export const deleteTransaction = (transactionId: number) =>
 export const putBudgets = (body: Schemas["BudgetsPutIn"]) => unwrap(api.PUT("/api/v1/budgets", { body }));
 
 export const createToken = (body: Schemas["TokenCreateIn"]) => unwrap(api.POST("/api/v1/tokens", { body }));
+
+/** `api_key` omitted keeps the stored key, a string replaces it, `null` clears it. */
+export const updateAiSettings = (body: Schemas["AiSettingsUpdateIn"]) =>
+  unwrap(api.PUT("/api/v1/ai/settings", { body }));
+
+/** One minimal request to the saved AI service; resolves with its latency. */
+export const testAiSettings = () => unwrap(api.POST("/api/v1/ai/settings/test"));
+
+/** Asks the AI service about `month` (may take minutes); a failure keeps the cached insight. */
+export const generateInsight = (month: string) =>
+  unwrap(api.POST("/api/v1/insights/{month}", { params: { path: { month } } }));
 
 export const revokeToken = (tokenId: number) =>
   unwrap(api.DELETE("/api/v1/tokens/{token_id}", { params: { path: { token_id: tokenId } } }));

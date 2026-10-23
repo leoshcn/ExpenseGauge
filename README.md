@@ -87,6 +87,35 @@ Refund matching in the web UI uses `GET /api/v1/transactions` (`refund_status=un
 `stats`), `GET /api/v1/transactions/{id}/refund-candidates` and `PATCH
 /api/v1/transactions/{id}` (`refund_of_id`); the full contract is at `/api/docs`.
 
+### AI insights (optional)
+
+The Dashboard's "全部" view has an **AI 洞察** card: on request, a large language model
+summarises the selected month and the year to date in one sentence plus points
+(overspending, anomalies, changes, what went well). It is off until configured.
+
+1. Go to 设置 → AI 洞察 and enter an **OpenAI-compatible** service: the Base URL (e.g.
+   `https://api.openai.com/v1`, `https://api.deepseek.com/v1`, or
+   `http://<host>:11434/v1` for Ollama), the model name and the API key (may be left empty
+   for local servers). The backend calls `POST {Base URL}/chat/completions`. Anthropic's
+   native API is not supported; use an OpenAI-compatible gateway in front of it.
+2. "测试连接" sends one tiny request with the saved settings and shows the latency or the
+   reason it failed.
+3. On the Dashboard, pick a month and click "生成洞察". The result is stored per month and
+   shown again without calling the model; when the month's data changes afterwards the card
+   says "数据已更新，可重新生成". A failed generation keeps the previous result.
+
+What is sent, and only when you click 生成: the month's budget, spending and category
+rows, the 12-month trend up to that month, the annual budget accounts' year to date, and
+**every transaction of that month** (date, amount, category, counterparty, description,
+refund information; at most the 1000 largest). Notes, payment channels and IDs are not
+sent. Choose the provider accordingly.
+
+The API key is stored in the database in plain text and never returned by the API (only
+whether one is set and its last 4 characters); it is therefore also in database backups.
+The `api` container needs outbound network access to the provider (or LAN access to an
+Ollama host). Generation may take up to 4 minutes (`/api/v1/insights/` gets a 300 s proxy
+timeout in nginx).
+
 ### Backup and restore
 
 Run from the directory with `docker-compose.yml`. The database user and name are those
