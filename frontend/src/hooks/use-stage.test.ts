@@ -34,6 +34,7 @@ const tree = (children: number): Schemas["CategoryTree"] => ({
         name: "买菜",
         description: null,
         budget_account: daily,
+        rollover_from: null,
       })),
     },
   ],

@@ -117,12 +117,14 @@ def test_category_tree_is_global_with_budget_accounts_on_level2(client, agent, l
                         "name": "买菜",
                         "description": None,
                         "budget_account": daily,
+                        "rollover_from": None,
                     },
                     {
                         "id": ledger.dining,
                         "name": "外食",
                         "description": None,
                         "budget_account": daily,
+                        "rollover_from": None,
                     },
                 ],
             },
@@ -135,6 +137,7 @@ def test_category_tree_is_global_with_budget_accounts_on_level2(client, agent, l
                         "name": "地铁",
                         "description": None,
                         "budget_account": daily,
+                        "rollover_from": None,
                     }
                 ],
             },
@@ -179,6 +182,7 @@ def test_tree_filtered_by_budget_account(client, ledger):
         "name": "维修",
         "description": None,
         "budget_account_id": fixed,
+        "rollover_from": None,
     }
     assert tree(fixed) == [("居住", ["房租", "维修"])]
     assert tree(ledger.daily) == [("餐饮", ["买菜", "外食"]), ("交通", ["地铁"])]
@@ -258,6 +262,7 @@ def test_category_rules(client, ledger):
         "name": "公共交通",
         "description": None,
         "budget_account_id": ledger.daily,
+        "rollover_from": None,
     }
     clash = client.patch(f"{API}/categories/{ledger.dining}", json={"name": "买菜"})
     assert_envelope(clash, 409, "CATEGORY_NAME_TAKEN")
@@ -309,6 +314,7 @@ def test_level2_category_description(client, agent, ledger):
         "name": "超市",
         "description": "线下商超",
         "budget_account": {"id": ledger.daily, "name": "日常", "period": "month"},
+        "rollover_from": None,
     }
     assert "description" not in tree[0]
 
@@ -374,6 +380,7 @@ def test_level1_category_has_no_description(client, ledger):
         "name": "居家",
         "description": None,
         "budget_account_id": None,
+        "rollover_from": None,
     }
 
 

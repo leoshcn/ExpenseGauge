@@ -83,6 +83,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
           count: 42,
           budget_account_id: scope,
           currency: "CNY",
+          rollover_available: null,
           categories: [food],
         }),
       }),

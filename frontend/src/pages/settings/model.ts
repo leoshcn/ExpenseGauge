@@ -26,12 +26,25 @@ export function hermesConfig(endpoint: string, token: string): string {
 /** Longest description of a level-2 category (`categories.description VARCHAR(500)`). */
 export const CATEGORY_DESCRIPTION_MAX = 500;
 
-/** A level-2 category's editable fields as the API stores them. */
-export type CategoryFields = { name: string; description: string | null; budgetAccountId: number };
+/**
+ * A level-2 category's editable fields as the API stores them. `rolloverFrom` is the
+ * month its rollover starts (`YYYY-MM`), or null.
+ */
+export type CategoryFields = {
+  name: string;
+  description: string | null;
+  budgetAccountId: number;
+  rolloverFrom: string | null;
+};
 
 /** The form's values as the API stores them: trimmed, a blank description as `null`. */
-export function categoryFields(name: string, description: string, budgetAccountId: number): CategoryFields {
-  return { name: name.trim(), description: description.trim() || null, budgetAccountId };
+export function categoryFields(
+  name: string,
+  description: string,
+  budgetAccountId: number,
+  rolloverFrom: string | null = null,
+): CategoryFields {
+  return { name: name.trim(), description: description.trim() || null, budgetAccountId, rolloverFrom };
 }
 
 /** The body that creates a level-2 category under `parentId`. */
@@ -53,6 +66,7 @@ export function categoryChanges(
   if (next.name !== initial.name) changes.name = next.name;
   if (next.description !== initial.description) changes.description = next.description;
   if (next.budgetAccountId !== initial.budgetAccountId) changes.budget_account_id = next.budgetAccountId;
+  if (next.rolloverFrom !== initial.rolloverFrom) changes.rollover_from = next.rolloverFrom;
   return Object.keys(changes).length > 0 ? changes : null;
 }
 

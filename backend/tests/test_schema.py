@@ -369,6 +369,9 @@ def test_0006_keeps_the_order_of_existing_categories(client):
         command.upgrade(config, "0006")
         assert rows("id, position") == [(1, 0), (2, 1), (3, 0), (4, 0), (6, 1), (7, 1), (8, 2)]
         assert rows("id, parent_id, name, description, budget_account_id") == before
+        # The API reads the current models: bring the rest of the schema up to date.
+        get_engine().dispose()
+        command.upgrade(config, "head")
 
         def tree() -> list[tuple[str, list[str]]]:
             body = client.get(f"{API}/categories").json()
@@ -461,6 +464,9 @@ def test_0007_leaves_every_refund_unmatched_and_the_figures_unchanged(client):
                 )
                 == 0
             )
+        # The API reads the current models: bring the rest of the schema up to date.
+        get_engine().dispose()
+        command.upgrade(config, "head")
         for month in ("2026-08", "2026-09"):
             leaves = {
                 child["category_id"]: child["actual"]

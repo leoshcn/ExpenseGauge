@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db import get_by_id
 from app.errors import conflict, invalid, not_found
 from app.models import Budget, BudgetAccount, Category, Transaction
+from app.months import format_month, parse_month
 from app.schemas.budget_account import BudgetAccountOut
 from app.schemas.category import CategoryLeaf, CategoryNode, CategoryTree
 from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
@@ -71,6 +72,7 @@ def to_leaf(category: Category, budget_accounts: dict[int, BudgetAccount]) -> Ca
         name=category.name,
         description=category.description,
         budget_account=BudgetAccountOut.model_validate(budget_accounts[category.budget_account_id]),
+        rollover_from=format_month(category.rollover_from) if category.rollover_from else None,
     )
 
 
@@ -197,7 +199,8 @@ def reorder_categories(db: Session, parent_id: int | None, ordered_ids: list[int
 
 def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Category:
     """Applies only the given fields (`name`, `description`, `budget_account_id`,
-    `budget_amount`); the others keep their value.
+    `budget_amount`, `rollover_from`); the others keep their value. A move to an annual
+    budget account turns rollover off.
 
     A new budget account of the same period moves the category's whole history. One of
     the other period (monthly <-> annual) needs `budget_amount` (None = no budget): the
@@ -231,10 +234,31 @@ def update_category(db: Session, category_id: int, fields: dict[str, Any]) -> Ca
         category.budget_account_id = fields["budget_account_id"]
         if cross_period:
             _reset_budget(db, category.id, target.period, fields["budget_amount"])
+        if target.period == "year":
+            category.rollover_from = None  # rollover is for monthly budgets only
+    if "rollover_from" in fields:
+        _set_rollover(db, category, fields["rollover_from"])
     if "name" in fields:
         category.name = fields["name"]
     _commit_name(db)
     return category
+
+
+def _set_rollover(db: Session, category: Category, month: str | None) -> None:
+    """Turns rollover on from `month`, or off (None). Level 2 in a monthly budget account
+    only (after a move in the same request)."""
+    if month is None:
+        category.rollover_from = None
+        return
+    details = {"rollover_from": month}
+    if category.parent_id is None:
+        db.rollback()
+        raise invalid("ROLLOVER_LEVEL2_ONLY", "只有二级分类可以开启结余结转", details)
+    account = get_budget_account(db, category.budget_account_id)
+    if account.period != "month":
+        db.rollback()
+        raise invalid("ROLLOVER_NOT_MONTHLY", "年度预算账户的分类不支持结余结转", details)
+    category.rollover_from = parse_month(month)
 
 
 def _reset_budget(db: Session, category_id: int, period: str, amount: Decimal | None) -> None:

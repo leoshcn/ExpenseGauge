@@ -25,18 +25,24 @@ describe("categoryFields / categoryChanges", () => {
       name: "超市",
       description: "线下商超\n不含外卖",
       budgetAccountId: 1,
+      rolloverFrom: null,
     });
-    expect(categoryFields("超市", "   ", 2)).toEqual({ name: "超市", description: null, budgetAccountId: 2 });
+    expect(categoryFields("超市", "   ", 2)).toEqual({ name: "超市", description: null, budgetAccountId: 2, rolloverFrom: null });
   });
 
   it("returns only what changed as the PATCH body, or null", () => {
-    const initial = { name: "超市", description: "线下商超", budgetAccountId: 1 };
+    const initial = { name: "超市", description: "线下商超", budgetAccountId: 1, rolloverFrom: null };
     expect(categoryChanges(initial, { ...initial })).toBeNull();
     expect(categoryChanges(initial, { ...initial, name: "商超" })).toEqual({ name: "商超" });
     expect(categoryChanges(initial, { ...initial, description: null })).toEqual({ description: null });
     expect(categoryChanges(initial, { ...initial, budgetAccountId: 2 })).toEqual({ budget_account_id: 2 });
+    expect(categoryChanges(initial, { ...initial, rolloverFrom: "2026-10" })).toEqual({ rollover_from: "2026-10" });
+    expect(categoryChanges({ ...initial, rolloverFrom: "2026-08" }, initial)).toEqual({ rollover_from: null });
     expect(
-      categoryChanges({ name: "超市", description: null, budgetAccountId: 1 }, categoryFields("超市", " ", 1)),
+      categoryChanges(
+        { name: "超市", description: null, budgetAccountId: 1, rolloverFrom: null },
+        categoryFields("超市", " ", 1),
+      ),
     ).toBeNull();
   });
 
@@ -54,7 +60,7 @@ describe("leafCounts", () => {
   it("counts level-2 categories per budget account across level-1 categories", () => {
     const daily = { id: 1, name: "日常", period: "month" as const };
     const fixed = { id: 2, name: "固定", period: "month" as const };
-    const leaf = (id: number, budget_account: typeof daily) => ({ id, name: `c${id}`, description: null, budget_account });
+    const leaf = (id: number, budget_account: typeof daily) => ({ id, name: `c${id}`, description: null, budget_account, rollover_from: null });
     const counts = leafCounts({
       budget_account_id: null,
       categories: [
@@ -69,7 +75,7 @@ describe("leafCounts", () => {
 
 describe("reorderTree / movedOrder", () => {
   const daily = { id: 1, name: "日常", period: "month" as const };
-  const leaf = (id: number) => ({ id, name: `c${id}`, description: null, budget_account: daily });
+  const leaf = (id: number) => ({ id, name: `c${id}`, description: null, budget_account: daily, rollover_from: null });
   const tree: Schemas["CategoryTree"] = {
     budget_account_id: null,
     categories: [

@@ -57,3 +57,12 @@ export function countByState(rows: readonly { budget: string | null; actual: str
   for (const row of rows) counts[usage(row.budget, row.actual).state] += 1;
   return counts;
 }
+
+/**
+ * What a rollover category has this month: its carry-in plus the month's budget (no
+ * budget counts as 0). Compared with the actual by `usage`, so a negative result (carried
+ * overspending) reads as over budget even before anything is spent.
+ */
+export function rolloverBudget(carryIn: string, budget: string | null): string {
+  return fromCents(toCents(carryIn) + (budget === null ? 0 : toCents(budget)));
+}

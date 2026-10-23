@@ -12,7 +12,7 @@ const daily = { id: 1, name: "日常", period: "month" as const };
 
 const tree: Schemas["CategoryTree"] = {
   budget_account_id: null,
-  categories: [{ id: 1, name: "餐饮", children: [{ id: 11, name: "买菜", description: null, budget_account: daily }] }],
+  categories: [{ id: 1, name: "餐饮", children: [{ id: 11, name: "买菜", description: null, budget_account: daily, rollover_from: null }] }],
 };
 
 const budgets = (scope: BudgetScope, month: string, amount: string | null): Schemas["BudgetsOut"] => ({
@@ -30,6 +30,10 @@ const budgets = (scope: BudgetScope, month: string, amount: string | null): Sche
       period: "month",
       amount,
       effective_from: amount === null ? null : month,
+      reference_last: "0.00",
+      reference_avg3: "0.00",
+      rollover_from: null,
+      carry_in: null,
     },
   ],
 });

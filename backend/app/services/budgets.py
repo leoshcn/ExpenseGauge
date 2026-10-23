@@ -14,7 +14,7 @@ requested month's year, so `in_force` returns that year's version for any of its
 
 from bisect import bisect_right
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
@@ -22,11 +22,16 @@ from sqlalchemy.orm import Session
 
 from app.errors import invalid
 from app.models import Budget, Category
-from app.months import format_month, parse_month
+from app.months import add_months, format_month, parse_month
 from app.schemas.budget import BudgetItemIn, BudgetLine, BudgetsOut
 from app.services.budget_accounts import budget_accounts_by_id, get_budget_account
 from app.services.categories import load_categories
+from app.services.refunds import effective_totals
 from app.services.settings import require_currency
+
+REFERENCE_MONTHS = 3
+CENT = Decimal("0.01")
+ZERO = Decimal("0.00")
 
 
 class BudgetHistory:
@@ -67,7 +72,10 @@ def load_history(db: Session, budget_account_id: int | None = None) -> BudgetHis
 
 def get_budgets(db: Session, month: str | None, budget_account_id: int | None = None) -> BudgetsOut:
     """Budget in force per level-2 category for `month` (default: the current month), for
-    every level-2 category or only those of one budget account."""
+    every level-2 category or only those of one budget account, with what it spent before
+    (`reference_last`, `reference_avg3`) and, for a rollover category, its carry-in."""
+    from app.services.rollover import carry_ins
+
     if budget_account_id is not None:
         get_budget_account(db, budget_account_id, status_code=422)
     currency = require_currency(db)
@@ -76,12 +84,43 @@ def get_budgets(db: Session, month: str | None, budget_account_id: int | None = 
     names = {c.id: c.name for c in categories}
     budget_accounts = budget_accounts_by_id(db)
     history = load_history(db, budget_account_id)
+    leaves = [c for c in categories if c.parent_id is not None]
+    last_year = date(month_date.year - 1, 1, 1)
+    window = min(add_months(month_date, -REFERENCE_MONTHS), last_year)
+    actuals = effective_totals(
+        db, category_ids=[c.id for c in leaves], start=window, end=month_date
+    )
+    carries = carry_ins(
+        db,
+        [c for c in leaves if budget_accounts[c.budget_account_id].period == "month"],
+        history,
+        month_date,
+    )
+
+    def actual(category_id: int, start: date, end: date) -> Decimal:
+        return sum(
+            (
+                total.amount
+                for (m, leaf_id), total in actuals.items()
+                if leaf_id == category_id and start <= m < end
+            ),
+            ZERO,
+        )
+
     lines = []
-    for category in categories:
-        if category.parent_id is None:
-            continue
+    for category in leaves:
         row = history.in_force(category.id, month_date)
         budget_account = budget_accounts[category.budget_account_id]
+        annual = budget_account.period == "year"
+        if annual:
+            reference_last = actual(category.id, last_year, date(month_date.year, 1, 1))
+            reference_avg3 = None
+        else:
+            reference_last = actual(category.id, add_months(month_date, -1), month_date)
+            reference_avg3 = (
+                actual(category.id, add_months(month_date, -REFERENCE_MONTHS), month_date)
+                / REFERENCE_MONTHS
+            ).quantize(CENT, ROUND_HALF_UP)
         lines.append(
             BudgetLine(
                 category_id=category.id,
@@ -93,6 +132,12 @@ def get_budgets(db: Session, month: str | None, budget_account_id: int | None = 
                 period=budget_account.period,
                 amount=row.amount if row else None,
                 effective_from=format_month(row.effective_from) if row else None,
+                reference_last=reference_last,
+                reference_avg3=reference_avg3,
+                rollover_from=format_month(category.rollover_from)
+                if category.rollover_from
+                else None,
+                carry_in=carries.get(category.id),
             )
         )
     return BudgetsOut(

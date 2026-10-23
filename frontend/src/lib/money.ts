@@ -87,3 +87,9 @@ export function formatPercent(ratio: number, fine = false): string {
 export function absolute(value: string): string {
   return fromCents(Math.abs(toCents(value)));
 }
+
+/** "+¥100.00" / "-¥30.00" / "¥0.00": a change, with its sign. */
+export function signedMoney(value: string, currency: string): string {
+  const formatted = formatMoney(value, currency);
+  return toCents(value) > 0 ? `+${formatted}` : formatted;
+}

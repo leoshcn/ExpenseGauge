@@ -22,6 +22,7 @@ const tree: Schemas["CategoryTree"] = {
           name: "买菜",
           description: null,
           budget_account: { id: 1, name: "日常", period: "month" },
+          rollover_from: null,
         },
       ],
     },

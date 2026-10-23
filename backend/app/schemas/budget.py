@@ -39,6 +39,20 @@ class BudgetLine(Schema):
         description="Month the in-force amount started (`YYYY-01` for an annual budget);"
         " null when there is no budget"
     )
+    reference_last: Money = Field(
+        description="Actual of the month before `month` (monthly), or of the previous"
+        " calendar year (annual), as the summaries count"
+    )
+    reference_avg3: Money | None = Field(
+        description="Average actual of the 3 months before `month`; null for annual lines"
+    )
+    rollover_from: Month | None = Field(
+        description="When the category's rollover started; null without rollover"
+    )
+    carry_in: Money | None = Field(
+        description="What the earlier months leave for `month` (negative: overspent); null"
+        " unless rollover has started by `month`"
+    )
 
 
 class BudgetsOut(Schema):

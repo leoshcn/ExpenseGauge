@@ -97,8 +97,20 @@ def test_level1_category_rejects_whole_batch_with_children(client, ledger):
     assert feedback[0]["parent"] == {"id": ledger.food, "name": "餐饮"}
     daily = {"id": ledger.daily, "name": "日常", "period": "month"}
     assert feedback[0]["children"] == [
-        {"id": ledger.groceries, "name": "买菜", "description": "生鲜", "budget_account": daily},
-        {"id": ledger.dining, "name": "外食", "description": None, "budget_account": daily},
+        {
+            "id": ledger.groceries,
+            "name": "买菜",
+            "description": "生鲜",
+            "budget_account": daily,
+            "rollover_from": None,
+        },
+        {
+            "id": ledger.dining,
+            "name": "外食",
+            "description": None,
+            "budget_account": daily,
+            "rollover_from": None,
+        },
     ]
     assert feedback[1] == {"index": 1, "status": "ok"}
     assert ledger.count() == 0
@@ -192,6 +204,7 @@ def test_refund_reduces_the_category_actual(client, ledger):
         "budget": None,
         "actual": "149.75",
         "count": 1,  # an unmatched refund changes no count
+        "carry_in": None,
     }
     # The refund counts in the month of its own date.
     october = client.get(f"{API}/summary/months/2026-10").json()

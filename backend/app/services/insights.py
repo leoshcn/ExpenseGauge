@@ -39,6 +39,7 @@ from app.services.summaries import get_annual_summary, get_month_detail, get_mon
 TREND_MONTHS = 12
 MAX_TRANSACTIONS = 1000
 CENT = Decimal("0.01")
+ZERO = Decimal("0.00")
 
 SYSTEM_PROMPT = "\n".join(
     [
@@ -48,7 +49,9 @@ SYSTEM_PROMPT = "\n".join(
         "数据说明：",
         "- 所有金额都是字符串，单位是 currency 指定的币种。预算为 null 表示未设预算，不是 0。",
         "- month_detail：所选月份的月度预算账户的预算、实际支出、消费笔数和一二级分类明细。"
-        "annual_actual 是年度预算账户在当月的支出，不计入月度预算对比。",
+        "annual_actual 是年度预算账户在当月的支出，不计入月度预算对比。"
+        "带 rollover_carry_in 的二级分类开启了结余结转：rollover_carry_in 是之前月份留下的结余"
+        "（负数为累计超支），rollover_available 是本月还可用的金额，小于 0 即超支。",
         "- trend：截至所选月份的近 12 个月月度预算与实际支出。",
         "- annual_accounts：各年度预算账户从 1 月到所选月份的全年预算、"
         "年初至今支出、笔数和逐月支出。",
@@ -77,12 +80,17 @@ def _money(value: Decimal | None) -> str | None:
 
 
 def _row(row: Level1Row | Level2Row) -> dict[str, Any]:
-    return {
+    fields: dict[str, Any] = {
         "name": row.name,
         "budget": _money(row.budget),
         "actual": _money(row.actual),
         "count": row.count,
     }
+    if isinstance(row, Level2Row) and row.carry_in is not None:
+        # A rollover category: earlier months' leftover (or overspending) carries in.
+        fields["rollover_carry_in"] = _money(row.carry_in)
+        fields["rollover_available"] = _money(row.carry_in + (row.budget or ZERO) - row.actual)
+    return fields
 
 
 def _transactions(db: Session, start: date) -> dict[str, Any]:

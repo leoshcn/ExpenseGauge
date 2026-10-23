@@ -477,6 +477,18 @@
             "title": "Budget Account Name",
             "type": "string"
           },
+          "carry_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the earlier months leave for `month` (negative: overspent); null unless rollover has started by `month`",
+            "title": "Carry In"
+          },
           "category_id": {
             "title": "Category Id",
             "type": "integer"
@@ -514,6 +526,36 @@
             ],
             "title": "Period",
             "type": "string"
+          },
+          "reference_avg3": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Average actual of the 3 months before `month`; null for annual lines",
+            "title": "Reference Avg3"
+          },
+          "reference_last": {
+            "description": "Actual of the month before `month` (monthly), or of the previous calendar year (annual), as the summaries count",
+            "title": "Reference Last",
+            "type": "string"
+          },
+          "rollover_from": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the category's rollover started; null without rollover",
+            "title": "Rollover From"
           }
         },
         "required": [
@@ -525,7 +567,11 @@
           "budget_account_name",
           "period",
           "amount",
-          "effective_from"
+          "effective_from",
+          "reference_last",
+          "reference_avg3",
+          "rollover_from",
+          "carry_in"
         ],
         "title": "BudgetLine",
         "type": "object"
@@ -745,13 +791,27 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "rollover_from": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The month from which what is left of its budget carries over, or null",
+            "title": "Rollover From"
           }
         },
         "required": [
           "id",
           "name",
           "description",
-          "budget_account"
+          "budget_account",
+          "rollover_from"
         ],
         "title": "CategoryLeaf",
         "type": "object"
@@ -859,6 +919,19 @@
               }
             ],
             "title": "Parent Id"
+          },
+          "rollover_from": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Level 2: the month its rollover starts, or null (no rollover)",
+            "title": "Rollover From"
           }
         },
         "required": [
@@ -866,7 +939,8 @@
           "parent_id",
           "name",
           "description",
-          "budget_account_id"
+          "budget_account_id",
+          "rollover_from"
         ],
         "title": "CategoryOut",
         "type": "object"
@@ -941,6 +1015,19 @@
             "minLength": 1,
             "title": "Name",
             "type": "string"
+          },
+          "rollover_from": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Level 2 in a monthly budget account: carry what is left of the budget (or overspent) into the next month from this month on; null turns it off",
+            "title": "Rollover From"
           }
         },
         "title": "CategoryUpdateIn",
@@ -1219,6 +1306,18 @@
             "description": "null means no budget",
             "title": "Budget"
           },
+          "carry_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rollover categories only: what the earlier months left (negative: overspent). Available = carry_in + (budget or 0) - actual",
+            "title": "Carry In"
+          },
           "category_id": {
             "title": "Category Id",
             "type": "integer"
@@ -1317,6 +1416,18 @@
             "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
             "title": "Month",
             "type": "string"
+          },
+          "rollover_available": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Sum of the rollover categories' available amounts; null when there is none. Not part of `budget`: level-1 rows and the month total ignore carry-ins",
+            "title": "Rollover Available"
           }
         },
         "required": [
@@ -1327,6 +1438,7 @@
           "actual",
           "count",
           "annual_actual",
+          "rollover_available",
           "categories"
         ],
         "title": "MonthDetailOut",

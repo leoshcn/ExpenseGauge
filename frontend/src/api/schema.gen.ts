@@ -969,6 +969,11 @@ export interface components {
             budget_account_id: number;
             /** Budget Account Name */
             budget_account_name: string;
+            /**
+             * Carry In
+             * @description What the earlier months leave for `month` (negative: overspent); null unless rollover has started by `month`
+             */
+            carry_in: string | null;
             /** Category Id */
             category_id: number;
             /** Category Name */
@@ -988,6 +993,21 @@ export interface components {
              * @enum {string}
              */
             period: "month" | "year";
+            /**
+             * Reference Avg3
+             * @description Average actual of the 3 months before `month`; null for annual lines
+             */
+            reference_avg3: string | null;
+            /**
+             * Reference Last
+             * @description Actual of the month before `month` (monthly), or of the previous calendar year (annual), as the summaries count
+             */
+            reference_last: string;
+            /**
+             * Rollover From
+             * @description When the category's rollover started; null without rollover
+             */
+            rollover_from: string | null;
         };
         /** BudgetsOut */
         BudgetsOut: {
@@ -1066,6 +1086,11 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /**
+             * Rollover From
+             * @description The month from which what is left of its budget carries over, or null
+             */
+            rollover_from: string | null;
         };
         /**
          * CategoryNode
@@ -1111,6 +1136,11 @@ export interface components {
             name: string;
             /** Parent Id */
             parent_id: number | null;
+            /**
+             * Rollover From
+             * @description Level 2: the month its rollover starts, or null (no rollover)
+             */
+            rollover_from: string | null;
         };
         /** CategoryTree */
         CategoryTree: {
@@ -1144,6 +1174,11 @@ export interface components {
             description?: string | null;
             /** Name */
             name?: string;
+            /**
+             * Rollover From
+             * @description Level 2 in a monthly budget account: carry what is left of the budget (or overspent) into the next month from this month on; null turns it off
+             */
+            rollover_from?: string | null;
         };
         /** ChannelCreateIn */
         ChannelCreateIn: {
@@ -1269,6 +1304,11 @@ export interface components {
              * @description null means no budget
              */
             budget: string | null;
+            /**
+             * Carry In
+             * @description Rollover categories only: what the earlier months left (negative: overspent). Available = carry_in + (budget or 0) - actual
+             */
+            carry_in?: string | null;
             /** Category Id */
             category_id: number;
             /**
@@ -1316,6 +1356,11 @@ export interface components {
             currency: string;
             /** Month */
             month: string;
+            /**
+             * Rollover Available
+             * @description Sum of the rollover categories' available amounts; null when there is none. Not part of `budget`: level-1 rows and the month total ignore carry-ins
+             */
+            rollover_available: string | null;
         };
         /** MonthTotal */
         MonthTotal: {

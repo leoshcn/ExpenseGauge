@@ -10,7 +10,7 @@ import type * as Queries from "@/api/queries";
 const daily: Schemas["BudgetAccountOut"] = { id: 1, name: "日常", period: "month" };
 const usableTree: Schemas["CategoryTree"] = {
   budget_account_id: null,
-  categories: [{ id: 10, name: "居住", children: [{ id: 11, name: "房租", description: null, budget_account: daily }] }],
+  categories: [{ id: 10, name: "居住", children: [{ id: 11, name: "房租", description: null, budget_account: daily, rollover_from: null }] }],
 };
 
 const state: {
@@ -42,6 +42,7 @@ vi.mock("@/api/queries", async (importOriginal) => {
         parent_id: body.parent_id ?? null,
         description: null,
         budget_account_id: body.budget_account_id ?? null,
+        rollover_from: null,
       }),
     ),
     createChannel: vi.fn(),

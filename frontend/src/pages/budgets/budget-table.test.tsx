@@ -7,7 +7,7 @@ import type { Schemas } from "@/api/client";
 import { S } from "@/strings.zh";
 
 import { BudgetTable } from "./budget-table";
-import { type BudgetDraft, budgetChanges, groupLines } from "./model";
+import { type BudgetDraft, budgetChanges, fillFromReference, groupLines } from "./model";
 
 const daily = { id: 1, name: "日常", period: "month" as const };
 const fixed = { id: 2, name: "固定", period: "month" as const };
@@ -19,11 +19,11 @@ const tree: Schemas["CategoryTree"] = {
       id: 1,
       name: "餐饮",
       children: [
-        { id: 11, name: "买菜", description: null, budget_account: daily },
-        { id: 12, name: "外卖", description: null, budget_account: daily },
+        { id: 11, name: "买菜", description: null, budget_account: daily, rollover_from: null },
+        { id: 12, name: "外卖", description: null, budget_account: daily, rollover_from: null },
       ],
     },
-    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品", description: null, budget_account: fixed }] },
+    { id: 2, name: "宠物", children: [{ id: 21, name: "猫粮用品", description: null, budget_account: fixed, rollover_from: null }] },
     { id: 3, name: "空的", children: [] },
   ],
 };
@@ -32,6 +32,10 @@ const of = (account: Schemas["BudgetAccountOut"]) => ({
   budget_account_id: account.id,
   budget_account_name: account.name,
   period: account.period,
+  reference_last: "0.00",
+  reference_avg3: "0.00",
+  rollover_from: null,
+  carry_in: null,
 });
 
 const lines: Schemas["BudgetLine"][] = [
@@ -60,6 +64,7 @@ function Harness({
       year={2026}
       showBudgetAccount={showBudgetAccount}
       onChange={(id, text) => setDraft({ ...draft, [id]: text })}
+      onFill={(kind) => setDraft(fillFromReference(data.lines, draft, kind))}
     />
   );
 }
@@ -109,6 +114,22 @@ describe("BudgetTable", () => {
     expect(latest).toEqual({ items: [], invalid: [11] });
   });
 
+  it("fills one input from a reference, or every input with spending at once", async () => {
+    const user = userEvent.setup();
+    let latest: ReturnType<typeof budgetChanges> = { items: [], invalid: [] };
+    const withRefs = lines.map((line) =>
+      line.category_id === 11 ? { ...line, reference_last: "480.00", reference_avg3: "466.67" } : line,
+    );
+    render(<Harness onItems={(items) => (latest = items)} data={{ tree, lines: withRefs }} />);
+    await user.click(screen.getAllByRole("button", { name: "「买菜」按近3月均实际 ¥466.67 填入" })[0]!);
+    expect(input("买菜")).toHaveValue("467");
+    await user.click(screen.getByRole("button", { name: "全部按上月实际填入" }));
+    expect(input("买菜")).toHaveValue("480");
+    // No spending: left as it was.
+    expect(input("外卖")).toHaveValue("0.00");
+    expect(latest.items).toEqual([{ category_id: 11, amount: "480.00" }]);
+  });
+
   it("replaces a calculation by its result when the input loses focus", async () => {
     const user = userEvent.setup();
     let latest: ReturnType<typeof budgetChanges> = { items: [], invalid: [] };
@@ -139,8 +160,8 @@ describe("BudgetTable", () => {
           id: 4,
           name: "娱乐",
           children: [
-            { id: 41, name: "电影", description: null, budget_account: daily },
-            { id: 42, name: "旅行", description: null, budget_account: yearly },
+            { id: 41, name: "电影", description: null, budget_account: daily, rollover_from: null },
+            { id: 42, name: "旅行", description: null, budget_account: yearly, rollover_from: null },
           ],
         },
       ],

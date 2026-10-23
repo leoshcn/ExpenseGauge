@@ -38,6 +38,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
         "actual": "828.80",
         "count": 3,  # payments; the unmatched refund is not one
         "annual_actual": "0.00",
+        "rollover_available": None,
         "categories": [
             {
                 "category_id": ledger.food,
@@ -52,6 +53,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                         "budget": "1200.00",
                         "actual": "480.00",
                         "count": 1,
+                        "carry_in": None,
                     },
                     {
                         "category_id": ledger.dining,
@@ -59,6 +61,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                         "budget": None,
                         "actual": "260.00",
                         "count": 1,
+                        "carry_in": None,
                     },
                 ],
             },
@@ -75,6 +78,7 @@ def test_month_detail_has_level1_rows_with_level2_children(client, ledger):
                         "budget": "200.00",
                         "actual": "88.80",
                         "count": 1,
+                        "carry_in": None,
                     },
                 ],
             },
@@ -413,6 +417,7 @@ def test_annual_account_year_to_date(client, ledger):
                                 "budget": "10000.00",
                                 "actual": "2000.00",
                                 "count": 1,
+                                "carry_in": None,
                             }
                         ],
                     },
@@ -429,6 +434,7 @@ def test_annual_account_year_to_date(client, ledger):
                                 "budget": "20000.00",
                                 "actual": "6000.00",
                                 "count": 1,
+                                "carry_in": None,
                             }
                         ],
                     },

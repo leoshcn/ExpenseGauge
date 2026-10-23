@@ -18,7 +18,7 @@ import { addMonths, isMonth, monthOf, parseMonth } from "@/lib/month";
 import { S } from "@/strings.zh";
 
 import { BudgetTable } from "./budget-table";
-import { type BudgetDraft, budgetChanges, draftAfterSave, groupLines } from "./model";
+import { type BudgetDraft, budgetChanges, draftAfterSave, fillFromReference, groupLines } from "./model";
 
 const T = S.budgets;
 
@@ -264,6 +264,11 @@ function BudgetsBody({
           // Resetting a running save would re-enable "save" and allow a second request.
           if (!save.isPending) save.reset();
           setDraft({ ...draft, [id]: text });
+        }}
+        onFill={(kind) => {
+          setSaved(null);
+          if (!save.isPending) save.reset();
+          setDraft(fillFromReference(lines, draft, kind));
         }}
         className={cn("transition-opacity", budgets.isPlaceholderData && "opacity-60")}
       />

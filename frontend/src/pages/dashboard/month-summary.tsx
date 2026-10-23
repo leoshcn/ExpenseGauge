@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, RefreshCwIcon } from "lucide-react";
 
 import type { Schemas } from "@/api/client";
 import { BudgetMeter } from "@/components/budget-meter";
@@ -140,6 +140,18 @@ export function MonthSummary({
           <p className="num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground" title={T.summary.annualExtraHint}>
             <span aria-hidden="true" className="size-2 shrink-0 rounded-[2px] bg-chart-annual" />
             <span className="amount">{T.summary.annualExtra(money(detail.annual_actual))}</span>
+          </p>
+        ) : null}
+        {detail.rollover_available !== null ? (
+          <p
+            className={cn(
+              "num mt-1 flex items-center gap-1.5 text-xs text-muted-foreground",
+              toCents(detail.rollover_available) < 0 && "text-over",
+            )}
+            title={T.table.carryInHint}
+          >
+            <RefreshCwIcon aria-hidden="true" className="size-3 shrink-0" />
+            <span className="amount">{T.summary.rolloverAvailable(money(detail.rollover_available))}</span>
           </p>
         ) : null}
       </div>
